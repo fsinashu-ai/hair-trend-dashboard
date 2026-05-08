@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/trends/auto-generate",
+      "schedule": "0 22 * * *"
+    }
+  ]
+}
