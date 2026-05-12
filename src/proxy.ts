@@ -65,6 +65,20 @@ function isAuthenticated(request: NextRequest) {
   );
 }
 
+function isAuthorizedCronRequest(request: NextRequest) {
+  const cronSecret = process.env.CRON_SECRET;
+
+  if (!cronSecret) {
+    return false;
+  }
+
+  return (
+    request.method === "GET" &&
+    request.nextUrl.pathname === "/api/trends/auto-generate" &&
+    request.headers.get("authorization") === `Bearer ${cronSecret}`
+  );
+}
+
 function withSecurityHeaders(response: NextResponse) {
   Object.entries(securityHeaders).forEach(([key, value]) => {
     response.headers.set(key, value);
@@ -94,6 +108,10 @@ function createUnauthorizedResponse(request: NextRequest) {
 }
 
 export function proxy(request: NextRequest) {
+  if (isAuthorizedCronRequest(request)) {
+    return withSecurityHeaders(NextResponse.next());
+  }
+
   if (!isAuthenticated(request)) {
     return createUnauthorizedResponse(request);
   }
