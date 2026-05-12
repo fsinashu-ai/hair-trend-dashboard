@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { analyzeAiImage } from "@/lib/ai/server";
+import { getSalonPromptContext } from "@/lib/salonProfile";
 import type { HairImageAnalysisResult } from "@/types/hairImageAnalysis";
 
 export const runtime = "nodejs";
@@ -133,10 +134,15 @@ export async function POST(request: Request) {
 
     const imageBuffer = Buffer.from(await image.arrayBuffer());
     const imageBase64 = imageBuffer.toString("base64");
+    const salonContext = getSalonPromptContext();
 
     const result = await analyzeAiImage({
       systemInstruction:
-        "あなたは美容師向けのヘアスタイル分析アシスタントです。SNSスクレイピングは禁止です。入力された画像だけを見て、人物の個人特定、年齢、性別などのセンシティブな推測は避けてください。美容師が接客、投稿、リール企画で自然に使える日本語で、髪型の見た目、質感、提案につながる要素だけを分析してください。",
+        [
+          "あなたは美容師向けのヘアスタイル分析アシスタントです。SNSスクレイピングは禁止です。入力された画像だけを見て、人物の個人特定、年齢、性別などのセンシティブな推測は避けてください。美容師が接客、投稿、リール企画で自然に使える日本語で、髪型の見た目、質感、提案につながる要素だけを分析してください。",
+          "以下のサロン設定を必ず反映し、髪質改善、ストレート、くせ毛改善、パサつき改善、艶髪、白髪ぼかし提案に使いやすい分析にしてください。",
+          salonContext,
+        ].join("\n\n"),
       prompt: [
         "ヘア画像を分析し、JSONだけで返してください。",
         `推定カテゴリは次から1つ選んでください: ${categoryCandidates.join("、")}`,
@@ -148,7 +154,7 @@ export async function POST(request: Request) {
         "glossDescriptionには、艶感、まとまり、光の見え方を説明してください。",
         "snsDescriptionはInstagram投稿下書きに使える自然な文章にしてください。",
         "reelDescriptionは、リール動画の見せ方、冒頭フック、テロップ案、締めの一言が分かる文章にしてください。",
-        "customerExplanationは、お客様にカウンセリングで伝えるやさしい説明にしてください。",
+        "customerExplanationは、お客様にカウンセリングで伝えるやさしい説明にし、必要に応じて髪質改善・ストレート・ホームケア提案へ自然につなげてください。",
         "画像だけでは断定できない髪質、履歴、白髪量、ダメージ状態は必ずcautionで補足してください。",
       ].join("\n"),
       imageBase64,
