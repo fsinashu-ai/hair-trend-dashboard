@@ -1,98 +1,270 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { FormEvent, useEffect, useMemo, useState } from "react";
+import { AutoTrendGenerator } from "@/components/trends/AutoTrendGenerator";
+import { TrendCard } from "@/components/trends/TrendCard";
 import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { StatusMessage } from "@/components/ui/StatusMessage";
-import { trendSources } from "@/config/trendSources";
+import { dummyKeywords } from "@/data/dummyKeywords";
+import { dummyTrends } from "@/data/dummyTrends";
+import {
+  readLocalBackupTrends,
+  saveLocalBackupTrends,
+} from "@/lib/backup/localStorage";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
 import {
-  createTrendSourceInSupabase,
-  fetchTrendSourcesFromSupabase,
-  updateTrendSourceFetchedAtInSupabase,
-  updateTrendSourceInSupabase,
-} from "@/lib/supabase/trendSources";
-import type { ManagedTrendSource, TrendSourceType } from "@/types/trendSource";
+  createTrendLinkInSupabase,
+  deleteTrendLinkFromSupabase,
+  fetchTrendLinksFromSupabase,
+} from "@/lib/supabase/trends";
+import type { Trend, TrendCategory } from "@/types/trend";
 
-type StatusTone = "neutral" | "info" | "success" | "warning" | "error";
-
-type SourceForm = {
-  title: string;
-  url: string;
-  sourceType: TrendSourceType;
-  isActive: boolean;
-  memo: string;
-};
-
-type TestResult = {
-  message: string;
-  sampleCount: number;
-  samples?: Array<{
-    title: string;
-    url: string;
-  }>;
-  warnings?: string[];
-};
-
-const sourceTypes: TrendSourceType[] = [
-  "RSS",
-  "公式サイト",
+const categoryOptions: TrendCategory[] = [
   "自社サイト",
-  "メーカー",
+  "Instagram",
+  "ヘアカタログ",
+  "髪質改善",
+  "白髪ぼかし",
+  "ヘアカラー",
+  "店販",
   "美容ディーラー",
-  "美容メディア",
+  "Pinterest",
+  "海外トレンド",
+  "YouTube",
+  "カウンセリング",
+  "SNS運用",
 ];
 const supabaseEnabled = isSupabaseConfigured();
 
-const emptyForm: SourceForm = {
-  isActive: true,
-  memo: "",
-  sourceType: "RSS",
-  title: "",
-  url: "",
+type TrendForm = {
+  url: string;
+  title: string;
+  category: TrendCategory;
+  memo: string;
 };
 
-function fallbackSources(): ManagedTrendSource[] {
-  return trendSources.map((source, index) => ({
-    id: `config-${index}`,
-    isActive: source.enabled,
-    lastFetchedAt: null,
-    memo: source.note,
-    sourceType: source.type === "rss" ? "RSS" : "公式サイト",
-    title: source.name,
-    url: source.url,
+type SortOption = "published-desc" | "published-asc" | "popular-desc";
+type StatusTone = "neutral" | "info" | "success" | "warning" | "error";
+
+const initialForm: TrendForm = {
+  url: "",
+  title: "",
+  category: "自社サイト",
+  memo: "",
+};
+
+const validTrendCategories: TrendCategory[] = [
+  "レディース",
+  "メンズ",
+  "カラー",
+  "パーマ",
+  "髪質改善",
+  "白髪ぼかし",
+  "SNS投稿",
+  "SNS運用",
+  "カウンセリング",
+  "店販",
+  "自社サイト",
+  "Instagram",
+  "ヘアカタログ",
+  "ヘアカラー",
+  "美容ディーラー",
+  "Pinterest",
+  "海外トレンド",
+  "YouTube",
+];
+
+const deprecatedDefaultTrendIds = new Set([
+  "ef-maykes-own-site-straight",
+  "ef-maykes-instagram-before-after",
+  "ef-maykes-hair-catalog-smooth-long",
+  "ef-maykes-hair-quality-menu",
+  "ef-maykes-gray-blending-gloss",
+  "ef-maykes-hair-color-transparent",
+  "ef-maykes-product-home-care",
+  "ef-maykes-dealer-treatment-info",
+  "ef-maykes-pinterest-smooth-hair-board",
+  "ef-maykes-overseas-sleek-hair",
+]);
+
+function normalizeTrendCategory(category: string): TrendCategory {
+  if (
+    category === "ショート" ||
+    category === "ボブ" ||
+    category === "レイヤー" ||
+    category === "韓国ヘア"
+  ) {
+    return "レディース";
+  }
+
+  if (category === "SNS集客") {
+    return "SNS運用";
+  }
+
+  if (
+    category === "レディース" ||
+    category === "メンズ" ||
+    category === "カラー" ||
+    category === "パーマ" ||
+    category === "髪質改善" ||
+    category === "白髪ぼかし" ||
+    category === "SNS投稿" ||
+    category === "SNS運用" ||
+    category === "カウンセリング" ||
+    category === "店販" ||
+    category === "自社サイト" ||
+    category === "Instagram" ||
+    category === "ヘアカタログ" ||
+    category === "ヘアカラー" ||
+    category === "美容ディーラー" ||
+    category === "Pinterest" ||
+    category === "海外トレンド" ||
+    category === "YouTube"
+  ) {
+    return category;
+  }
+
+  return "レディース";
+}
+
+function normalizeTrendMasters(trends: Trend[]) {
+  return trends.map((trend) => ({
+    ...trend,
+    category: normalizeTrendCategory(trend.category),
+    tags: trend.tags.map((tag) => (tag === "#SNS集客" ? "#SNS投稿" : tag)),
   }));
 }
 
-function formatDate(value: string | null) {
-  if (!value) {
-    return "未取得";
+function getInitialTrends() {
+  const savedTrends = readLocalBackupTrends();
+
+  if (!savedTrends) {
+    return dummyTrends;
   }
 
-  return new Intl.DateTimeFormat("ja-JP", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value));
+  const savedTrendMap = new Map(
+    normalizeTrendMasters(savedTrends)
+      .filter((trend) => !deprecatedDefaultTrendIds.has(trend.id))
+      .map((trend) => [trend.id, trend] as const),
+  );
+  const newDefaultTrends = dummyTrends.filter(
+    (trend) => !savedTrendMap.has(trend.id),
+  );
+
+  return [...newDefaultTrends, ...Array.from(savedTrendMap.values())];
 }
 
-export function TrendSourceManager() {
-  const [sources, setSources] = useState<ManagedTrendSource[]>(() =>
-    supabaseEnabled ? [] : fallbackSources(),
+function getToday() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function getTrendTime(trend: Trend) {
+  return new Date(trend.publishedAt).getTime() || 0;
+}
+
+function getHeatScore(trend: Trend) {
+  const heatScores = {
+    高: 3,
+    中: 2,
+    低: 1,
+  } as const;
+
+  return heatScores[trend.heat];
+}
+
+function sortTrends(trends: Trend[], sortOption: SortOption) {
+  return [...trends].sort((firstTrend, secondTrend) => {
+    if (sortOption === "published-asc") {
+      return getTrendTime(firstTrend) - getTrendTime(secondTrend);
+    }
+
+    if (sortOption === "popular-desc") {
+      const heatDiff = getHeatScore(secondTrend) - getHeatScore(firstTrend);
+
+      if (heatDiff !== 0) {
+        return heatDiff;
+      }
+
+      return getTrendTime(secondTrend) - getTrendTime(firstTrend);
+    }
+
+    return getTrendTime(secondTrend) - getTrendTime(firstTrend);
+  });
+}
+
+function trendMatches(trend: Trend, query: string) {
+  const lowerQuery = query.trim().toLowerCase();
+
+  if (!lowerQuery) {
+    return true;
+  }
+
+  return [
+    trend.title,
+    trend.category,
+    trend.memo,
+    trend.summary,
+    ...trend.keywords,
+    ...trend.tags,
+  ]
+    .join(" ")
+    .toLowerCase()
+    .includes(lowerQuery);
+}
+
+function TrendLoadingCards() {
+  return (
+    <div className="mt-5 grid gap-4 xl:grid-cols-2">
+      {["loading-trend-1", "loading-trend-2", "loading-trend-3", "loading-trend-4"].map(
+        (item) => (
+          <div
+            className="rounded-lg border border-stone-200 bg-white p-4 shadow-sm sm:p-5"
+            key={item}
+          >
+            <div className="flex gap-2">
+              <div className="h-6 w-20 animate-pulse rounded-md bg-stone-100" />
+              <div className="h-6 w-24 animate-pulse rounded-md bg-stone-100" />
+            </div>
+            <div className="mt-5 h-6 w-4/5 animate-pulse rounded-md bg-stone-100" />
+            <div className="mt-3 h-4 w-full animate-pulse rounded-md bg-stone-100" />
+            <div className="mt-2 h-4 w-2/3 animate-pulse rounded-md bg-stone-100" />
+            <div className="mt-5 flex flex-wrap gap-2">
+              <div className="h-6 w-16 animate-pulse rounded-md bg-stone-100" />
+              <div className="h-6 w-20 animate-pulse rounded-md bg-stone-100" />
+              <div className="h-6 w-14 animate-pulse rounded-md bg-stone-100" />
+            </div>
+          </div>
+        ),
+      )}
+    </div>
   );
-  const [form, setForm] = useState<SourceForm>(emptyForm);
-  const [editingId, setEditingId] = useState<string | null>(null);
+}
+
+export function TrendManager() {
+  const searchParams = useSearchParams();
+  const [trends, setTrends] = useState<Trend[]>(() =>
+    supabaseEnabled ? [] : getInitialTrends(),
+  );
+  const [form, setForm] = useState<TrendForm>(initialForm);
+  const [searchText, setSearchText] = useState(
+    () => searchParams.get("keyword") ?? "",
+  );
+  const [selectedCategory, setSelectedCategory] = useState("すべて");
+  const [selectedSort, setSelectedSort] =
+    useState<SortOption>("published-desc");
   const [isLoading, setIsLoading] = useState(supabaseEnabled);
   const [isSaving, setIsSaving] = useState(false);
-  const [testingId, setTestingId] = useState<string | null>(null);
+  const [deletingTrendId, setDeletingTrendId] = useState<string | null>(null);
   const [statusTone, setStatusTone] = useState<StatusTone>(
     supabaseEnabled ? "info" : "warning",
   );
   const [message, setMessage] = useState(
     supabaseEnabled
-      ? "Supabaseから取得元を読み込んでいます。"
-      : "Supabase未設定のため、固定configの取得元を表示しています。",
+      ? "Supabaseから読み込み中です。"
+      : "環境変数が未設定のため、ダミーデータで動作しています。",
   );
-  const [testResult, setTestResult] = useState<TestResult | null>(null);
 
   useEffect(() => {
     if (!supabaseEnabled) {
@@ -101,29 +273,33 @@ export function TrendSourceManager() {
 
     let isMounted = true;
 
-    async function loadSources() {
+    async function loadTrends() {
       try {
-        const data = await fetchTrendSourcesFromSupabase();
+        const supabaseTrends = await fetchTrendLinksFromSupabase();
 
         if (!isMounted) {
           return;
         }
 
-        setSources(data && data.length > 0 ? data : fallbackSources());
-        setStatusTone(data && data.length > 0 ? "success" : "warning");
-        setMessage(
-          data && data.length > 0
-            ? "Supabaseの取得元を表示しています。"
-            : "Supabaseに取得元がまだないため、固定configの取得元を表示しています。",
-        );
+        if (supabaseTrends && supabaseTrends.length > 0) {
+          setTrends(supabaseTrends);
+          setStatusTone("success");
+          setMessage("Supabaseに保存されているトレンドを表示しています。");
+        } else {
+          setTrends(dummyTrends);
+          setStatusTone("warning");
+          setMessage(
+            "Supabaseにトレンドがまだないため、初期データを表示しています。",
+          );
+        }
       } catch {
         if (!isMounted) {
           return;
         }
 
-        setSources(fallbackSources());
+        setTrends(dummyTrends);
         setStatusTone("warning");
-        setMessage("取得元を読み込めなかったため、固定configを表示しています。");
+        setMessage("Supabaseから読み込めなかったため、ダミーデータを表示しています。");
       } finally {
         if (isMounted) {
           setIsLoading(false);
@@ -131,321 +307,427 @@ export function TrendSourceManager() {
       }
     }
 
-    void loadSources();
+    void loadTrends();
 
     return () => {
       isMounted = false;
     };
   }, []);
 
-  function startEdit(source: ManagedTrendSource) {
-    setEditingId(source.id.startsWith("config-") ? null : source.id);
-    setForm({
-      isActive: source.isActive,
-      memo: source.memo,
-      sourceType: source.sourceType,
-      title: source.title,
-      url: source.url,
-    });
-    setTestResult(null);
-    setStatusTone(source.id.startsWith("config-") ? "warning" : "info");
-    setMessage(
-      source.id.startsWith("config-")
-        ? "固定configの取得元は直接編集できません。内容を参考に新規登録してください。"
-        : "取得元を編集中です。",
-    );
-  }
+  useEffect(() => {
+    if (supabaseEnabled) {
+      return;
+    }
 
-  function resetForm() {
-    setEditingId(null);
-    setForm(emptyForm);
-  }
+    saveLocalBackupTrends(trends);
+  }, [trends]);
+
+  const categories = useMemo(
+    () => [
+      "すべて",
+      ...Array.from(
+        new Set([
+          ...categoryOptions,
+          ...trends
+            .map((trend) => trend.category)
+            .filter((category) => validTrendCategories.includes(category)),
+        ]),
+      ),
+    ],
+    [trends],
+  );
+
+  const categoryCounts = useMemo(
+    () =>
+      categories
+        .filter((category): category is TrendCategory => category !== "すべて")
+        .map((category) => ({
+        category,
+        count: trends.filter((trend) => trend.category === category).length,
+      })),
+    [categories, trends],
+  );
+
+  const categoryCountMap = useMemo(
+    () =>
+      new Map(
+        categoryCounts.map((item) => [item.category, item.count] as const),
+      ),
+    [categoryCounts],
+  );
+
+  const filteredTrends = useMemo(() => {
+    const matchedTrends = trends.filter((trend) => {
+        const matchesCategory =
+          selectedCategory === "すべて" || trend.category === selectedCategory;
+        return matchesCategory && trendMatches(trend, searchText);
+    });
+
+    return sortTrends(matchedTrends, selectedSort);
+  }, [trends, searchText, selectedCategory, selectedSort]);
+
+  const selectedCategoryCount =
+    selectedCategory === "すべて"
+      ? trends.length
+      : trends.filter((trend) => trend.category === selectedCategory).length;
+  const hasActiveFilter =
+    Boolean(searchText.trim()) ||
+    selectedCategory !== "すべて" ||
+    selectedSort !== "published-desc";
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (!form.title.trim() || !form.url.trim()) {
-      setStatusTone("warning");
-      setMessage("取得元タイトルとURLを入力してください。");
-      return;
-    }
+    const title = form.title.trim();
+    const url = form.url.trim();
+    const memo = form.memo.trim();
 
-    if (!supabaseEnabled) {
+    if (!title || !url || !memo) {
       setStatusTone("warning");
-      setMessage("Supabase未設定のため、取得元は保存できません。");
+      setMessage("URL、タイトル、メモを入力してください。");
       return;
     }
 
     setIsSaving(true);
     setStatusTone("info");
-    setMessage("取得元を保存しています。");
+    setMessage("トレンドを保存しています。");
 
     try {
-      const saved = editingId
-        ? await updateTrendSourceInSupabase(editingId, form)
-        : await createTrendSourceInSupabase(form);
-
-      if (saved) {
-        setSources((currentSources) => {
-          if (editingId) {
-            return currentSources.map((source) =>
-              source.id === editingId ? saved : source,
-            );
-          }
-
-          return [saved, ...currentSources.filter((source) => !source.id.startsWith("config-"))];
+      if (supabaseEnabled) {
+        const savedTrend = await createTrendLinkInSupabase({
+          title,
+          url,
+          memo,
+          category: form.category,
         });
+
+        if (savedTrend) {
+          setTrends((currentTrends) => [savedTrend, ...currentTrends]);
+          setStatusTone("success");
+          setMessage("Supabaseにトレンドを保存しました。");
+        } else {
+          setStatusTone("warning");
+          setMessage("保存先が未設定のため、この画面内だけで追加します。");
+        }
+      } else {
+        const today = getToday();
+        setTrends((currentTrends) => [
+          {
+            id: `${title}-${currentTrends.length + 1}`,
+            title,
+            summary: memo,
+            category: form.category,
+            sourceName: "ダミー登録",
+            url,
+            publishedAt: today,
+            registeredAt: today,
+            keywords: [form.category],
+            tags: [`#${form.category}`],
+            memo,
+            heat: "中",
+          },
+          ...currentTrends,
+        ]);
+        setStatusTone("warning");
+        setMessage("環境変数が未設定のため、この端末に保存しました。");
       }
 
-      setStatusTone("success");
-      setMessage(editingId ? "取得元を更新しました。" : "取得元を追加しました。");
-      resetForm();
+      setForm(initialForm);
     } catch {
       setStatusTone("error");
-      setMessage("取得元の保存に失敗しました。Supabase設定を確認してください。");
+      setMessage("トレンドの保存に失敗しました。Supabase設定を確認してください。");
     } finally {
       setIsSaving(false);
     }
   }
 
-  async function handleTest(source: ManagedTrendSource) {
-    setTestingId(source.id);
+  async function handleDelete(trendId: string) {
+    setDeletingTrendId(trendId);
     setStatusTone("info");
-    setMessage("取得テストを実行しています。");
-    setTestResult(null);
+    setMessage("トレンドを削除しています。");
 
     try {
-      const response = await fetch("/api/trend-sources/test", {
-        body: JSON.stringify({
-          sourceType: source.sourceType,
-          title: source.title,
-          url: source.url,
-        }),
-        headers: {
-          "Content-Type": "application/json",
-        },
-        method: "POST",
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to test source.");
+      if (supabaseEnabled) {
+        await deleteTrendLinkFromSupabase(trendId);
+        setStatusTone("success");
+        setMessage("Supabaseからトレンドを削除しました。");
+      } else {
+        setStatusTone("warning");
+        setMessage("環境変数が未設定のため、この端末のデータから削除しました。");
       }
 
-      const data = (await response.json()) as TestResult;
-      setTestResult(data);
-      setStatusTone(data.sampleCount > 0 ? "success" : "warning");
-      setMessage(data.message);
-
-      if (supabaseEnabled && !source.id.startsWith("config-")) {
-        const updated = await updateTrendSourceFetchedAtInSupabase(source.id);
-
-        if (updated) {
-          setSources((currentSources) =>
-            currentSources.map((item) => (item.id === source.id ? updated : item)),
-          );
-        }
-      }
+      setTrends((currentTrends) =>
+        currentTrends.filter((trend) => trend.id !== trendId),
+      );
     } catch {
       setStatusTone("error");
-      setMessage("取得テストに失敗しました。URLやRSS公開状態を確認してください。");
+      setMessage("トレンドの削除に失敗しました。Supabase設定を確認してください。");
     } finally {
-      setTestingId(null);
+      setDeletingTrendId(null);
     }
   }
 
+  function handleAutoGenerated(generatedTrends: Trend[]) {
+    if (generatedTrends.length === 0) {
+      return;
+    }
+
+    setTrends((currentTrends) => {
+      const currentUrls = new Set(currentTrends.map((trend) => trend.url));
+      const nextTrends = generatedTrends.filter(
+        (trend) => !currentUrls.has(trend.url),
+      );
+
+      return [...nextTrends, ...currentTrends];
+    });
+  }
+
   return (
-    <section className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
-      <div className="rounded-lg border border-stone-200 bg-white p-4 shadow-sm sm:p-5">
+    <>
+      <AutoTrendGenerator onGenerated={handleAutoGenerated} />
+
+      <section className="mt-6 rounded-lg border border-stone-200 bg-white p-4 shadow-sm sm:p-5">
         <h2 className="text-lg font-semibold text-stone-950">
-          取得元を登録・編集
+          トレンドを登録
         </h2>
-        <form className="mt-4 grid gap-4" onSubmit={handleSubmit}>
-          <label className="grid gap-2 text-sm font-medium text-stone-700">
-            取得元タイトル
-            <input
-              className="min-h-11 rounded-md border border-stone-300 px-3 text-sm outline-none focus:border-teal-600"
-              onChange={(event) =>
-                setForm((current) => ({ ...current, title: event.target.value }))
-              }
-              placeholder="例: 自社ブログ"
-              required
-              value={form.title}
-            />
-          </label>
-          <label className="grid gap-2 text-sm font-medium text-stone-700">
-            URL
-            <input
-              className="min-h-11 rounded-md border border-stone-300 px-3 text-sm outline-none focus:border-teal-600"
-              onChange={(event) =>
-                setForm((current) => ({ ...current, url: event.target.value }))
-              }
-              placeholder="https://example.com/feed.xml"
-              required
-              type="url"
-              value={form.url}
-            />
-          </label>
-          <div className="grid gap-4 sm:grid-cols-[1fr_auto]">
+        <form onSubmit={handleSubmit}>
+          <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_1fr_180px]">
             <label className="grid gap-2 text-sm font-medium text-stone-700">
-              種別
-              <select
-                className="min-h-11 rounded-md border border-stone-300 bg-white px-3 text-sm outline-none focus:border-teal-600"
+              URL
+              <input
+                className="min-h-11 w-full rounded-md border border-stone-300 px-3 text-sm outline-none focus:border-teal-600"
                 onChange={(event) =>
-                  setForm((current) => ({
-                    ...current,
-                    sourceType: event.target.value as TrendSourceType,
+                  setForm((currentForm) => ({
+                    ...currentForm,
+                    url: event.target.value,
                   }))
                 }
-                value={form.sourceType}
+                placeholder="https://example.com/article"
+                required
+                type="url"
+                value={form.url}
+              />
+            </label>
+            <label className="grid gap-2 text-sm font-medium text-stone-700">
+              タイトル
+              <input
+                className="min-h-11 w-full rounded-md border border-stone-300 px-3 text-sm outline-none focus:border-teal-600"
+                onChange={(event) =>
+                  setForm((currentForm) => ({
+                    ...currentForm,
+                    title: event.target.value,
+                  }))
+                }
+                placeholder="例: 初夏に提案したいボブ"
+                required
+                type="text"
+                value={form.title}
+              />
+            </label>
+            <label className="grid gap-2 text-sm font-medium text-stone-700">
+              カテゴリ
+              <select
+                className="min-h-11 w-full rounded-md border border-stone-300 bg-white px-3 text-sm outline-none focus:border-teal-600"
+                onChange={(event) =>
+                  setForm((currentForm) => ({
+                    ...currentForm,
+                    category: event.target.value as TrendCategory,
+                  }))
+                }
+                value={form.category}
               >
-                {sourceTypes.map((sourceType) => (
-                  <option key={sourceType}>{sourceType}</option>
+                {categoryOptions.map((category) => (
+                  <option key={category}>{category}</option>
                 ))}
               </select>
             </label>
-            <label className="flex min-h-11 items-center gap-2 pt-6 text-sm font-medium text-stone-700">
-              <input
-                checked={form.isActive}
-                className="size-4"
-                onChange={(event) =>
-                  setForm((current) => ({
-                    ...current,
-                    isActive: event.target.checked,
-                  }))
-                }
-                type="checkbox"
-              />
-              有効
-            </label>
           </div>
-          <label className="grid gap-2 text-sm font-medium text-stone-700">
+
+          <label className="mt-4 grid gap-2 text-sm font-medium text-stone-700">
             メモ
             <textarea
-              className="min-h-24 rounded-md border border-stone-300 px-3 py-2 text-sm outline-none focus:border-teal-600"
+              className="min-h-24 w-full rounded-md border border-stone-300 px-3 py-2 text-sm outline-none focus:border-teal-600"
               onChange={(event) =>
-                setForm((current) => ({ ...current, memo: event.target.value }))
+                setForm((currentForm) => ({
+                  ...currentForm,
+                  memo: event.target.value,
+                }))
               }
-              placeholder="この取得元をどう使うかを書きます"
+              placeholder="このトレンドをサロン提案や投稿にどう使うかを書きます"
+              required
               value={form.memo}
             />
           </label>
-          <div className="flex flex-col gap-3 sm:flex-row">
-            <button
-              className="min-h-11 rounded-md bg-stone-950 px-4 text-sm font-semibold text-white hover:bg-stone-800 disabled:cursor-not-allowed disabled:bg-stone-300"
-              disabled={isSaving}
-              type="submit"
-            >
-              {isSaving ? "保存中" : editingId ? "更新する" : "追加する"}
-            </button>
-            <button
-              className="min-h-11 rounded-md border border-stone-300 px-4 text-sm font-semibold text-stone-700 hover:bg-stone-50"
-              onClick={resetForm}
-              type="button"
-            >
-              入力をリセット
-            </button>
-          </div>
+
+          <button
+            className="mt-4 min-h-11 rounded-md bg-stone-950 px-4 text-sm font-semibold text-white hover:bg-stone-800 disabled:cursor-not-allowed disabled:bg-stone-300"
+            disabled={
+              isSaving || !form.url.trim() || !form.title.trim() || !form.memo.trim()
+            }
+            type="submit"
+          >
+            {isSaving ? "保存中" : "登録する"}
+          </button>
         </form>
+      </section>
+
+      <div className="mt-6">
+        <StatusMessage isLoading={isLoading || isSaving || Boolean(deletingTrendId)} tone={statusTone}>
+          {isLoading ? "トレンドを読み込んでいます。" : message}
+        </StatusMessage>
       </div>
 
-      <div className="grid content-start gap-5">
-        <StatusMessage isLoading={isLoading || isSaving || Boolean(testingId)} tone={statusTone}>
-          {message}
-        </StatusMessage>
-
-        {testResult ? (
-          <div className="rounded-lg border border-stone-200 bg-white p-4 shadow-sm sm:p-5">
-            <h2 className="text-lg font-semibold text-stone-950">取得テスト結果</h2>
-            <p className="mt-2 text-sm leading-6 text-stone-600">
-              {testResult.message}
-            </p>
-            {testResult.samples && testResult.samples.length > 0 ? (
-              <div className="mt-4 grid gap-2">
-                {testResult.samples.map((sample) => (
-                  <a
-                    className="break-words rounded-md border border-stone-200 p-3 text-sm font-semibold text-teal-700 hover:bg-teal-50"
-                    href={sample.url}
-                    key={sample.url}
-                    rel="noreferrer"
-                    target="_blank"
-                  >
-                    {sample.title}
-                  </a>
-                ))}
-              </div>
-            ) : null}
-          </div>
-        ) : null}
-
-        <section className="rounded-lg border border-stone-200 bg-white p-4 shadow-sm sm:p-5">
-          <div className="flex flex-wrap items-center justify-between gap-3">
+      <section className="mt-8">
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div>
             <h2 className="text-lg font-semibold text-stone-950">
-              取得元一覧
+              トレンド一覧
             </h2>
-            <Badge tone={supabaseEnabled ? "success" : "warning"}>
-              {supabaseEnabled ? "Supabase管理" : "config表示"}
-            </Badge>
+            <p className="mt-1 text-sm text-stone-500">
+              表示件数: {filteredTrends.length} / 登録件数: {trends.length}
+              {selectedCategory !== "すべて"
+                ? ` / ${selectedCategory}: ${selectedCategoryCount}`
+                : ""}
+            </p>
+          </div>
+          <Badge tone={supabaseEnabled ? "success" : "neutral"}>
+            {supabaseEnabled ? "Supabase保存" : "端末保存"}
+          </Badge>
+        </div>
+
+        <div className="mt-4 rounded-lg border border-stone-200 bg-white p-4 shadow-sm sm:p-5">
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_220px]">
+            <label className="grid gap-2 text-sm font-medium text-stone-700">
+              キーワード検索
+              <input
+                className="min-h-11 w-full rounded-md border border-stone-300 px-3 text-sm outline-none focus:border-teal-600"
+                onChange={(event) => setSearchText(event.target.value)}
+                placeholder="例: ボブ、艶髪、Instagram投稿"
+                type="search"
+                value={searchText}
+              />
+            </label>
+            <div className="grid gap-2 text-sm font-medium text-stone-700">
+              並び替え
+              <select
+                className="min-h-11 w-full rounded-md border border-stone-300 bg-white px-3 text-sm outline-none focus:border-teal-600"
+                onChange={(event) =>
+                  setSelectedSort(event.target.value as SortOption)
+                }
+                value={selectedSort}
+              >
+                <option value="published-desc">投稿日 新しい順</option>
+                <option value="published-asc">投稿日 古い順</option>
+                <option value="popular-desc">人気順</option>
+              </select>
+            </div>
           </div>
 
-          {sources.length > 0 ? (
-            <div className="mt-4 grid gap-3">
-              {sources.map((source) => (
-                <article
-                  className="rounded-md border border-stone-200 p-4"
-                  key={source.id}
+          <div className="mt-5">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-sm font-medium text-stone-700">
+                カテゴリフィルター
+              </p>
+              {hasActiveFilter ? (
+                <button
+                  className="min-h-9 rounded-md border border-stone-300 px-3 text-xs font-semibold text-stone-700 hover:bg-stone-50"
+                  onClick={() => {
+                    setSearchText("");
+                    setSelectedCategory("すべて");
+                    setSelectedSort("published-desc");
+                  }}
+                  type="button"
                 >
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap gap-2">
-                        <Badge tone={source.isActive ? "success" : "neutral"}>
-                          {source.isActive ? "有効" : "無効"}
-                        </Badge>
-                        <Badge tone="info">{source.sourceType}</Badge>
-                      </div>
-                      <h3 className="mt-3 break-words text-sm font-semibold text-stone-950">
-                        {source.title}
-                      </h3>
-                      <p className="mt-1 break-words text-xs text-stone-500">
-                        {source.url}
-                      </p>
-                    </div>
-                    <div className="flex shrink-0 gap-2">
-                      <button
-                        className="min-h-9 rounded-md border border-stone-300 px-3 text-xs font-semibold text-stone-700 hover:bg-stone-50"
-                        onClick={() => startEdit(source)}
-                        type="button"
-                      >
-                        編集
-                      </button>
-                      <button
-                        className="min-h-9 rounded-md border border-teal-200 px-3 text-xs font-semibold text-teal-700 hover:bg-teal-50 disabled:cursor-not-allowed disabled:bg-stone-100 disabled:text-stone-400"
-                        disabled={testingId === source.id}
-                        onClick={() => handleTest(source)}
-                        type="button"
-                      >
-                        {testingId === source.id ? "確認中" : "取得テスト"}
-                      </button>
-                    </div>
-                  </div>
-                  <p className="mt-3 text-sm leading-6 text-stone-600">
-                    {source.memo || "メモはありません。"}
-                  </p>
-                  <p className="mt-3 text-xs text-stone-500">
-                    最終取得日時: {formatDate(source.lastFetchedAt)}
-                  </p>
-                </article>
+                  リセット
+                </button>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+            {categories.map((category) => (
+              <button
+                className={`min-h-10 shrink-0 rounded-md border px-3 text-sm font-semibold ${
+                  selectedCategory === category
+                    ? "border-teal-700 bg-teal-50 text-teal-800"
+                    : "border-stone-300 bg-white text-stone-700 hover:bg-stone-50"
+                }`}
+                key={category}
+                onClick={() => setSelectedCategory(category)}
+                type="button"
+              >
+                {category}
+                <span className="ml-1 text-xs font-medium opacity-70">
+                  {category === "すべて"
+                    ? trends.length
+                    : categoryCountMap.get(category as TrendCategory) ?? 0}
+                </span>
+              </button>
+            ))}
+          </div>
+
+          <div className="mt-4 rounded-md bg-stone-50 p-3">
+            <p className="text-xs font-semibold text-stone-500">検索ヒント</p>
+            <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
+              {dummyKeywords.map((keyword) => (
+                <button
+                  className="min-h-8 shrink-0 rounded-md bg-white px-2.5 text-xs font-semibold text-sky-700 ring-1 ring-sky-100 hover:bg-sky-50"
+                  key={keyword.id}
+                  onClick={() => setSearchText(keyword.name)}
+                  type="button"
+                >
+                  {keyword.name}
+                </button>
               ))}
             </div>
-          ) : (
-            <div className="mt-4">
-              <EmptyState
-                description="RSSや公式サイトURLを追加すると、トレンド自動生成の取得元として使えます。"
-                title="取得元はまだありません"
+          </div>
+        </div>
+
+        {isLoading ? (
+          <TrendLoadingCards />
+        ) : filteredTrends.length > 0 ? (
+          <div className="mt-5 grid gap-4 xl:grid-cols-2">
+            {filteredTrends.map((trend) => (
+              <TrendCard
+                isDeleting={deletingTrendId === trend.id}
+                key={trend.id}
+                trend={trend}
+                onDelete={handleDelete}
               />
-            </div>
-          )}
-        </section>
-      </div>
-    </section>
+            ))}
+          </div>
+        ) : (
+          <div className="mt-5">
+            <EmptyState
+              action={
+                hasActiveFilter ? (
+                  <button
+                    className="min-h-10 rounded-md border border-stone-300 px-3 text-sm font-semibold text-stone-700 hover:bg-stone-50"
+                    onClick={() => {
+                      setSearchText("");
+                      setSelectedCategory("すべて");
+                      setSelectedSort("published-desc");
+                    }}
+                    type="button"
+                  >
+                    条件をリセット
+                  </button>
+                ) : null
+              }
+              description={
+                hasActiveFilter
+                  ? "検索語句やカテゴリを変えると、別のトレンドが見つかるかもしれません。"
+                  : "URL、タイトル、カテゴリ、メモを登録すると、ここに一覧で表示されます。"
+              }
+              title={
+                hasActiveFilter
+                  ? "条件に合うトレンドがありません"
+                  : "トレンドはまだありません"
+              }
+            />
+          </div>
+        )}
+      </section>
+    </>
   );
 }
