@@ -1,6 +1,7 @@
 import { dummyKeywords } from "@/data/dummyKeywords";
 import { dummyTrends } from "@/data/dummyTrends";
 import { generateAiText } from "@/lib/ai/server";
+import { getSalonPromptContext } from "@/lib/salonProfile";
 import type { TrendSource } from "@/config/trendSources";
 import type { RssArticle } from "@/lib/rss";
 import type { TrendCategory } from "@/types/trend";
@@ -151,10 +152,15 @@ export async function generateTrendCandidates({
   }
 
   try {
+    const salonContext = getSalonPromptContext();
     const result = await generateAiText({
       maxOutputTokens: 2400,
       systemInstruction:
-        "あなたは美容師向けのトレンド収集アシスタントです。SNSスクレイピングは禁止です。入力されたRSS記事情報と登録済みキーワードだけをもとに、サロンワークや投稿ネタに使いやすいトレンド候補を日本語で分類してください。",
+        [
+          "あなたは美容師向けのトレンド収集アシスタントです。SNSスクレイピングは禁止です。入力されたRSS記事情報と登録済みキーワードだけをもとに、サロンワークや投稿ネタに使いやすいトレンド候補を日本語で分類してください。",
+          "以下のサロン設定に合う候補を優先し、髪質改善、ストレート、くせ毛改善、パサつき改善、艶髪、白髪ぼかし、ホームケア提案に使えるものを高く評価してください。",
+          salonContext,
+        ].join("\n\n"),
       prompt: [
         "以下の記事候補を美容師向けに分類し、必ずJSON配列だけで返してください。",
         `カテゴリ候補: ${autoTrendCategories.join("、")}`,
