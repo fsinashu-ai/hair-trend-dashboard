@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { generateAiText } from "@/lib/ai/server";
+import { getSalonPromptContext } from "@/lib/salonProfile";
 
 export const runtime = "nodejs";
 
@@ -165,12 +166,18 @@ export async function POST(request: Request) {
     const genderTarget = getGenderTarget(body.genderTarget);
     const writingTone = getWritingTone(body.writingTone);
     const length = getLength(body.length);
+    const salonContext = getSalonPromptContext();
 
     const result = await generateAiText({
       systemInstruction:
-        "あなたは美容師向けの投稿企画を支援する日本語ライターです。SNSスクレイピングは行わず、入力された手動登録トレンドとキーワードだけを材料にします。美容師が実務でそのまま整えて使える、自然で押し売り感のない日本語にしてください。",
+        [
+          "あなたは美容師向けの投稿企画を支援する日本語ライターです。SNSスクレイピングは行わず、入力された手動登録トレンドとキーワードだけを材料にします。美容師が実務でそのまま整えて使える、自然で押し売り感のない日本語にしてください。",
+          "以下のサロン設定を必ず反映し、ef.mayke`sらしい髪質改善・くせ毛改善・艶髪提案につながる文章にしてください。",
+          salonContext,
+        ].join("\n\n"),
       prompt: [
         settings.instruction,
+        "サロン設定をふまえ、髪質改善、ストレート、くせ毛、パサつき、艶髪、白髪ぼかしのいずれかに自然につながる場合は優先して反映してください。",
         `出力タイプ: ${settings.postType}`,
         `対象: ${ageGroup}${genderTarget}`,
         `文体: ${writingTone}`,
