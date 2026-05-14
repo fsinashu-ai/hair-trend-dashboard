@@ -33,6 +33,18 @@ const envItems = [
     description: "Gemini APIキー。サーバー側だけで使い、画面には出しません。",
   },
   {
+    name: "YOUTUBE_API_KEY",
+    description: "YouTube Data APIキー。YouTube周回API Routeのサーバー側だけで使います。",
+  },
+  {
+    name: "YOUTUBE_DAILY_VIDEO_LIMIT",
+    description: "YouTube周回で1日に保存する動画候補数の上限です。未設定時は6件です。",
+  },
+  {
+    name: "YOUTUBE_KEYWORD_LIMIT",
+    description: "YouTube周回で1回に検索するキーワード数の上限です。未設定時は4個です。",
+  },
+  {
     name: "APP_USER",
     description: "任意のアプリ保護ユーザー名。未設定の場合はsalonを使います。",
   },
@@ -57,6 +69,7 @@ export default function SettingsPage() {
   const aiProvider = process.env.AI_PROVIDER ?? "auto";
   const isOpenAiReady = Boolean(process.env.OPENAI_API_KEY);
   const isGeminiReady = Boolean(process.env.GEMINI_API_KEY);
+  const isYoutubeReady = Boolean(process.env.YOUTUBE_API_KEY);
   const isAppPasswordReady = Boolean(process.env.APP_PASSWORD);
 
   return (
@@ -97,6 +110,9 @@ export default function SettingsPage() {
               </Badge>
               <Badge tone={isGeminiReady ? "success" : "warning"}>
                 Gemini: {isGeminiReady ? "設定済み" : "未設定"}
+              </Badge>
+              <Badge tone={isYoutubeReady ? "success" : "warning"}>
+                YouTube: {isYoutubeReady ? "設定済み" : "未設定"}
               </Badge>
               <Badge tone="neutral">AI: {aiProvider}</Badge>
               <Badge tone={isAppPasswordReady ? "success" : "warning"}>
