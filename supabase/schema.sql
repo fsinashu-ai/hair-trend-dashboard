@@ -71,6 +71,24 @@ create table if not exists public.trend_sources (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists public.sns_posts (
+  id uuid primary key default gen_random_uuid(),
+  sns_type text not null default 'Other' check (
+    sns_type in ('Instagram', 'YouTube', 'Pinterest', 'TikTok', 'X', 'Other')
+  ),
+  url text not null,
+  title text not null,
+  memo text not null default '',
+  category text not null default 'SNS投稿',
+  tags text[] not null default '{}',
+  ai_summary text not null default '',
+  post_idea text not null default '',
+  counseling_idea text not null default '',
+  saved_at date not null default current_date,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 create index if not exists keywords_name_idx on public.keywords (name);
 create index if not exists keywords_category_idx on public.keywords (category);
 create index if not exists trend_links_category_idx on public.trend_links (category);
@@ -78,6 +96,9 @@ create index if not exists trend_links_registered_at_idx on public.trend_links (
 create index if not exists ai_outputs_created_at_idx on public.ai_outputs (created_at desc);
 create index if not exists trend_sources_is_active_idx on public.trend_sources (is_active);
 create index if not exists trend_sources_source_type_idx on public.trend_sources (source_type);
+create index if not exists sns_posts_sns_type_idx on public.sns_posts (sns_type);
+create index if not exists sns_posts_category_idx on public.sns_posts (category);
+create index if not exists sns_posts_saved_at_idx on public.sns_posts (saved_at desc);
 
 drop trigger if exists set_keywords_updated_at on public.keywords;
 create trigger set_keywords_updated_at
@@ -103,10 +124,17 @@ before update on public.trend_sources
 for each row
 execute function public.set_updated_at();
 
+drop trigger if exists set_sns_posts_updated_at on public.sns_posts;
+create trigger set_sns_posts_updated_at
+before update on public.sns_posts
+for each row
+execute function public.set_updated_at();
+
 alter table public.keywords enable row level security;
 alter table public.trend_links enable row level security;
 alter table public.ai_outputs enable row level security;
 alter table public.trend_sources enable row level security;
+alter table public.sns_posts enable row level security;
 
 -- Personal-use policies:
 -- The current app uses the public anon key from the browser, so these policies allow
@@ -144,6 +172,14 @@ with check (true);
 drop policy if exists "personal_trend_sources_all" on public.trend_sources;
 create policy "personal_trend_sources_all"
 on public.trend_sources
+for all
+to anon, authenticated
+using (true)
+with check (true);
+
+drop policy if exists "personal_sns_posts_all" on public.sns_posts;
+create policy "personal_sns_posts_all"
+on public.sns_posts
 for all
 to anon, authenticated
 using (true)
