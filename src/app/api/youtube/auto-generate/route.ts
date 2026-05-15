@@ -182,17 +182,43 @@ async function insertYoutubeTrends(trends: YoutubeGeneratedTrend[]) {
     .insert(rows)
     .select("title,url,category,memo,registered_at,tags");
 
-  if (error) {
-    throw error;
+  if (!error) {
+    return {
+      savedCount: data?.length ?? 0,
+      savedTrends: (data ?? []).map((row) => ({
+        category: row.category as TrendCategory,
+        memo: row.memo,
+        registered_at: row.registered_at,
+        tags: row.tags ?? [],
+        title: row.title,
+        url: row.url,
+      })) as YoutubeGeneratedTrend[],
+    };
+  }
+
+  const retryRows = trends.map((trend) => ({
+    category: trend.category,
+    memo: trend.memo,
+    registered_at: trend.registered_at,
+    title: trend.title,
+    url: trend.url,
+  }));
+  const retry = await supabase
+    .from("trend_links")
+    .insert(retryRows)
+    .select("title,url,category,memo,registered_at");
+
+  if (retry.error) {
+    throw retry.error;
   }
 
   return {
-    savedCount: data?.length ?? 0,
-    savedTrends: (data ?? []).map((row) => ({
+    savedCount: retry.data?.length ?? 0,
+    savedTrends: (retry.data ?? []).map((row, index) => ({
       category: row.category as TrendCategory,
       memo: row.memo,
       registered_at: row.registered_at,
-      tags: row.tags ?? [],
+      tags: trends[index]?.tags ?? [],
       title: row.title,
       url: row.url,
     })) as YoutubeGeneratedTrend[],
