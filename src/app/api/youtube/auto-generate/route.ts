@@ -38,6 +38,19 @@ type SnsPostRow = {
   url: string;
 };
 
+function getErrorMessage(error: unknown) {
+  if (!error || typeof error !== "object") {
+    return "詳細不明";
+  }
+
+  const record = error as Record<string, unknown>;
+  const message =
+    typeof record.message === "string" ? record.message : "詳細不明";
+  const code = typeof record.code === "string" ? ` code: ${record.code}` : "";
+
+  return `${message}${code}`;
+}
+
 function today() {
   return new Date().toISOString().slice(0, 10);
 }
@@ -122,7 +135,9 @@ async function fetchBaseData() {
   ]);
 
   if (trendResult.error) {
-    warnings.push("登録済みトレンドURLの取得に失敗しました。");
+    warnings.push(
+      `登録済みトレンドURLの取得に失敗しました。${getErrorMessage(trendResult.error)}`,
+    );
   } else {
     const rows = (trendResult.data ?? []) as TrendLinkRow[];
     existingUrls = new Set(rows.map((row) => row.url).filter(Boolean));
@@ -135,13 +150,17 @@ async function fetchBaseData() {
   }
 
   if (keywordResult.error) {
-    warnings.push("登録済みキーワードの取得に失敗しました。初期キーワードを使います。");
+    warnings.push(
+      `登録済みキーワードの取得に失敗しました。初期キーワードを使います。${getErrorMessage(keywordResult.error)}`,
+    );
   } else {
     keywordRows = (keywordResult.data ?? []) as KeywordRow[];
   }
 
   if (snsResult.error) {
-    warnings.push("登録済みSNS投稿URLの取得に失敗しました。");
+    warnings.push(
+      `登録済みSNS投稿URLの取得に失敗しました。${getErrorMessage(snsResult.error)}`,
+    );
   } else {
     ((snsResult.data ?? []) as SnsPostRow[]).forEach((row) => {
       if (row.url) {
@@ -326,9 +345,9 @@ export async function POST(request: Request) {
 
     try {
       saved = await insertYoutubeTrends(uniqueTrends);
-    } catch {
+    } catch (error) {
       warnings.push(
-        "YouTube候補の生成はできましたが、Supabase保存に失敗しました。Supabase URL、anon key、RLS、schema.sqlを確認してください。",
+        `YouTube候補の生成はできましたが、Supabase保存に失敗しました。${getErrorMessage(error)}`,
       );
     }
 
