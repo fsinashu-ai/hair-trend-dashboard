@@ -44,6 +44,15 @@ export function YouTubeTrendGenerator({
   );
   const [result, setResult] = useState<YoutubeAutoGenerateResponse | null>(null);
 
+  async function getResponseErrorMessage(response: Response) {
+    try {
+      const data = (await response.json()) as { error?: string };
+      return data.error ?? "YouTube周回に失敗しました。";
+    } catch {
+      return "YouTube周回に失敗しました。";
+    }
+  }
+
   async function handleGenerate() {
     setIsGenerating(true);
     setStatusTone("info");
@@ -52,6 +61,7 @@ export function YouTubeTrendGenerator({
     try {
       const response = await fetch("/api/youtube/auto-generate", {
         body: JSON.stringify({ rangeDays }),
+        credentials: "same-origin",
         headers: {
           "Content-Type": "application/json",
         },
@@ -59,7 +69,7 @@ export function YouTubeTrendGenerator({
       });
 
       if (!response.ok) {
-        throw new Error("Failed to generate YouTube trends.");
+        throw new Error(await getResponseErrorMessage(response));
       }
 
       const data = (await response.json()) as YoutubeAutoGenerateResponse;
@@ -74,11 +84,13 @@ export function YouTubeTrendGenerator({
           ? `${data.providerLabel}でYouTube動画を${data.savedCount}件保存しました。`
           : `${data.providerLabel}で確認しました。保存できる新規候補がないか、Supabase/APIキーが未設定です。`,
       );
-    } catch {
+    } catch (error) {
       setResult(null);
       setStatusTone("error");
       setMessage(
-        "YouTube周回に失敗しました。YOUTUBE_API_KEY、Supabase設定、AI設定を確認してください。",
+        error instanceof Error
+          ? error.message
+          : "YouTube周回に失敗しました。YOUTUBE_API_KEY、Supabase設定、AI設定を確認してください。",
       );
     } finally {
       setIsGenerating(false);
