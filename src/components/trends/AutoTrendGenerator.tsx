@@ -54,6 +54,15 @@ export function AutoTrendGenerator({ onGenerated }: AutoTrendGeneratorProps) {
   );
   const [result, setResult] = useState<AutoGenerateResponse | null>(null);
 
+  async function getResponseErrorMessage(response: Response) {
+    try {
+      const data = (await response.json()) as { error?: string };
+      return data.error ?? "自動生成に失敗しました。";
+    } catch {
+      return "自動生成に失敗しました。";
+    }
+  }
+
   async function handleGenerate() {
     setIsGenerating(true);
     setStatusTone("info");
@@ -61,11 +70,12 @@ export function AutoTrendGenerator({ onGenerated }: AutoTrendGeneratorProps) {
 
     try {
       const response = await fetch("/api/trends/auto-generate", {
+        credentials: "same-origin",
         method: "POST",
       });
 
       if (!response.ok) {
-        throw new Error("Failed to auto generate trends.");
+        throw new Error(await getResponseErrorMessage(response));
       }
 
       const data = (await response.json()) as AutoGenerateResponse;
@@ -80,11 +90,13 @@ export function AutoTrendGenerator({ onGenerated }: AutoTrendGeneratorProps) {
           ? `${data.providerLabel}で${data.savedCount}件を保存しました。`
           : `${data.providerLabel}で候補を生成しました。Supabase未設定または重複のため保存はありません。`,
       );
-    } catch {
+    } catch (error) {
       setResult(null);
       setStatusTone("error");
       setMessage(
-        "自動生成に失敗しました。RSS URL、Supabase設定、AI設定を確認してください。",
+        error instanceof Error
+          ? error.message
+          : "自動生成に失敗しました。RSS URL、Supabase設定、AI設定を確認してください。",
       );
     } finally {
       setIsGenerating(false);
