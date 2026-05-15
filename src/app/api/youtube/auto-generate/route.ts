@@ -293,7 +293,18 @@ export async function POST(request: Request) {
     const uniqueTrends = generation.trends
       .filter((trend) => !baseData.existingUrls.has(trend.url))
       .slice(0, remainingDailySlots);
-    const saved = await insertYoutubeTrends(uniqueTrends);
+    let saved = {
+      savedCount: 0,
+      savedTrends: [] as YoutubeGeneratedTrend[],
+    };
+
+    try {
+      saved = await insertYoutubeTrends(uniqueTrends);
+    } catch {
+      warnings.push(
+        "YouTube候補の生成はできましたが、Supabase保存に失敗しました。Supabase URL、anon key、RLS、schema.sqlを確認してください。",
+      );
+    }
 
     return NextResponse.json({
       dailyLimit,
@@ -312,7 +323,7 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         error:
-          "YouTube周回に失敗しました。YOUTUBE_API_KEY、Supabase設定、AI設定を確認してください。",
+          "YouTube周回に失敗しました。YOUTUBE_API_KEY、AI設定、Vercel環境変数を確認してください。",
       },
       { status: 500 },
     );
