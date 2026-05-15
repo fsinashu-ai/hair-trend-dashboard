@@ -1,5 +1,6 @@
 -- Hair Trend Dashboard Supabase schema
 -- Run this file in the Supabase SQL Editor.
+-- This app is for personal/salon-internal use. Protect public deployments with APP_PASSWORD.
 
 create extension if not exists "pgcrypto";
 
@@ -18,11 +19,25 @@ create table if not exists public.keywords (
   name text not null,
   category text not null,
   memo text not null default '',
-  use_count integer not null default 0 check (use_count >= 0),
-  priority text not null default '中' check (priority in ('高', '中', '低')),
+  use_count integer not null default 0,
+  priority text not null default '中',
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table public.keywords add column if not exists category text not null default 'レディース';
+alter table public.keywords add column if not exists memo text not null default '';
+alter table public.keywords add column if not exists use_count integer not null default 0;
+alter table public.keywords add column if not exists priority text not null default '中';
+alter table public.keywords alter column priority set default '中';
+alter table public.keywords alter column use_count set default 0;
+update public.keywords
+set priority = '中'
+where priority is null or priority not in ('高', '中', '低');
+alter table public.keywords drop constraint if exists keywords_priority_check;
+alter table public.keywords drop constraint if exists keywords_use_count_check;
+alter table public.keywords add constraint keywords_priority_check check (priority in ('高', '中', '低'));
+alter table public.keywords add constraint keywords_use_count_check check (use_count >= 0);
 
 create table if not exists public.trend_links (
   id uuid primary key default gen_random_uuid(),
@@ -31,12 +46,14 @@ create table if not exists public.trend_links (
   category text not null,
   memo text not null default '',
   registered_at date not null default current_date,
+  tags text[] not null default '{}',
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
 
-alter table public.trend_links
-add column if not exists tags text[] not null default '{}';
+alter table public.trend_links add column if not exists tags text[] not null default '{}';
+alter table public.trend_links add column if not exists registered_at date not null default current_date;
+alter table public.trend_links add column if not exists memo text not null default '';
 
 create table if not exists public.ai_outputs (
   id uuid primary key default gen_random_uuid(),
@@ -50,20 +67,14 @@ create table if not exists public.ai_outputs (
   updated_at timestamptz not null default now()
 );
 
+alter table public.ai_outputs add column if not exists prompt text not null default '';
+alter table public.ai_outputs add column if not exists used_keywords text[] not null default '{}';
+
 create table if not exists public.trend_sources (
   id uuid primary key default gen_random_uuid(),
   title text not null,
   url text not null,
-  source_type text not null default 'RSS' check (
-    source_type in (
-      'RSS',
-      '公式サイト',
-      '自社サイト',
-      'メーカー',
-      '美容ディーラー',
-      '美容メディア'
-    )
-  ),
+  source_type text not null default 'RSS',
   is_active boolean not null default true,
   memo text not null default '',
   last_fetched_at timestamptz,
@@ -71,11 +82,22 @@ create table if not exists public.trend_sources (
   updated_at timestamptz not null default now()
 );
 
+alter table public.trend_sources add column if not exists source_type text not null default 'RSS';
+alter table public.trend_sources add column if not exists is_active boolean not null default true;
+alter table public.trend_sources add column if not exists memo text not null default '';
+alter table public.trend_sources add column if not exists last_fetched_at timestamptz;
+alter table public.trend_sources alter column source_type set default 'RSS';
+update public.trend_sources
+set source_type = 'RSS'
+where source_type is null
+  or source_type not in ('RSS', '公式サイト', '自社サイト', 'メーカー', '美容ディーラー', '美容メディア');
+alter table public.trend_sources drop constraint if exists trend_sources_source_type_check;
+alter table public.trend_sources add constraint trend_sources_source_type_check
+check (source_type in ('RSS', '公式サイト', '自社サイト', 'メーカー', '美容ディーラー', '美容メディア'));
+
 create table if not exists public.sns_posts (
   id uuid primary key default gen_random_uuid(),
-  sns_type text not null default 'Other' check (
-    sns_type in ('Instagram', 'YouTube', 'Pinterest', 'TikTok', 'X', 'Other')
-  ),
+  sns_type text not null default 'Other',
   url text not null,
   title text not null,
   memo text not null default '',
@@ -88,6 +110,22 @@ create table if not exists public.sns_posts (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table public.sns_posts add column if not exists sns_type text not null default 'Other';
+alter table public.sns_posts add column if not exists memo text not null default '';
+alter table public.sns_posts add column if not exists category text not null default 'SNS投稿';
+alter table public.sns_posts add column if not exists tags text[] not null default '{}';
+alter table public.sns_posts add column if not exists ai_summary text not null default '';
+alter table public.sns_posts add column if not exists post_idea text not null default '';
+alter table public.sns_posts add column if not exists counseling_idea text not null default '';
+alter table public.sns_posts add column if not exists saved_at date not null default current_date;
+alter table public.sns_posts alter column sns_type set default 'Other';
+update public.sns_posts
+set sns_type = 'Other'
+where sns_type is null or sns_type not in ('Instagram', 'YouTube', 'Pinterest', 'TikTok', 'X', 'Other');
+alter table public.sns_posts drop constraint if exists sns_posts_sns_type_check;
+alter table public.sns_posts add constraint sns_posts_sns_type_check
+check (sns_type in ('Instagram', 'YouTube', 'Pinterest', 'TikTok', 'X', 'Other'));
 
 create index if not exists keywords_name_idx on public.keywords (name);
 create index if not exists keywords_category_idx on public.keywords (category);
@@ -186,8 +224,7 @@ using (true)
 with check (true);
 
 -- Storage bucket for uploaded hair images.
--- The bucket is private for personal use. The app only needs upload access and uses
--- the browser preview for the selected image.
+-- The bucket is private for personal use. The app only needs upload/delete access.
 insert into storage.buckets (
   id,
   name,
@@ -221,3 +258,8 @@ with check (bucket_id = 'hair-images');
 
 drop policy if exists "mvp_hair_images_delete" on storage.objects;
 drop policy if exists "personal_hair_images_delete" on storage.objects;
+create policy "personal_hair_images_delete"
+on storage.objects
+for delete
+to anon, authenticated
+using (bucket_id = 'hair-images');
