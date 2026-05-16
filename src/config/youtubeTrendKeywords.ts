@@ -11,8 +11,9 @@ export const defaultYoutubeTrendKeywords = [
 ];
 
 export const youtubeTrendSearchConfig = {
-  dailyVideoLimit: 6,
-  keywordLimit: 4,
-  maxResultsPerKeyword: 3,
-  rangeDays: 7,
+  dailyVideoLimit: 30,
+  keywordLimit: 6,
+  maxResultsPerKeyword: 5,
+  rangeDays: 30,
+  runVideoLimit: 30,
 };
