@@ -44,15 +44,22 @@ function toPositiveInteger(value: string | undefined, fallback: number) {
 
 export function getYoutubeDailyVideoLimit(fallback: number) {
   return Math.min(
-    20,
+    30,
     toPositiveInteger(process.env.YOUTUBE_DAILY_VIDEO_LIMIT, fallback),
   );
 }
 
 export function getYoutubeKeywordLimit(fallback: number) {
   return Math.min(
-    9,
+    6,
     toPositiveInteger(process.env.YOUTUBE_KEYWORD_LIMIT, fallback),
+  );
+}
+
+export function getYoutubeRunVideoLimit(fallback: number) {
+  return Math.min(
+    30,
+    toPositiveInteger(process.env.YOUTUBE_RUN_VIDEO_LIMIT, fallback),
   );
 }
 
@@ -106,13 +113,17 @@ export async function searchYoutubeVideosForKeywords({
   const warnings: string[] = [];
   const videoMap = new Map<string, YoutubeSearchVideo>();
   const publishedAfter = getPublishedAfter(rangeDays);
+  const safeMaxResultsPerKeyword = Math.min(
+    5,
+    Math.max(1, Math.floor(maxResultsPerKeyword)),
+  );
 
   for (const keyword of keywords) {
     const params = new URLSearchParams({
       fields:
         "items(id/videoId,snippet/title,snippet/channelTitle,snippet/publishedAt,snippet/thumbnails/default/url,snippet/thumbnails/medium/url,snippet/thumbnails/high/url)",
       key: apiKey,
-      maxResults: String(maxResultsPerKeyword),
+      maxResults: String(safeMaxResultsPerKeyword),
       order: "date",
       part: "snippet",
       publishedAfter,
