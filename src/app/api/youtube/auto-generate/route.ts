@@ -7,6 +7,7 @@ import { getSupabaseClient } from "@/lib/supabase/client";
 import {
   getYoutubeDailyVideoLimit,
   getYoutubeKeywordLimit,
+  getYoutubeRunVideoLimit,
   isYoutubeApiConfigured,
   searchYoutubeVideosForKeywords,
 } from "@/lib/youtube";
@@ -17,6 +18,7 @@ import {
 import type { TrendCategory } from "@/types/trend";
 import type {
   YoutubeGeneratedTrend,
+  YoutubeSearchVideo,
   YoutubeTrendRangeDays,
 } from "@/types/youtubeTrend";
 
@@ -30,12 +32,14 @@ type KeywordRow = {
 
 type TrendLinkRow = {
   url: string;
+  title?: string | null;
   category?: string | null;
   registered_at?: string | null;
 };
 
 type SnsPostRow = {
   url: string;
+  title?: string | null;
 };
 
 function getErrorMessage(error: unknown) {
@@ -57,6 +61,100 @@ function today() {
 
 function isYoutubeUrl(url: string) {
   return url.includes("youtube.com/") || url.includes("youtu.be/");
+}
+
+function normalizeTitle(title: string) {
+  return title
+    .normalize("NFKC")
+    .toLowerCase()
+    .replace(/[#\[\]【】（）()「」『』"'“”‘’|｜:：,，.。!！?？\-ー〜~_]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function toTitleBigrams(title: string) {
+  const compactTitle = normalizeTitle(title).replace(/\s+/g, "");
+
+  if (!compactTitle) {
+    return [];
+  }
+
+  if (compactTitle.length === 1) {
+    return [compactTitle];
+  }
+
+  return Array.from({ length: compactTitle.length - 1 }, (_, index) =>
+    compactTitle.slice(index, index + 2),
+  );
+}
+
+function getTitleSimilarity(firstTitle: string, secondTitle: string) {
+  const first = normalizeTitle(firstTitle);
+  const second = normalizeTitle(secondTitle);
+
+  if (!first || !second) {
+    return 0;
+  }
+
+  if (first === second) {
+    return 1;
+  }
+
+  if (
+    Math.min(first.length, second.length) >= 10 &&
+    (first.includes(second) || second.includes(first))
+  ) {
+    return 0.86;
+  }
+
+  const firstBigrams = new Set(toTitleBigrams(first));
+  const secondBigrams = new Set(toTitleBigrams(second));
+
+  if (firstBigrams.size === 0 || secondBigrams.size === 0) {
+    return 0;
+  }
+
+  const intersectionSize = Array.from(firstBigrams).filter((bigram) =>
+    secondBigrams.has(bigram),
+  ).length;
+  const unionSize = new Set([...firstBigrams, ...secondBigrams]).size;
+
+  return intersectionSize / unionSize;
+}
+
+function isSimilarTitle(title: string, titles: string[]) {
+  return titles.some(
+    (existingTitle) => getTitleSimilarity(title, existingTitle) >= 0.78,
+  );
+}
+
+function filterUniqueVideos({
+  existingTitles,
+  existingUrls,
+  videos,
+}: {
+  existingTitles: string[];
+  existingUrls: Set<string>;
+  videos: YoutubeSearchVideo[];
+}) {
+  const acceptedTitles = [...existingTitles];
+  const uniqueVideos: YoutubeSearchVideo[] = [];
+  let excludedCount = 0;
+
+  videos.forEach((video) => {
+    if (existingUrls.has(video.url) || isSimilarTitle(video.title, acceptedTitles)) {
+      excludedCount += 1;
+      return;
+    }
+
+    uniqueVideos.push(video);
+    acceptedTitles.push(video.title);
+  });
+
+  return {
+    excludedCount,
+    videos: uniqueVideos,
+  };
 }
 
 function getRangeDays(value: unknown): YoutubeTrendRangeDays {
@@ -115,12 +213,14 @@ async function fetchBaseData() {
   const warnings: string[] = [];
   let keywordRows: KeywordRow[] = [];
   let existingUrls = new Set<string>();
+  let existingTitles: string[] = [];
   let todayYoutubeCount = 0;
 
   if (!supabase) {
     warnings.push("Supabaseが未設定のため、保存せず生成結果だけ表示します。");
     return {
       existingKeywords: defaultYoutubeTrendKeywords,
+      existingTitles,
       existingUrls,
       keywordRows,
       todayYoutubeCount,
@@ -129,9 +229,9 @@ async function fetchBaseData() {
   }
 
   const [trendResult, keywordResult, snsResult] = await Promise.all([
-    supabase.from("trend_links").select("url,category,registered_at"),
+    supabase.from("trend_links").select("url,title,category,registered_at"),
     supabase.from("keywords").select("name,priority,use_count"),
-    supabase.from("sns_posts").select("url"),
+    supabase.from("sns_posts").select("url,title"),
   ]);
 
   if (trendResult.error) {
@@ -141,6 +241,7 @@ async function fetchBaseData() {
   } else {
     const rows = (trendResult.data ?? []) as TrendLinkRow[];
     existingUrls = new Set(rows.map((row) => row.url).filter(Boolean));
+    existingTitles = rows.map((row) => row.title ?? "").filter(Boolean);
     todayYoutubeCount = rows.filter(
       (row) =>
         Boolean(row.url) &&
@@ -166,11 +267,16 @@ async function fetchBaseData() {
       if (row.url) {
         existingUrls.add(row.url);
       }
+
+      if (row.title) {
+        existingTitles.push(row.title);
+      }
     });
   }
 
   return {
     existingKeywords: buildSearchKeywords(keywordRows, 20),
+    existingTitles,
     existingUrls,
     keywordRows,
     todayYoutubeCount,
@@ -251,6 +357,9 @@ export async function POST(request: Request) {
   );
   const keywordLimit = getYoutubeKeywordLimit(youtubeTrendSearchConfig.keywordLimit);
   const maxResultsPerKeyword = youtubeTrendSearchConfig.maxResultsPerKeyword;
+  const runVideoLimit = getYoutubeRunVideoLimit(
+    youtubeTrendSearchConfig.runVideoLimit,
+  );
 
   try {
     const baseData = await fetchBaseData();
@@ -260,6 +369,7 @@ export async function POST(request: Request) {
       dailyLimit - baseData.todayYoutubeCount,
     );
     const searchedKeywords = buildSearchKeywords(baseData.keywordRows, keywordLimit);
+    const remainingRunSlots = Math.min(remainingDailySlots, runVideoLimit);
 
     if (remainingDailySlots <= 0) {
       return NextResponse.json({
@@ -308,9 +418,19 @@ export async function POST(request: Request) {
     });
     warnings.push(...searchResult.warnings);
 
-    const candidateVideos = searchResult.videos
-      .filter((video) => !baseData.existingUrls.has(video.url))
-      .slice(0, remainingDailySlots);
+    const filteredVideos = filterUniqueVideos({
+      existingTitles: baseData.existingTitles,
+      existingUrls: baseData.existingUrls,
+      videos: searchResult.videos,
+    });
+
+    if (filteredVideos.excludedCount > 0) {
+      warnings.push(
+        `保存済みURLまたは近いタイトルの重複候補を${filteredVideos.excludedCount}件除外しました。`,
+      );
+    }
+
+    const candidateVideos = filteredVideos.videos.slice(0, remainingRunSlots);
 
     if (candidateVideos.length === 0) {
       return NextResponse.json({
@@ -337,7 +457,7 @@ export async function POST(request: Request) {
     });
     const uniqueTrends = generation.trends
       .filter((trend) => !baseData.existingUrls.has(trend.url))
-      .slice(0, remainingDailySlots);
+      .slice(0, remainingRunSlots);
     let saved = {
       savedCount: 0,
       savedTrends: [] as YoutubeGeneratedTrend[],
