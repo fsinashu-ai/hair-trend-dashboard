@@ -38,11 +38,15 @@ const envItems = [
   },
   {
     name: "YOUTUBE_DAILY_VIDEO_LIMIT",
-    description: "YouTube周回で1日に保存する動画候補数の上限です。未設定時は6件です。",
+    description: "YouTube周回で1日に保存する動画候補数の上限です。未設定時は30件です。",
   },
   {
     name: "YOUTUBE_KEYWORD_LIMIT",
-    description: "YouTube周回で1回に検索するキーワード数の上限です。未設定時は4個です。",
+    description: "YouTube周回で1回に検索するキーワード数の上限です。未設定時は6個です。",
+  },
+  {
+    name: "YOUTUBE_RUN_VIDEO_LIMIT",
+    description: "YouTube周回1回あたりに扱う候補数の上限です。未設定時は30件です。",
   },
   {
     name: "APP_USER",
