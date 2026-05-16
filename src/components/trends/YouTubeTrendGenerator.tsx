@@ -36,7 +36,7 @@ function toTrend(trend: YoutubeGeneratedTrend, index: number): Trend {
 export function YouTubeTrendGenerator({
   onGenerated,
 }: YouTubeTrendGeneratorProps) {
-  const [rangeDays, setRangeDays] = useState<YoutubeTrendRangeDays>(7);
+  const [rangeDays, setRangeDays] = useState<YoutubeTrendRangeDays>(30);
   const [isGenerating, setIsGenerating] = useState(false);
   const [statusTone, setStatusTone] = useState<StatusTone>("neutral");
   const [message, setMessage] = useState(
@@ -135,7 +135,7 @@ export function YouTubeTrendGenerator({
             {isGenerating ? "YouTube周回中" : "YouTube周回"}
           </button>
           <p className="text-xs leading-5 text-stone-500">
-            取得数は1日上限内に制限し、重複URLは保存しません。
+            1キーワード最大5件、1回最大30件までに制限し、重複URLや近いタイトルは保存しません。
           </p>
         </div>
       </div>
