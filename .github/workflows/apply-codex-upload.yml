@@ -1,0 +1,49 @@
+name: Apply Codex Upload
+
+on:
+  push:
+    paths:
+      - ".github/workflows/apply-codex-upload.yml"
+      - ".codex-upload/payload.part*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Apply uploaded files
+        run: |
+          cat .codex-upload/payload.part* > /tmp/codex-payload.b64
+          node <<'NODE'
+          const fs = require('fs');
+          const path = require('path');
+          const zlib = require('zlib');
+
+          const encoded = fs.readFileSync('/tmp/codex-payload.b64', 'utf8').replace(/\s/g, '');
+          const payload = JSON.parse(
+            zlib.brotliDecompressSync(Buffer.from(encoded, 'base64')).toString('utf8')
+          );
+
+          for (const [filePath, content] of Object.entries(payload)) {
+            fs.mkdirSync(path.dirname(filePath), { recursive: true });
+            fs.writeFileSync(filePath, content, 'utf8');
+          }
+          NODE
+
+      - name: Commit applied files
+        run: |
+          rm -rf .codex-upload
+          rm -f .github/workflows/apply-codex-upload.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git status --short
+          git commit -m "Add blog management and YouTube trend insights" || exit 0
+          git push
