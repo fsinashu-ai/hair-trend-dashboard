@@ -46,7 +46,11 @@ type TrendForm = {
   memo: string;
 };
 
-type SortOption = "published-desc" | "published-asc" | "popular-desc";
+type SortOption =
+  | "published-desc"
+  | "published-asc"
+  | "popular-desc"
+  | "salon-relevance-desc";
 type StatusTone = "neutral" | "info" | "success" | "warning" | "error";
 
 const initialForm: TrendForm = {
@@ -175,6 +179,16 @@ function getHeatScore(trend: Trend) {
   return heatScores[trend.heat];
 }
 
+function getSalonRelevanceScore(trend: Trend) {
+  const relevanceScores = {
+    高: 3,
+    中: 2,
+    低: 1,
+  } as const;
+
+  return trend.salonRelevance ? relevanceScores[trend.salonRelevance] : 0;
+}
+
 function sortTrends(trends: Trend[], sortOption: SortOption) {
   return [...trends].sort((firstTrend, secondTrend) => {
     if (sortOption === "published-asc") {
@@ -186,6 +200,18 @@ function sortTrends(trends: Trend[], sortOption: SortOption) {
 
       if (heatDiff !== 0) {
         return heatDiff;
+      }
+
+      return getTrendTime(secondTrend) - getTrendTime(firstTrend);
+    }
+
+    if (sortOption === "salon-relevance-desc") {
+      const relevanceDiff =
+        getSalonRelevanceScore(secondTrend) -
+        getSalonRelevanceScore(firstTrend);
+
+      if (relevanceDiff !== 0) {
+        return relevanceDiff;
       }
 
       return getTrendTime(secondTrend) - getTrendTime(firstTrend);
@@ -207,6 +233,12 @@ function trendMatches(trend: Trend, query: string) {
     trend.category,
     trend.memo,
     trend.summary,
+    trend.youtubeSummary ?? "",
+    trend.stylistPoints ?? "",
+    trend.instagramIdea ?? "",
+    trend.reelScript ?? "",
+    trend.counselingIdea ?? "",
+    trend.salonRelevance ?? "",
     ...trend.keywords,
     ...trend.tags,
   ]
@@ -623,6 +655,9 @@ export function TrendManager() {
                 <option value="published-desc">投稿日 新しい順</option>
                 <option value="published-asc">投稿日 古い順</option>
                 <option value="popular-desc">人気順</option>
+                <option value="salon-relevance-desc">
+                  ef.mayke`s関連度順
+                </option>
               </select>
             </div>
           </div>

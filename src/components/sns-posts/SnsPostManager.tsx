@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -76,6 +77,18 @@ function createTrendFromSnsPost(post: SnsPost): Trend {
     title: post.title,
     url: post.url,
   };
+}
+
+function createBlogHrefFromSnsPost(post: SnsPost) {
+  const params = new URLSearchParams({
+    category: post.category,
+    keyword: post.tags[0]?.replace(/^#/, "") ?? post.category,
+    snsPostId: post.id,
+    title: post.title,
+    url: post.url,
+  });
+
+  return `/blog?${params.toString()}`;
 }
 
 function SnsPostCard({
@@ -156,14 +169,22 @@ function SnsPostCard({
         </div>
       ) : null}
 
-      <a
-        className="mt-5 inline-flex min-h-10 w-full items-center justify-center rounded-md border border-teal-200 px-3 text-sm font-semibold text-teal-700 hover:bg-teal-50 sm:w-auto"
-        href={post.url}
-        rel="noreferrer"
-        target="_blank"
-      >
-        SNS投稿URLを開く
-      </a>
+      <div className="mt-5 flex flex-col gap-2 sm:flex-row">
+        <a
+          className="inline-flex min-h-10 w-full items-center justify-center rounded-md border border-teal-200 px-3 text-sm font-semibold text-teal-700 hover:bg-teal-50 sm:w-auto"
+          href={post.url}
+          rel="noreferrer"
+          target="_blank"
+        >
+          SNS投稿URLを開く
+        </a>
+        <Link
+          className="inline-flex min-h-10 w-full items-center justify-center rounded-md border border-stone-300 px-3 text-sm font-semibold text-stone-700 hover:bg-stone-50 sm:w-auto"
+          href={createBlogHrefFromSnsPost(post)}
+        >
+          ブログ化
+        </Link>
+      </div>
     </article>
   );
 }

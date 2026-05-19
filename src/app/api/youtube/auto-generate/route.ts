@@ -34,7 +34,15 @@ type TrendLinkRow = {
   url: string;
   title?: string | null;
   category?: string | null;
+  counseling_idea?: string | null;
+  instagram_idea?: string | null;
+  memo?: string | null;
+  reel_script?: string | null;
   registered_at?: string | null;
+  salon_relevance?: string | null;
+  stylist_points?: string | null;
+  tags?: string[] | null;
+  youtube_summary?: string | null;
 };
 
 type SnsPostRow = {
@@ -296,28 +304,31 @@ async function insertYoutubeTrends(trends: YoutubeGeneratedTrend[]) {
 
   const rows = trends.map((trend) => ({
     category: trend.category,
+    counseling_idea: trend.counseling_idea,
+    instagram_idea: trend.instagram_idea,
     memo: trend.memo,
+    reel_script: trend.reel_script,
     registered_at: trend.registered_at,
+    salon_relevance: trend.salon_relevance,
+    stylist_points: trend.stylist_points,
     tags: trend.tags,
     title: trend.title,
     url: trend.url,
+    youtube_summary: trend.youtube_summary,
   }));
   const { data, error } = await supabase
     .from("trend_links")
     .insert(rows)
-    .select("title,url,category,memo,registered_at,tags");
+    .select(
+      "title,url,category,memo,registered_at,tags,youtube_summary,stylist_points,instagram_idea,reel_script,counseling_idea,salon_relevance",
+    );
 
   if (!error) {
     return {
       savedCount: data?.length ?? 0,
-      savedTrends: (data ?? []).map((row) => ({
-        category: row.category as TrendCategory,
-        memo: row.memo,
-        registered_at: row.registered_at,
-        tags: row.tags ?? [],
-        title: row.title,
-        url: row.url,
-      })) as YoutubeGeneratedTrend[],
+      savedTrends: (data ?? []).map((row, index) =>
+        toSavedYoutubeTrend(row as TrendLinkRow, trends[index]),
+      ),
     };
   }
 
@@ -339,14 +350,37 @@ async function insertYoutubeTrends(trends: YoutubeGeneratedTrend[]) {
 
   return {
     savedCount: retry.data?.length ?? 0,
-    savedTrends: (retry.data ?? []).map((row, index) => ({
-      category: row.category as TrendCategory,
-      memo: row.memo,
-      registered_at: row.registered_at,
-      tags: trends[index]?.tags ?? [],
-      title: row.title,
-      url: row.url,
-    })) as YoutubeGeneratedTrend[],
+    savedTrends: (retry.data ?? []).map((row, index) =>
+      toSavedYoutubeTrend(row as TrendLinkRow, trends[index]),
+    ),
+  };
+}
+
+function toSavedYoutubeTrend(
+  row: TrendLinkRow,
+  fallback?: YoutubeGeneratedTrend,
+): YoutubeGeneratedTrend {
+  return {
+    category: (row.category as TrendCategory | undefined) ?? fallback?.category ?? "YouTube",
+    channelTitle: fallback?.channelTitle,
+    counseling_idea: row.counseling_idea ?? fallback?.counseling_idea ?? "",
+    instagram_idea: row.instagram_idea ?? fallback?.instagram_idea ?? "",
+    memo: row.memo ?? fallback?.memo ?? "",
+    publishedAt: fallback?.publishedAt,
+    reel_script: row.reel_script ?? fallback?.reel_script ?? "",
+    registered_at: row.registered_at ?? fallback?.registered_at ?? today(),
+    salon_relevance:
+      row.salon_relevance === "高" ||
+      row.salon_relevance === "中" ||
+      row.salon_relevance === "低"
+        ? row.salon_relevance
+        : fallback?.salon_relevance ?? "中",
+    stylist_points: row.stylist_points ?? fallback?.stylist_points ?? "",
+    tags: row.tags?.length ? row.tags : fallback?.tags ?? [],
+    thumbnail: fallback?.thumbnail,
+    title: row.title ?? fallback?.title ?? "YouTubeトレンド",
+    url: row.url,
+    youtube_summary: row.youtube_summary ?? fallback?.youtube_summary ?? "",
   };
 }
 

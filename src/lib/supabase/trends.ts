@@ -1,5 +1,5 @@
 import { getSupabaseClient } from "@/lib/supabase/client";
-import type { Trend, TrendCategory } from "@/types/trend";
+import type { SalonRelevance, Trend, TrendCategory } from "@/types/trend";
 
 type TrendLinkRow = {
   id: string;
@@ -9,6 +9,12 @@ type TrendLinkRow = {
   memo: string | null;
   registered_at: string | null;
   tags?: string[] | null;
+  youtube_summary?: string | null;
+  stylist_points?: string | null;
+  instagram_idea?: string | null;
+  reel_script?: string | null;
+  counseling_idea?: string | null;
+  salon_relevance?: string | null;
 };
 
 export type NewTrendLink = {
@@ -18,6 +24,12 @@ export type NewTrendLink = {
   memo: string;
   registeredAt?: string;
   tags?: string[];
+  youtubeSummary?: string;
+  stylistPoints?: string;
+  instagramIdea?: string;
+  reelScript?: string;
+  counselingIdea?: string;
+  salonRelevance?: SalonRelevance;
 };
 
 function toCategory(value: string): TrendCategory {
@@ -63,11 +75,18 @@ function toCategory(value: string): TrendCategory {
 function toTrend(row: TrendLinkRow): Trend {
   const registeredAt = row.registered_at ?? new Date().toISOString().slice(0, 10);
   const category = toCategory(row.category);
+  const salonRelevance =
+    row.salon_relevance === "高" ||
+    row.salon_relevance === "中" ||
+    row.salon_relevance === "低"
+      ? row.salon_relevance
+      : undefined;
+  const youtubeSummary = row.youtube_summary?.trim() || undefined;
 
   return {
     id: row.id,
     title: row.title,
-    summary: row.memo ?? "",
+    summary: youtubeSummary ?? row.memo ?? "",
     category,
     sourceName: "Supabase",
     url: row.url,
@@ -77,6 +96,12 @@ function toTrend(row: TrendLinkRow): Trend {
     tags: row.tags?.length ? row.tags : [`#${category}`],
     memo: row.memo ?? "",
     heat: "中",
+    youtubeSummary,
+    stylistPoints: row.stylist_points?.trim() || undefined,
+    instagramIdea: row.instagram_idea?.trim() || undefined,
+    reelScript: row.reel_script?.trim() || undefined,
+    counselingIdea: row.counseling_idea?.trim() || undefined,
+    salonRelevance,
   };
 }
 
@@ -89,7 +114,9 @@ export async function fetchTrendLinksFromSupabase() {
 
   const { data, error } = await supabase
     .from("trend_links")
-    .select("id,url,title,category,memo,registered_at,tags")
+    .select(
+      "id,url,title,category,memo,registered_at,tags,youtube_summary,stylist_points,instagram_idea,reel_script,counseling_idea,salon_relevance",
+    )
     .order("created_at", { ascending: false });
 
   if (!error) {
@@ -124,8 +151,16 @@ export async function createTrendLinkInSupabase(trend: NewTrendLink) {
       memo: trend.memo,
       registered_at: trend.registeredAt,
       tags: trend.tags ?? [],
+      youtube_summary: trend.youtubeSummary ?? "",
+      stylist_points: trend.stylistPoints ?? "",
+      instagram_idea: trend.instagramIdea ?? "",
+      reel_script: trend.reelScript ?? "",
+      counseling_idea: trend.counselingIdea ?? "",
+      salon_relevance: trend.salonRelevance ?? "中",
     })
-    .select("id,url,title,category,memo,registered_at,tags")
+    .select(
+      "id,url,title,category,memo,registered_at,tags,youtube_summary,stylist_points,instagram_idea,reel_script,counseling_idea,salon_relevance",
+    )
     .single();
 
   if (!error) {
@@ -202,9 +237,17 @@ export async function restoreTrendLinksToSupabase(
         tags: trend.tags,
         title: trend.title,
         url: trend.url,
+        youtube_summary: trend.youtubeSummary ?? "",
+        stylist_points: trend.stylistPoints ?? "",
+        instagram_idea: trend.instagramIdea ?? "",
+        reel_script: trend.reelScript ?? "",
+        counseling_idea: trend.counselingIdea ?? "",
+        salon_relevance: trend.salonRelevance ?? "中",
       })),
     )
-    .select("id,url,title,category,memo,registered_at,tags");
+    .select(
+      "id,url,title,category,memo,registered_at,tags,youtube_summary,stylist_points,instagram_idea,reel_script,counseling_idea,salon_relevance",
+    );
 
   if (error) {
     throw error;

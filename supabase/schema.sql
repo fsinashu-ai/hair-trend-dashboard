@@ -54,6 +54,18 @@ create table if not exists public.trend_links (
 alter table public.trend_links add column if not exists tags text[] not null default '{}';
 alter table public.trend_links add column if not exists registered_at date not null default current_date;
 alter table public.trend_links add column if not exists memo text not null default '';
+alter table public.trend_links add column if not exists youtube_summary text not null default '';
+alter table public.trend_links add column if not exists stylist_points text not null default '';
+alter table public.trend_links add column if not exists instagram_idea text not null default '';
+alter table public.trend_links add column if not exists reel_script text not null default '';
+alter table public.trend_links add column if not exists counseling_idea text not null default '';
+alter table public.trend_links add column if not exists salon_relevance text not null default '中';
+update public.trend_links
+set salon_relevance = '中'
+where salon_relevance is null or salon_relevance not in ('高', '中', '低');
+alter table public.trend_links drop constraint if exists trend_links_salon_relevance_check;
+alter table public.trend_links add constraint trend_links_salon_relevance_check
+check (salon_relevance in ('高', '中', '低'));
 
 create table if not exists public.ai_outputs (
   id uuid primary key default gen_random_uuid(),
@@ -127,16 +139,56 @@ alter table public.sns_posts drop constraint if exists sns_posts_sns_type_check;
 alter table public.sns_posts add constraint sns_posts_sns_type_check
 check (sns_type in ('Instagram', 'YouTube', 'Pinterest', 'TikTok', 'X', 'Other'));
 
+create table if not exists public.blog_posts (
+  id uuid primary key default gen_random_uuid(),
+  title text not null,
+  slug text not null,
+  category text not null,
+  target_keyword text not null default '',
+  meta_description text not null default '',
+  excerpt text not null default '',
+  content text not null default '',
+  status text not null default 'draft',
+  tags text[] not null default '{}',
+  related_trend_ids uuid[] not null default '{}',
+  related_sns_post_ids uuid[] not null default '{}',
+  related_youtube_urls text[] not null default '{}',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table public.blog_posts add column if not exists target_keyword text not null default '';
+alter table public.blog_posts add column if not exists meta_description text not null default '';
+alter table public.blog_posts add column if not exists excerpt text not null default '';
+alter table public.blog_posts add column if not exists content text not null default '';
+alter table public.blog_posts add column if not exists status text not null default 'draft';
+alter table public.blog_posts add column if not exists tags text[] not null default '{}';
+alter table public.blog_posts add column if not exists related_trend_ids uuid[] not null default '{}';
+alter table public.blog_posts add column if not exists related_sns_post_ids uuid[] not null default '{}';
+alter table public.blog_posts add column if not exists related_youtube_urls text[] not null default '{}';
+alter table public.blog_posts alter column status set default 'draft';
+update public.blog_posts
+set status = 'draft'
+where status is null or status not in ('idea', 'draft', 'ready', 'published');
+alter table public.blog_posts drop constraint if exists blog_posts_status_check;
+alter table public.blog_posts add constraint blog_posts_status_check
+check (status in ('idea', 'draft', 'ready', 'published'));
+
 create index if not exists keywords_name_idx on public.keywords (name);
 create index if not exists keywords_category_idx on public.keywords (category);
 create index if not exists trend_links_category_idx on public.trend_links (category);
 create index if not exists trend_links_registered_at_idx on public.trend_links (registered_at desc);
+create index if not exists trend_links_salon_relevance_idx on public.trend_links (salon_relevance);
 create index if not exists ai_outputs_created_at_idx on public.ai_outputs (created_at desc);
 create index if not exists trend_sources_is_active_idx on public.trend_sources (is_active);
 create index if not exists trend_sources_source_type_idx on public.trend_sources (source_type);
 create index if not exists sns_posts_sns_type_idx on public.sns_posts (sns_type);
 create index if not exists sns_posts_category_idx on public.sns_posts (category);
 create index if not exists sns_posts_saved_at_idx on public.sns_posts (saved_at desc);
+create index if not exists blog_posts_created_at_idx on public.blog_posts (created_at desc);
+create index if not exists blog_posts_category_idx on public.blog_posts (category);
+create index if not exists blog_posts_status_idx on public.blog_posts (status);
+create index if not exists blog_posts_slug_idx on public.blog_posts (slug);
 
 drop trigger if exists set_keywords_updated_at on public.keywords;
 create trigger set_keywords_updated_at
@@ -168,11 +220,18 @@ before update on public.sns_posts
 for each row
 execute function public.set_updated_at();
 
+drop trigger if exists set_blog_posts_updated_at on public.blog_posts;
+create trigger set_blog_posts_updated_at
+before update on public.blog_posts
+for each row
+execute function public.set_updated_at();
+
 alter table public.keywords enable row level security;
 alter table public.trend_links enable row level security;
 alter table public.ai_outputs enable row level security;
 alter table public.trend_sources enable row level security;
 alter table public.sns_posts enable row level security;
+alter table public.blog_posts enable row level security;
 
 -- Personal-use policies:
 -- The current app uses the public anon key from the browser, so these policies allow
@@ -218,6 +277,14 @@ with check (true);
 drop policy if exists "personal_sns_posts_all" on public.sns_posts;
 create policy "personal_sns_posts_all"
 on public.sns_posts
+for all
+to anon, authenticated
+using (true)
+with check (true);
+
+drop policy if exists "personal_blog_posts_all" on public.blog_posts;
+create policy "personal_blog_posts_all"
+on public.blog_posts
 for all
 to anon, authenticated
 using (true)

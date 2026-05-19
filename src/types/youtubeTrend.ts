@@ -1,4 +1,4 @@
-import type { TrendCategory } from "@/types/trend";
+import type { SalonRelevance, TrendCategory } from "@/types/trend";
 
 export type YoutubeTrendRangeDays = 7 | 30;
 
@@ -19,6 +19,12 @@ export type YoutubeGeneratedTrend = {
   memo: string;
   tags: string[];
   registered_at: string;
+  youtube_summary: string;
+  stylist_points: string;
+  instagram_idea: string;
+  reel_script: string;
+  counseling_idea: string;
+  salon_relevance: SalonRelevance;
   channelTitle?: string;
   publishedAt?: string;
   thumbnail?: string;

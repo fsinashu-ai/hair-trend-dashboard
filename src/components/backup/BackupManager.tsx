@@ -6,6 +6,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { StatusMessage } from "@/components/ui/StatusMessage";
 import { dummyGeneratedPosts } from "@/data/dummyGeneratedPosts";
 import { dummyKeywords } from "@/data/dummyKeywords";
+import { dummyBlogPosts } from "@/data/dummyBlogPosts";
 import { dummyTrends } from "@/data/dummyTrends";
 import {
   backupToCsv,
@@ -17,16 +18,22 @@ import {
 } from "@/lib/backup/format";
 import {
   readLocalBackupGeneratedPosts,
+  readLocalBackupBlogPosts,
   readLocalBackupKeywords,
   readLocalBackupTrends,
   readLocalRecentTrends,
   saveLocalBackupGeneratedPosts,
+  saveLocalBackupBlogPosts,
   saveLocalBackupKeywords,
   saveLocalBackupTrends,
   saveLocalRecentTrends,
   type RecentTrendBackup,
 } from "@/lib/backup/localStorage";
 import { fetchAiOutputsFromSupabase, restoreAiOutputsToSupabase } from "@/lib/supabase/aiOutputs";
+import {
+  fetchBlogPostsFromSupabase,
+  restoreBlogPostsToSupabase,
+} from "@/lib/supabase/blogPosts";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
 import {
   fetchKeywordsFromSupabase,
@@ -83,6 +90,7 @@ function mergeRecentTrends(
 function getBackupCount(backup: AppBackup) {
   return (
     backup.data.trends.length +
+    backup.data.blogPosts.length +
     backup.data.keywords.length +
     backup.data.generatedPosts.length +
     backup.data.recentTrends.length
@@ -92,13 +100,14 @@ function getBackupCount(backup: AppBackup) {
 function BackupStats({ backup }: { backup: AppBackup }) {
   const stats = [
     { label: "トレンド", value: backup.data.trends.length },
+    { label: "ブログ", value: backup.data.blogPosts.length },
     { label: "キーワード", value: backup.data.keywords.length },
     { label: "AI生成結果", value: backup.data.generatedPosts.length },
     { label: "最近見たトレンド", value: backup.data.recentTrends.length },
   ];
 
   return (
-    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
       {stats.map((stat) => (
         <div
           className="rounded-lg border border-stone-200 bg-stone-50 p-4"
@@ -116,13 +125,15 @@ function BackupStats({ backup }: { backup: AppBackup }) {
 
 async function loadCurrentBackupData(): Promise<BackupData> {
   if (supabaseEnabled) {
-    const [trends, keywords, generatedPosts] = await Promise.all([
+    const [trends, keywords, generatedPosts, blogPosts] = await Promise.all([
       fetchTrendLinksFromSupabase(),
       fetchKeywordsFromSupabase(),
       fetchAiOutputsFromSupabase(),
+      fetchBlogPostsFromSupabase(),
     ]);
 
     return {
+      blogPosts: blogPosts ?? [],
       generatedPosts: generatedPosts ?? [],
       keywords: keywords ?? [],
       recentTrends: readLocalRecentTrends(),
@@ -131,6 +142,7 @@ async function loadCurrentBackupData(): Promise<BackupData> {
   }
 
   return {
+    blogPosts: readLocalBackupBlogPosts() ?? dummyBlogPosts,
     generatedPosts: readLocalBackupGeneratedPosts() ?? dummyGeneratedPosts,
     keywords: readLocalBackupKeywords() ?? dummyKeywords,
     recentTrends: readLocalRecentTrends(),
@@ -301,6 +313,9 @@ export function BackupManager() {
         await restoreAiOutputsToSupabase(importedBackup.data.generatedPosts, {
           replaceExisting,
         });
+        await restoreBlogPostsToSupabase(importedBackup.data.blogPosts, {
+          replaceExisting,
+        });
         saveLocalRecentTrends(
           replaceExisting
             ? importedBackup.data.recentTrends
@@ -325,6 +340,14 @@ export function BackupManager() {
           mode === "replace"
             ? importedBackup.data.generatedPosts
             : mergeById(currentPosts, importedBackup.data.generatedPosts),
+        );
+        saveLocalBackupBlogPosts(
+          mode === "replace"
+            ? importedBackup.data.blogPosts
+            : mergeById(
+                readLocalBackupBlogPosts() ?? dummyBlogPosts,
+                importedBackup.data.blogPosts,
+              ),
         );
         saveLocalRecentTrends(
           mode === "replace"

@@ -1,4 +1,5 @@
 import type { GeneratedPost } from "@/types/generatedPost";
+import type { BlogPost } from "@/types/blog";
 import type { Keyword } from "@/types/keyword";
 import type { SnsPost } from "@/types/snsPost";
 import type { Trend, TrendHeat } from "@/types/trend";
@@ -12,6 +13,7 @@ export type RecentTrendBackup = {
 };
 
 export const backupStorageKeys = {
+  blogPosts: "hair-trend-dashboard:backup-blog-posts",
   generatedPosts: "hair-trend-dashboard:backup-generated-posts",
   keywords: "hair-trend-dashboard:backup-keywords",
   recentTrends: "hair-trend-dashboard:recent-trends",
@@ -81,6 +83,14 @@ export function readLocalBackupSnsPosts() {
 
 export function saveLocalBackupSnsPosts(posts: SnsPost[]) {
   saveArrayToStorage(backupStorageKeys.snsPosts, posts);
+}
+
+export function readLocalBackupBlogPosts() {
+  return readArrayFromStorage<BlogPost>(backupStorageKeys.blogPosts);
+}
+
+export function saveLocalBackupBlogPosts(posts: BlogPost[]) {
+  saveArrayToStorage(backupStorageKeys.blogPosts, posts);
 }
 
 export function readLocalRecentTrends() {

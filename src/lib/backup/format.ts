@@ -1,11 +1,18 @@
 import type { GeneratedPost } from "@/types/generatedPost";
 import type { Keyword, KeywordPriority } from "@/types/keyword";
-import type { Trend, TrendCategory, TrendHeat } from "@/types/trend";
+import type {
+  SalonRelevance,
+  Trend,
+  TrendCategory,
+  TrendHeat,
+} from "@/types/trend";
+import type { BlogPost } from "@/types/blog";
 import type { RecentTrendBackup } from "./localStorage";
 
 export type BackupSource = "local" | "supabase";
 
 export type BackupData = {
+  blogPosts: BlogPost[];
   generatedPosts: GeneratedPost[];
   keywords: Keyword[];
   recentTrends: RecentTrendBackup[];
@@ -42,6 +49,7 @@ const trendCategories: TrendCategory[] = [
 ];
 
 const trendHeats: TrendHeat[] = ["高", "中", "低"];
+const salonRelevances: SalonRelevance[] = ["高", "中", "低"];
 const keywordPriorities: KeywordPriority[] = ["高", "中", "低"];
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -93,6 +101,17 @@ function toTrendHeat(value: unknown): TrendHeat {
   return "中";
 }
 
+function toSalonRelevance(value: unknown): SalonRelevance | undefined {
+  if (
+    typeof value === "string" &&
+    salonRelevances.includes(value as SalonRelevance)
+  ) {
+    return value as SalonRelevance;
+  }
+
+  return undefined;
+}
+
 function toKeywordPriority(value: unknown): KeywordPriority {
   if (
     typeof value === "string" &&
@@ -131,6 +150,12 @@ function normalizeTrend(value: unknown, index: number): Trend | null {
     tags: toStringArray(value.tags).length ? toStringArray(value.tags) : [`#${category}`],
     title: toStringValue(value.title, `インポートしたトレンド ${index + 1}`),
     url: toStringValue(value.url, "https://example.com"),
+    youtubeSummary: toStringValue(value.youtubeSummary, ""),
+    stylistPoints: toStringValue(value.stylistPoints, ""),
+    instagramIdea: toStringValue(value.instagramIdea, ""),
+    reelScript: toStringValue(value.reelScript, ""),
+    counselingIdea: toStringValue(value.counselingIdea, ""),
+    salonRelevance: toSalonRelevance(value.salonRelevance),
   };
 }
 
@@ -162,6 +187,46 @@ function normalizeGeneratedPost(value: unknown, index: number): GeneratedPost | 
     theme: toStringValue(value.theme, "美容トレンド"),
     tone: toStringValue(value.tone, "やさしく提案"),
     usedKeywords: toStringArray(value.usedKeywords),
+  };
+}
+
+function normalizeBlogPost(value: unknown, index: number): BlogPost | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  return {
+    category:
+      value.category === "縮毛矯正" ||
+      value.category === "白髪ぼかし" ||
+      value.category === "大人女性ヘア" ||
+      value.category === "ショート" ||
+      value.category === "ボブ" ||
+      value.category === "ヘアカラー" ||
+      value.category === "ホームケア" ||
+      value.category === "松江市美容室" ||
+      value.category === "SNS投稿ネタ"
+        ? value.category
+        : "髪質改善",
+    content: toStringValue(value.content, ""),
+    createdAt: normalizeDate(value.createdAt),
+    excerpt: toStringValue(value.excerpt, ""),
+    id: toStringValue(value.id, `import-blog-${index + 1}`),
+    metaDescription: toStringValue(value.metaDescription, ""),
+    relatedSnsPostIds: toStringArray(value.relatedSnsPostIds),
+    relatedTrendIds: toStringArray(value.relatedTrendIds),
+    relatedYoutubeUrls: toStringArray(value.relatedYoutubeUrls),
+    slug: toStringValue(value.slug, `import-blog-${index + 1}`),
+    status:
+      value.status === "idea" ||
+      value.status === "ready" ||
+      value.status === "published"
+        ? value.status
+        : "draft",
+    tags: toStringArray(value.tags),
+    targetKeyword: toStringValue(value.targetKeyword, ""),
+    title: toStringValue(value.title, `インポートしたブログ ${index + 1}`),
+    updatedAt: normalizeDate(value.updatedAt),
   };
 }
 
@@ -214,6 +279,7 @@ export function parseAppBackup(value: unknown): AppBackup | null {
     appName: "hair-trend-dashboard",
     data: {
       generatedPosts: normalizeArray(data.generatedPosts, normalizeGeneratedPost),
+      blogPosts: normalizeArray(data.blogPosts, normalizeBlogPost),
       keywords: normalizeArray(data.keywords, normalizeKeyword),
       recentTrends: normalizeArray(data.recentTrends, normalizeRecentTrend),
       trends: normalizeArray(data.trends, normalizeTrend),
@@ -244,6 +310,7 @@ export function backupToCsv(backup: AppBackup) {
       "URL",
       "日付",
       "優先度/人気",
+      "ef.mayke`s関連度",
       "利用回数",
     ],
   ];
@@ -261,6 +328,25 @@ export function backupToCsv(backup: AppBackup) {
       trend.url,
       trend.registeredAt,
       trend.heat,
+      trend.salonRelevance ?? "",
+      "",
+    ]);
+  });
+
+  backup.data.blogPosts.forEach((post) => {
+    rows.push([
+      "ブログ記事",
+      post.id,
+      post.title,
+      post.category,
+      post.excerpt,
+      post.metaDescription,
+      post.targetKeyword,
+      post.tags.join(" / "),
+      post.slug,
+      post.createdAt,
+      post.status,
+      "",
       "",
     ]);
   });
@@ -278,6 +364,7 @@ export function backupToCsv(backup: AppBackup) {
       "",
       "",
       keyword.priority,
+      "",
       String(keyword.useCount),
     ]);
   });
@@ -296,6 +383,7 @@ export function backupToCsv(backup: AppBackup) {
       post.createdAt,
       post.tone,
       "",
+      "",
     ]);
   });
 
@@ -312,6 +400,7 @@ export function backupToCsv(backup: AppBackup) {
       "",
       trend.viewedAt,
       trend.heat,
+      "",
       "",
     ]);
   });

@@ -26,10 +26,16 @@ function toTrend(trend: YoutubeGeneratedTrend, index: number): Trend {
     publishedAt: trend.publishedAt?.slice(0, 10) || trend.registered_at,
     registeredAt: trend.registered_at,
     sourceName: trend.channelTitle ?? "YouTube周回",
-    summary: trend.memo,
+    summary: trend.youtube_summary || trend.memo,
     tags: trend.tags,
     title: trend.title,
     url: trend.url,
+    youtubeSummary: trend.youtube_summary,
+    stylistPoints: trend.stylist_points,
+    instagramIdea: trend.instagram_idea,
+    reelScript: trend.reel_script,
+    counselingIdea: trend.counseling_idea,
+    salonRelevance: trend.salon_relevance,
   };
 }
 

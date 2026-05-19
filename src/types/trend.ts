@@ -19,6 +19,7 @@ export type TrendCategory =
   | "YouTube";
 
 export type TrendHeat = "高" | "中" | "低";
+export type SalonRelevance = "高" | "中" | "低";
 
 export type Trend = {
   id: string;
@@ -33,4 +34,10 @@ export type Trend = {
   tags: string[];
   memo: string;
   heat: TrendHeat;
+  youtubeSummary?: string;
+  stylistPoints?: string;
+  instagramIdea?: string;
+  reelScript?: string;
+  counselingIdea?: string;
+  salonRelevance?: SalonRelevance;
 };
