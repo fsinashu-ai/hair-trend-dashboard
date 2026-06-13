@@ -7,7 +7,7 @@ export default function TrendSourcesPage() {
       <PageHeader
         eyebrow="Sources"
         title="取得元管理"
-        description="RSS、公式サイト、自社サイト、メーカー、美容ディーラー、美容メディアの取得元を管理します。SNSスクレイピングは行いません。"
+        description="信頼性の高い美容情報源を優先度別に管理し、公開RSSだけを安全に確認します。SNSやサイト本文のスクレイピングは行いません。"
       />
       <TrendSourceManager />
     </main>

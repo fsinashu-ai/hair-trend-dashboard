@@ -67,6 +67,20 @@ alter table public.trend_links drop constraint if exists trend_links_salon_relev
 alter table public.trend_links add constraint trend_links_salon_relevance_check
 check (salon_relevance in ('高', '中', '低'));
 
+delete from public.trend_links as duplicate
+using public.trend_links as original
+where duplicate.url = original.url
+  and (
+    duplicate.created_at > original.created_at
+    or (
+      duplicate.created_at = original.created_at
+      and duplicate.id > original.id
+    )
+  );
+
+create unique index if not exists trend_links_url_unique_idx
+on public.trend_links (url);
+
 create table if not exists public.ai_outputs (
   id uuid primary key default gen_random_uuid(),
   theme text not null,
@@ -87,8 +101,14 @@ create table if not exists public.trend_sources (
   title text not null,
   url text not null,
   source_type text not null default 'RSS',
-  is_active boolean not null default true,
+  category text not null default '美容業界ニュース',
+  priority text not null default 'medium',
+  is_active boolean not null default false,
   memo text not null default '',
+  rss_url text,
+  rss_status text not null default 'unchecked',
+  consecutive_failures integer not null default 0,
+  last_error text not null default '',
   last_fetched_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -96,24 +116,386 @@ create table if not exists public.trend_sources (
 
 alter table public.trend_sources add column if not exists source_type text not null default 'RSS';
 alter table public.trend_sources add column if not exists is_active boolean not null default true;
+alter table public.trend_sources add column if not exists category text not null default '美容業界ニュース';
+alter table public.trend_sources add column if not exists priority text not null default 'medium';
 alter table public.trend_sources add column if not exists memo text not null default '';
+alter table public.trend_sources add column if not exists rss_url text;
+alter table public.trend_sources add column if not exists rss_status text not null default 'unchecked';
+alter table public.trend_sources add column if not exists consecutive_failures integer not null default 0;
+alter table public.trend_sources add column if not exists last_error text not null default '';
 alter table public.trend_sources add column if not exists last_fetched_at timestamptz;
 alter table public.trend_sources alter column source_type set default 'RSS';
+alter table public.trend_sources alter column is_active set default false;
+alter table public.trend_sources alter column priority set default 'medium';
+alter table public.trend_sources alter column rss_status set default 'unchecked';
 update public.trend_sources
 set source_type = 'RSS'
 where source_type is null
   or source_type not in ('RSS', '公式サイト', '自社サイト', 'メーカー', '美容ディーラー', '美容メディア');
+update public.trend_sources
+set priority = 'medium'
+where priority is null or priority not in ('high', 'medium', 'low');
+update public.trend_sources
+set rss_status = 'unchecked'
+where rss_status is null
+  or rss_status not in ('unchecked', 'available', 'unavailable', 'error');
+update public.trend_sources
+set consecutive_failures = 0
+where consecutive_failures is null or consecutive_failures < 0;
 alter table public.trend_sources drop constraint if exists trend_sources_source_type_check;
 alter table public.trend_sources add constraint trend_sources_source_type_check
 check (source_type in ('RSS', '公式サイト', '自社サイト', 'メーカー', '美容ディーラー', '美容メディア'));
+alter table public.trend_sources drop constraint if exists trend_sources_priority_check;
+alter table public.trend_sources add constraint trend_sources_priority_check
+check (priority in ('high', 'medium', 'low'));
+alter table public.trend_sources drop constraint if exists trend_sources_rss_status_check;
+alter table public.trend_sources add constraint trend_sources_rss_status_check
+check (rss_status in ('unchecked', 'available', 'unavailable', 'error'));
+alter table public.trend_sources drop constraint if exists trend_sources_failures_check;
+alter table public.trend_sources add constraint trend_sources_failures_check
+check (consecutive_failures >= 0);
+
+delete from public.trend_sources as duplicate
+using public.trend_sources as original
+where duplicate.url = original.url
+  and (
+    duplicate.created_at > original.created_at
+    or (
+      duplicate.created_at = original.created_at
+      and duplicate.id > original.id
+    )
+  );
+
+create unique index if not exists trend_sources_url_unique_idx
+on public.trend_sources (url);
+
+insert into public.trend_sources (
+  title,
+  url,
+  source_type,
+  category,
+  priority,
+  memo,
+  is_active,
+  rss_url,
+  rss_status
+)
+values
+  (
+    'ef.mayke`s 自社ブログ',
+    'https://www.ef-mayke-s.com/blog_toppage/',
+    '自社サイト',
+    '自社サイト',
+    'high',
+    '髪質改善・縮毛矯正・くせ毛・パサつき改善の自社発信を最優先で確認します。',
+    true,
+    'https://www.ef-mayke-s.com/blog-feed.xml',
+    'available'
+  ),
+  (
+    'Beautopia',
+    'https://www.beautopia.jp/',
+    '美容メディア',
+    '美容業界ニュース',
+    'high',
+    '美容業界のニュース、サロン動向、メーカー情報の確認に使います。',
+    true,
+    'https://www.beautopia.jp/feed/',
+    'available'
+  ),
+  (
+    'KAMIU',
+    'https://kamiu.jp/',
+    '美容メディア',
+    '美容業界ニュース',
+    'high',
+    '美容師・美容室向けの業界ニュースや経営情報を確認します。',
+    true,
+    'https://kamiu.jp/feed/',
+    'available'
+  ),
+  (
+    'BeautyTech.jp',
+    'https://beautytech.jp/',
+    '美容メディア',
+    '美容業界ニュース',
+    'medium',
+    '美容業界のテクノロジー、DX、顧客体験の動向を確認します。',
+    false,
+    null,
+    'unchecked'
+  ),
+  (
+    'WWDJAPAN BEAUTY',
+    'https://www.wwdjapan.com/category/beauty',
+    '美容メディア',
+    '美容業界ニュース',
+    'high',
+    'ビューティー市場、ブランド、商品トレンドの確認に使います。',
+    true,
+    'https://www.wwdjapan.com/category/beauty/feed',
+    'available'
+  ),
+  (
+    'FASHIONSNAP BEAUTY',
+    'https://www.fashionsnap.com/beauty/',
+    '美容メディア',
+    '美容業界ニュース',
+    'medium',
+    '美容・ファッション業界の新商品や市場ニュースを確認します。',
+    false,
+    'https://www.fashionsnap.com/rss.xml',
+    'available'
+  ),
+  (
+    'PR TIMES 美容サロン',
+    'https://prtimes.jp/topics/keywords/美容サロン',
+    '美容メディア',
+    '美容業界ニュース',
+    'low',
+    '美容サロン関連の公式発表を確認します。RSSが見つからない場合は手動参照のみです。',
+    false,
+    null,
+    'unchecked'
+  ),
+  (
+    'HOT PEPPER Beauty Magazine',
+    'https://beauty.hotpepper.jp/magazine/',
+    '美容メディア',
+    'ヘアスタイル・トレンド',
+    'high',
+    '一般のお客様が検索している髪型やヘアケア特集を確認します。',
+    true,
+    null,
+    'unchecked'
+  ),
+  (
+    'HOT PEPPER Beauty ヘアカタログ',
+    'https://beauty.hotpepper.jp/catalog/',
+    '美容メディア',
+    'ヘアスタイル・トレンド',
+    'high',
+    'ショート、ボブ、レイヤーなど国内の人気スタイルを確認します。',
+    true,
+    null,
+    'unchecked'
+  ),
+  (
+    'MAQUIA ヘアカタログ',
+    'https://maquia.hpplus.jp/catalog/hair/',
+    '美容メディア',
+    'ヘアスタイル・トレンド',
+    'medium',
+    '大人女性向けのヘアスタイル、カラー、ケア提案を確認します。',
+    false,
+    null,
+    'unchecked'
+  ),
+  (
+    'minimo room',
+    'https://minimodel.jp/room/hair',
+    '美容メディア',
+    'ヘアスタイル・トレンド',
+    'medium',
+    '若年層を含むヘアデザインや美容師発信の傾向を確認します。',
+    false,
+    null,
+    'unchecked'
+  ),
+  (
+    '美的 ヘア',
+    'https://www.biteki.com/hair',
+    '美容メディア',
+    'ヘアスタイル・トレンド',
+    'high',
+    '大人女性向けヘア、髪悩み、ホームケア、店販提案に活用します。',
+    true,
+    'https://www.biteki.com/feed/',
+    'available'
+  ),
+  (
+    'FASHIONSNAP ヘアカタログ',
+    'https://www.fashionsnap.com/beauty/inside/hair-catalogue/',
+    '美容メディア',
+    'ヘアスタイル・トレンド',
+    'medium',
+    '感度の高いヘアデザインやビューティービジュアルを確認します。',
+    false,
+    'https://www.fashionsnap.com/rss.xml',
+    'available'
+  ),
+  (
+    'HOT PEPPER Beauty Academy',
+    'https://hba.beauty.hotpepper.jp/',
+    '公式サイト',
+    'サロン経営・市場データ',
+    'high',
+    '美容室経営、集客、顧客動向、スタッフ教育の参考にします。',
+    true,
+    'https://hba.beauty.hotpepper.jp/feed/',
+    'available'
+  ),
+  (
+    '美容センサス',
+    'https://hba.beauty.hotpepper.jp/search/search_cat/census/',
+    '公式サイト',
+    'サロン経営・市場データ',
+    'high',
+    '年代別の美容行動や市場データを松江市の集客提案に活用します。',
+    true,
+    'https://hba.beauty.hotpepper.jp/search/search_cat/census/feed/',
+    'available'
+  ),
+  (
+    'アリミノ',
+    'https://www.arimino.co.jp/',
+    'メーカー',
+    'メーカー',
+    'medium',
+    'カラー、パーマ、スタイリング、サロン向け新商品の情報を確認します。',
+    false,
+    'https://www.arimino.co.jp/feed/',
+    'available'
+  ),
+  (
+    'ナプラ',
+    'https://www.napla.co.jp/',
+    'メーカー',
+    'メーカー',
+    'medium',
+    'ヘアカラー、ケア、スタイリング商品の提案材料を確認します。',
+    false,
+    'https://www.napla.co.jp/feed/',
+    'available'
+  ),
+  (
+    'フィヨーレ',
+    'https://www.fiole.jp/',
+    'メーカー',
+    'メーカー',
+    'medium',
+    'カラー、ヘアケア、サロン専売品の新着情報を確認します。',
+    false,
+    null,
+    'unchecked'
+  ),
+  (
+    'ミルボン',
+    'https://www.milbon.co.jp/',
+    'メーカー',
+    'メーカー',
+    'high',
+    '髪質改善、ホームケア、店販、サロン市場情報を確認します。',
+    true,
+    null,
+    'unchecked'
+  ),
+  (
+    'デミ コスメティクス',
+    'https://www.demi.nicca.co.jp/',
+    'メーカー',
+    'メーカー',
+    'medium',
+    'ヘアケア、頭皮ケア、カラー、店販提案の情報を確認します。',
+    false,
+    null,
+    'unchecked'
+  ),
+  (
+    'ルベル',
+    'https://www.lebel.co.jp/',
+    'メーカー',
+    'メーカー',
+    'medium',
+    'サロン向けヘアケア、カラー、教育情報を確認します。',
+    false,
+    'https://www.lebel.co.jp/feed/',
+    'available'
+  ),
+  (
+    '資生堂プロフェッショナル',
+    'https://www.shiseido-professional.com/ja',
+    'メーカー',
+    'メーカー',
+    'high',
+    '大人女性向けケア、カラー、サロン専売商品の情報を確認します。',
+    true,
+    null,
+    'unchecked'
+  ),
+  (
+    'hoyu 公式ニュース',
+    'https://www.hoyu.co.jp/',
+    'メーカー',
+    'メーカー',
+    'medium',
+    'ヘアカラーの新色、商品、研究情報を確認します。',
+    false,
+    'https://www.hoyu.co.jp/news/rss.xml',
+    'available'
+  ),
+  (
+    'Allure Hair',
+    'https://www.allure.com/hair-ideas',
+    '美容メディア',
+    '海外トレンド',
+    'high',
+    '海外のヘアスタイル、カラー、ヘアケアのトレンドを確認します。',
+    true,
+    'https://www.allure.com/feed/rss',
+    'available'
+  ),
+  (
+    'Vogue Beauty',
+    'https://www.vogue.com/beauty',
+    '美容メディア',
+    '海外トレンド',
+    'high',
+    '海外の上品なビューティー、ヘア、カラー傾向を確認します。',
+    true,
+    'https://www.vogue.com/feed/rss',
+    'available'
+  ),
+  (
+    'Harper''s Bazaar Hair',
+    'https://www.harpersbazaar.com/beauty/hair/',
+    '美容メディア',
+    '海外トレンド',
+    'medium',
+    '大人女性向けの海外ヘアスタイルやケア情報を確認します。',
+    false,
+    'https://www.harpersbazaar.com/rss/beauty.xml',
+    'available'
+  ),
+  (
+    'Behindthechair.com',
+    'https://behindthechair.com/',
+    '美容メディア',
+    '海外トレンド',
+    'medium',
+    '海外美容師の技術、カラー、サロンワーク事例を確認します。RSS未確認時は手動参照のみです。',
+    false,
+    null,
+    'unchecked'
+  )
+on conflict (url) do update
+set
+  source_type = excluded.source_type,
+  category = excluded.category,
+  priority = excluded.priority,
+  rss_url = coalesce(public.trend_sources.rss_url, excluded.rss_url),
+  rss_status = case
+    when excluded.rss_url is not null then 'available'
+    else public.trend_sources.rss_status
+  end;
 
 create table if not exists public.sns_posts (
   id uuid primary key default gen_random_uuid(),
   sns_type text not null default 'Other',
   url text not null,
-  title text not null,
+  title text not nul,
   memo text not null default '',
-  category text not null default 'SNS投稿',
+  category text not null default 'SNS投稽',
   tags text[] not null default '{}',
   ai_summary text not null default '',
   post_idea text not null default '',
@@ -182,6 +564,9 @@ create index if not exists trend_links_salon_relevance_idx on public.trend_links
 create index if not exists ai_outputs_created_at_idx on public.ai_outputs (created_at desc);
 create index if not exists trend_sources_is_active_idx on public.trend_sources (is_active);
 create index if not exists trend_sources_source_type_idx on public.trend_sources (source_type);
+create index if not exists trend_sources_category_idx on public.trend_sources (category);
+create index if not exists trend_sources_priority_idx on public.trend_sources (priority);
+create index if not exists trend_sources_rss_status_idx on public.trend_sources (rss_status);
 create index if not exists sns_posts_sns_type_idx on public.sns_posts (sns_type);
 create index if not exists sns_posts_category_idx on public.sns_posts (category);
 create index if not exists sns_posts_saved_at_idx on public.sns_posts (saved_at desc);
@@ -232,6 +617,19 @@ alter table public.ai_outputs enable row level security;
 alter table public.trend_sources enable row level security;
 alter table public.sns_posts enable row level security;
 alter table public.blog_posts enable row level security;
+
+-- Explicit Data API grants for Supabase projects created after May 30, 2026.
+grant usage on schema public to anon, authenticated, service_role;
+
+grant select, insert, update, delete
+on table
+  public.keywords,
+  public.trend_links,
+  public.ai_outputs,
+  public.trend_sources,
+  public.sns_posts,
+  public.blog_posts
+to anon, authenticated, service_role;
 
 -- Personal-use policies:
 -- The current app uses the public anon key from the browser, so these policies allow
@@ -298,7 +696,6 @@ insert into storage.buckets (
   public,
   file_size_limit,
   allowed_mime_types
-)
 values (
   'hair-images',
   'hair-images',

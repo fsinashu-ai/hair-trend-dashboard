@@ -6,6 +6,9 @@ import type { TrendSourceType } from "@/types/trendSource";
 export const runtime = "nodejs";
 
 type TestRequest = {
+  category?: string;
+  consecutiveFailures?: number;
+  rssUrl?: string | null;
   title?: string;
   url?: string;
   sourceType?: TrendSourceType;
@@ -34,39 +37,43 @@ export async function POST(request: Request) {
     );
   }
 
-  if (sourceType !== "RSS") {
-    return NextResponse.json({
-      message:
-        "URL形式は有効です。RSS以外の取得元は、HTMLスクレイピングを行わず手動登録URLとして扱います。",
-      sampleCount: 0,
-      samples: [],
-    });
-  }
-
   const source: TrendSource = {
-    categoryHint: "髪質改善",
+    categoryHint: body.category?.trim() || "髪質改善",
     enabled: true,
+    failureCount: Math.max(0, body.consecutiveFailures ?? 0),
     name: title,
     note: "取得テスト",
-    type: "rss",
+    priority: "high",
+    rssUrl: body.rssUrl?.trim() || undefined,
+    sourceType,
+    type: body.rssUrl || sourceType === "RSS" ? "rss" : "manual-url",
     url,
   };
   const result = await fetchRssArticles([source]);
+  const sourceResult = result.sourceResults[0];
 
   if (result.articles.length === 0) {
     return NextResponse.json({
       message:
-        "RSS記事を取得できませんでした。RSS URLか、サイト側の公開状態を確認してください。",
+        "公開RSSを確認できませんでした。HTML本文は取得せず、手動参照URLとして残します。",
+      rssUrl: sourceResult?.rssUrl ?? null,
+      rssStatus: sourceResult?.status ?? "unavailable",
       sampleCount: 0,
       samples: [],
       warnings: result.errors,
+      consecutiveFailures:
+        sourceResult?.consecutiveFailures ??
+        Math.max(0, body.consecutiveFailures ?? 0) + 1,
     });
   }
 
   return NextResponse.json({
-    message: "RSS記事を取得できました。",
+    message: `公開RSSを確認できました。1回の取得は最大5記事です。`,
+    rssUrl: sourceResult?.rssUrl ?? null,
+    rssStatus: sourceResult?.status ?? "available",
     sampleCount: result.articles.length,
     samples: result.articles.slice(0, 3),
     warnings: result.errors,
+    consecutiveFailures: 0,
   });
 }
