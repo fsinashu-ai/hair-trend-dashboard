@@ -37,7 +37,8 @@ jobs:
                   target = (destination / relative).resolve()
                   if target != destination and destination not in target.parents:
                       raise RuntimeError(f"Unsafe archive path: {item.filename}")
-                  if item.is_dir():
+                  is_directory = item.is_dir() or item.filename.endswith(("/", "\\"))
+                  if is_directory:
                       target.mkdir(parents=True, exist_ok=True)
                   else:
                       target.parent.mkdir(parents=True, exist_ok=True)
