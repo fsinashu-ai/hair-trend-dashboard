@@ -26,7 +26,23 @@ jobs:
           base64 --decode /tmp/codex-update.b64 > /tmp/codex-update.zip
           echo "c344470f50bf65b0d25eb0fced98af5720fe011e0c32e69a2f2e5621a8fedbb8  /tmp/codex-update.zip" | sha256sum --check -
           mkdir -p /tmp/codex-update
-          unzip -q /tmp/codex-update.zip -d /tmp/codex-update
+          python - <<'PY'
+          from pathlib import Path
+          from zipfile import ZipFile
+
+          destination = Path("/tmp/codex-update").resolve()
+          with ZipFile("/tmp/codex-update.zip") as archive:
+              for item in archive.infolist():
+                  relative = Path(*item.filename.replace("\\", "/").split("/"))
+                  target = (destination / relative).resolve()
+                  if target != destination and destination not in target.parents:
+                      raise RuntimeError(f"Unsafe archive path: {item.filename}")
+                  if item.is_dir():
+                      target.mkdir(parents=True, exist_ok=True)
+                  else:
+                      target.parent.mkdir(parents=True, exist_ok=True)
+                      target.write_bytes(archive.read(item))
+          PY
           cp -R /tmp/codex-update/. .
           rm -rf .codex-upload
           rm -f .github/workflows/apply-codex-upload.yml
