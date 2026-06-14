@@ -90,19 +90,73 @@ export function AutoTrendGenerator({ onGenerated }: AutoTrendGeneratorProps) {
       setMessage(
         data.savedCount > 0
           ? `${data.providerLabel}ã§${data.savedCount}ä»¶ã‚’ä¿å­˜ã—ã¾ã—ãŸã€‚`
-          : `${data.providerLabel}ã§å€™è£œã‚’ç”Ÿæˆã—ã¾ã—ãŸã€‚Supabaseæœªè¨­å®šã¾ãŸã¯é‡è¤‡ã®ãf8à y/çykf8àkøà`¸à¢¸ào¸àføà¤øà ˜ˆ
-NÂˆHØ]Ú
-\œ›ÜŠHÂˆÙ]™\Ý[
-[
-NÂˆÙ]Ý]\ÕÛ™J™\œ›ÜˆŠNÂˆÙ]Y\ÜØYÙJˆ\œ›Üˆ[œÝ[˜Ù[Ùˆ\œ›Ü‚ˆÈ\œ›Ü‹›Y\ÜØYÙBˆˆº!ê¹båyå'ù¢$8àjùi,y¥eøàeøào¸àeøàgøà ””ÔÈT“8à TÝ\X˜\Ùz*+yk¦¸à PRz*+yk¦¸à¤¹è®º*£xàeøài¸àcøàh8àexàa8à ˆ‹ˆ
-NÂˆHš[˜[HÂˆÙ]\ÑÙ[™\˜][™Ê˜[ÙJNÂˆBˆB‚ˆ™]\›ˆ
-ˆÙXÝ[ÛˆÛ\ÜÓ˜[YOHœ›Ý[™Y[È›Ü™\ˆ›Ü™\‹]X[LŒ™Ë]Ú]HMÚYÝË\ÛHÛNœMH‚ˆ]ˆÛ\ÜÓ˜[YOH™›^›^]Ü˜\][\Ë\Ý\\ÝYžKX™]ÙY[ˆØ\LÈ‚ˆ]‚ˆˆÛ\ÜÓ˜[YOH^[È›Û\Ù[ZX›Û^\ÝÛ™KNML‚ˆ8àâ8àë8àìøàâz!ê¹båyå'ù¢$ˆÚ‚ˆÛ\ÜÓ˜[YOH›]Lˆ^\ÛHXY[™ËMˆ^\ÝÛ™KMŒ‚ˆ9ænúc,¹®"8àoÕT“8à xà«xàï8àëøàï8àâxà T”Ôú*&9.¢øà¤¸à ¸àj8àjøà yï£¹k®yn*ùd$xàdxàk¹ænúc,¹`&z(ç8à¤¹/g8à¢¸ào¸àfxà ”Ó”øà®xà«øàë8à©8àå8àìøà¬8àkú(c8àa8ào¸àføà¤øà ‚ˆÜ‚ˆÙ]‚ˆ˜YÙHÛ™OHš[™›È””ÔËÕT“8àæxàï8à®OÐ˜YÙO‚ˆÙ]‚‚ˆ]ˆÛ\ÜÓ˜[YOH›]M›^›^XÛÛØ\LÈÛN™›^\›ÝÈÛNš][\ËXÙ[\ˆ‚ˆ]Û‚ˆÛ\ÜÓ˜[YOH›Z[‹ZLLH›Ý[™Y[Y™Ë]X[MÌM^\ÛH›Û\Ù[ZX›Û^]Ú]HÝ™\Ž˜™Ë]X[N\ØX›Y˜Ý\œÛÜ‹[›ÝX[ÝÙY\ØX›Y˜™Ë\ÝÛ™KLÌ‚ˆ\ØX›Y^Ú\ÑÙ[™\˜][™ßBˆÛÛXÚÏ^Ú[™QÙ[™\˜]_Bˆ\OH˜]Ûˆ‚ˆ‚ˆÚ\ÑÙ[™\˜][™ÈÈº!ê¹båyå'ù¢$9.+Hˆˆº!ê¹båyå'ù¢$8àfxà¢ÈŸBˆØ]Û‚ˆÛ\ÜÓ˜[YOH^^ÈXY[™ËMH^\ÝÛ™KML‚ˆ”Ôøàc9cå¸à£8àj¸àa8à­xà©8àâ8àkøà®xà«xààøàåøàeøà xà¨¸àåøàê¹aj9/døàkù«h¸à xào¸àføà¤øà ‚ˆÜ‚ˆÙ]‚‚ˆ]ˆÛ\ÜÓ˜[YOH›]M‚ˆÝ]\ÓY\ÜØYÙH\ÓØY[™Ï^Ú\ÑÙ[™\˜][™ßHÛ™O^ÜÝ]\ÕÛ™_O‚ˆÛY\ÜØYÙ_BˆÔÝ]\ÓY\ÜØYÙO‚ˆÙ]‚‚ˆÜ™\Ý[È
-ˆ]ˆÛ\ÜÓ˜[YOH›]M›Ý[™Y[Y™Ë\ÝÛ™KMLLÈ‚ˆ]ˆÛ\ÜÓ˜[YOH™›^›^]Ü˜\Ø\Lˆ‚ˆ˜YÙHÛ™OHœÝXØÙ\ÜÈ¹`&z(çÜ™\Ý[™Ù[™\˜]YÛÝ[y.íÐ˜YÙO‚ˆ˜YÙHÛ™O^Ü™\Ý[œØ]™YÛÝ[ˆÈœÝXØÙ\ÜÈˆˆ›™]]˜[ŸO‚ˆ9/çykfÜ™\Ý[œØ]™YÛÝ[y.í‚ˆÐ˜YÙO‚ˆ˜YÙHÛ™OH›™]]˜[žÜ™\Ý[œ›ÝšY\“X™[OÐ˜YÙO‚ˆÙ]‚ˆÜ™\Ý[Ø\›š[™ÜË›[™ÝˆÈ
-ˆ[Û\ÜÓ˜[YOH›]LÈÜšYØ\LH^^ÈXY[™ËMH^\ÝÛ™KMŒ‚ˆÜ™\Ý[Ø\›š[™ÜË›X\
+          : `${data.providerLabel}ã§å€™è£œã‚’ç”Ÿæˆã—ã¾ã—ãŸã€‚Supabaseæœªè¨­å®šã¾ãŸã¯é‡è¤‡ã®ãŸã‚ä¿å­˜ã¯ã‚ã‚Šã¾ã›ã‚“ã€‚`,
+      );
+    } catch (error) {
+      setResult(null);
+      setStatusTone("error");
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "è‡ªå‹•ç”Ÿæˆã«å¤±æ•—ã—ã¾ã—ãŸã€‚RSS URLã€Supabaseè¨­å®šã€AIè¨­å®šã‚’ç¢ºèªã—ã¦ãã ã•ã„ã€‚",
+      );
+    } finally {
+      setIsGenerating(false);
+    }
+  }
 
-Ø\›š[™ÊHOˆ
-ˆHÙ^O^ÝØ\›š[™ßO¸àîÞÝØ\›š[™ßOÛO‚ˆ
-J_BˆÝ[‚ˆ
-Hˆ[BˆÙ]‚ˆ
-Hˆ[BˆÜÙXÝ[Û‚ˆ
-NÂŸB
+  return (
+    <section className="rounded-lg border border-teal-200 bg-white p-4 shadow-sm sm:p-5">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-semibold text-stone-950">
+            ãƒˆãƒ¬ãƒ³ãƒ‰è‡ªå‹•ç”Ÿæˆ
+          </h2>
+          <p className="mt-2 text-sm leading-6 text-stone-600">
+            ç™»éŒ²æ¸ˆã¿URLã€ã‚­ãƒ¼ãƒ¯ãƒ¼ãƒ‰ã€RSSè¨˜äº‹ã‚’ã‚‚ã¨ã«ã€ç¾Žå®¹å¸«å‘ã‘ã®ç™»éŒ²å€™è£œã‚’ä½œã‚Šã¾ã™ã€‚SNSã‚¹ã‚¯ãƒ¬ã‚¤ãƒ”ãƒ³ã‚°ã¯è¡Œã„ã¾ã›ã‚“ã€‚
+          </p>
+        </div>
+        <Badge tone="info">RSS/URLãƒ™ãƒ¼ã‚¹</Badge>
+      </div>
+
+      <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
+        <button
+          className="min-h-11 rounded-md bg-teal-700 px-4 text-sm font-semibold text-white hover:bg-teal-800 disabled:cursor-not-allowed disabled:bg-stone-300"
+          disabled={isGenerating}
+          onClick={handleGenerate}
+          type="button"
+        >
+          {isGenerating ? "è‡ªå‹•ç”Ÿæˆä¸­" : "è‡ªå‹•ç”Ÿæˆã™ã‚‹"}
+        </button>
+        <p className="text-xs leading-5 text-stone-500">
+          RSSãŒå–ã‚Œãªã„ã‚µã‚¤ãƒˆã¯ã‚¹ã‚­ãƒƒãƒ—ã—ã€ã‚¢ãƒ—ãƒªå…¨ä½“ã¯æ­¢ã‚ã¾ã›ã‚“ã€‚
+        </p>
+      </div>
+
+      <div className="mt-4">
+        <StatusMessage isLoading={isGenerating} tone={statusTone}>
+          {message}
+        </StatusMessage>
+      </div>
+
+      {result ? (
+        <div className="mt-4 rounded-md bg-stone-50 p-3">
+          <div className="flex flex-wrap gap-2">
+            <Badge tone="success">å€™è£œ {result.generatedCount}ä»¶</Badge>
+            <Badge tone={result.savedCount > 0 ? "success" : "neutral"}>
+              ä¿å­˜ {result.savedCount}ä»¶
+            </Badge>
+            <Badge tone="neutral">{result.providerLabel}</Badge>
+          </div>
+          {result.warnings.length > 0 ? (
+            <ul className="mt-3 grid gap-1 text-xs leading-5 text-stone-600">
+              {result.warnings.map((warning) => (
+                <li key={warning}>ãƒ»{warning}</li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+      ) : null}
+    </section>
+  );
+}
