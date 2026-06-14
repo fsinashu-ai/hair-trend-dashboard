@@ -10,7 +10,6 @@ on:
 permissions:
   contents: write
 
-# Retry after correcting the staged archive checksum.
 jobs:
   apply:
     runs-on: ubuntu-latest
@@ -23,6 +22,7 @@ jobs:
         run: |
           set -euo pipefail
           cat .codex-upload/part-*.txt > /tmp/codex-update.b64
+          sed -i 's/rV9\/b705/rV9b705/' /tmp/codex-update.b64
           base64 --decode /tmp/codex-update.b64 > /tmp/codex-update.zip
           echo "c344470f50bf65b0d25eb0fced98af5720fe011e0c32e69a2f2e5621a8fedbb8  /tmp/codex-update.zip" | sha256sum --check -
           mkdir -p /tmp/codex-update
