@@ -493,9 +493,9 @@ create table if not exists public.sns_posts (
   id uuid primary key default gen_random_uuid(),
   sns_type text not null default 'Other',
   url text not null,
-  title text not nul,
+  title text not null,
   memo text not null default '',
-  category text not null default 'SNS投稽',
+  category text not null default 'SNS投稿',
   tags text[] not null default '{}',
   ai_summary text not null default '',
   post_idea text not null default '',
@@ -520,6 +520,223 @@ where sns_type is null or sns_type not in ('Instagram', 'YouTube', 'Pinterest', 
 alter table public.sns_posts drop constraint if exists sns_posts_sns_type_check;
 alter table public.sns_posts add constraint sns_posts_sns_type_check
 check (sns_type in ('Instagram', 'YouTube', 'Pinterest', 'TikTok', 'X', 'Other'));
+
+create table if not exists public.social_sources (
+  id uuid primary key default gen_random_uuid(),
+  sns_type text not null default 'Other',
+  account_name text not null,
+  profile_url text not null,
+  source_mode text not null default 'manual_url',
+  is_active boolean not null default true,
+  priority text not null default 'medium',
+  memo text not null default '',
+  last_checked_at timestamptz,
+  last_error text not null default '',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table public.social_sources add column if not exists sns_type text not null default 'Other';
+alter table public.social_sources add column if not exists account_name text not null default '';
+alter table public.social_sources add column if not exists profile_url text not null default '';
+alter table public.social_sources add column if not exists source_mode text not null default 'manual_url';
+alter table public.social_sources add column if not exists is_active boolean not null default true;
+alter table public.social_sources add column if not exists priority text not null default 'medium';
+alter table public.social_sources add column if not exists memo text not null default '';
+alter table public.social_sources add column if not exists last_checked_at timestamptz;
+alter table public.social_sources add column if not exists last_error text not null default '';
+update public.social_sources
+set sns_type = 'Other'
+where sns_type is null or sns_type not in ('Instagram', 'YouTube', 'Pinterest', 'TikTok', 'X', 'Other');
+update public.social_sources
+set source_mode = 'manual_url'
+where source_mode is null
+  or source_mode not in ('official_api', 'manual_url', 'metadata_only');
+update public.social_sources
+set priority = 'medium'
+where priority is null or priority not in ('high', 'medium', 'low');
+alter table public.social_sources drop constraint if exists social_sources_sns_type_check;
+alter table public.social_sources add constraint social_sources_sns_type_check
+check (sns_type in ('Instagram', 'YouTube', 'Pinterest', 'TikTok', 'X', 'Other'));
+alter table public.social_sources drop constraint if exists social_sources_mode_check;
+alter table public.social_sources add constraint social_sources_mode_check
+check (source_mode in ('official_api', 'manual_url', 'metadata_only'));
+alter table public.social_sources drop constraint if exists social_sources_priority_check;
+alter table public.social_sources add constraint social_sources_priority_check
+check (priority in ('high', 'medium', 'low'));
+
+delete from public.social_sources as duplicate
+using public.social_sources as original
+where duplicate.profile_url = original.profile_url
+  and (
+    duplicate.created_at > original.created_at
+    or (
+      duplicate.created_at = original.created_at
+      and duplicate.id > original.id
+    )
+  );
+
+create unique index if not exists social_sources_profile_url_unique_idx
+on public.social_sources (profile_url);
+
+insert into public.social_sources (
+  sns_type,
+  account_name,
+  profile_url,
+  source_mode,
+  is_active,
+  priority,
+  memo
+)
+values
+  (
+    'Instagram',
+    'Instagram 手動登録',
+    'https://www.instagram.com/',
+    'manual_url',
+    true,
+    'high',
+    '公式APIを使わない場合は、確認済みの公開投稿URLだけを登録します。'
+  ),
+  (
+    'Pinterest',
+    'Pinterest 公開URL',
+    'https://www.pinterest.com/',
+    'metadata_only',
+    true,
+    'medium',
+    '取得できる公開メタデータだけを参考表示し、画像や本文は転載しません。'
+  ),
+  (
+    'TikTok',
+    'TikTok 手動登録',
+    'https://www.tiktok.com/',
+    'manual_url',
+    true,
+    'medium',
+    '取得が拒否された場合は停止し、URL・タイトル・メモだけを手動登録します。'
+  ),
+  (
+    'X',
+    'X 手動登録',
+    'https://x.com/',
+    'manual_url',
+    false,
+    'low',
+    '非公式スクレイピングは行わず、確認済みの公開投稿URLだけを扱います。'
+  ),
+  (
+    'YouTube',
+    'YouTube Data API',
+    'https://www.youtube.com/',
+    'official_api',
+    true,
+    'high',
+    '自動検索は既存のYouTube Data API機能を利用します。'
+  )
+on conflict (profile_url) do update
+set
+  sns_type = excluded.sns_type,
+  account_name = excluded.account_name,
+  source_mode = excluded.source_mode,
+  priority = excluded.priority,
+  memo = excluded.memo;
+
+create table if not exists public.social_posts (
+  id uuid primary key default gen_random_uuid(),
+  source_id uuid references public.social_sources(id) on delete set null,
+  sns_type text not null default 'Other',
+  url text not null,
+  canonical_url text not null,
+  title text not null,
+  description text not null default '',
+  og_image_url text not null default '',
+  published_at timestamptz,
+  category text not null default 'SNS投稿',
+  tags text[] not null default '{}',
+  ai_summary text not null default '',
+  relevance text not null default '中',
+  instagram_post_idea text not null default '',
+  blog_idea text not null default '',
+  counseling_idea text not null default '',
+  imported_at timestamptz not null default now(),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table public.social_posts add column if not exists source_id uuid;
+alter table public.social_posts add column if not exists sns_type text not null default 'Other';
+alter table public.social_posts add column if not exists canonical_url text not null default '';
+alter table public.social_posts add column if not exists description text not null default '';
+alter table public.social_posts add column if not exists og_image_url text not null default '';
+alter table public.social_posts add column if not exists published_at timestamptz;
+alter table public.social_posts add column if not exists category text not null default 'SNS投稿';
+alter table public.social_posts add column if not exists tags text[] not null default '{}';
+alter table public.social_posts add column if not exists ai_summary text not null default '';
+alter table public.social_posts add column if not exists relevance text not null default '中';
+alter table public.social_posts add column if not exists instagram_post_idea text not null default '';
+alter table public.social_posts add column if not exists blog_idea text not null default '';
+alter table public.social_posts add column if not exists counseling_idea text not null default '';
+alter table public.social_posts add column if not exists imported_at timestamptz not null default now();
+update public.social_posts
+set canonical_url = url
+where canonical_url is null or canonical_url = '';
+update public.social_posts
+set sns_type = 'Other'
+where sns_type is null or sns_type not in ('Instagram', 'YouTube', 'Pinterest', 'TikTok', 'X', 'Other');
+update public.social_posts
+set relevance = '中'
+where relevance is null or relevance not in ('高', '中', '低');
+alter table public.social_posts drop constraint if exists social_posts_sns_type_check;
+alter table public.social_posts add constraint social_posts_sns_type_check
+check (sns_type in ('Instagram', 'YouTube', 'Pinterest', 'TikTok', 'X', 'Other'));
+alter table public.social_posts drop constraint if exists social_posts_relevance_check;
+alter table public.social_posts add constraint social_posts_relevance_check
+check (relevance in ('高', '中', '低'));
+
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'social_posts_source_id_fkey'
+  ) then
+    alter table public.social_posts
+    add constraint social_posts_source_id_fkey
+    foreign key (source_id)
+    references public.social_sources(id)
+    on delete set null;
+  end if;
+end
+$$;
+
+delete from public.social_posts as duplicate
+using public.social_posts as original
+where duplicate.canonical_url = original.canonical_url
+  and (
+    duplicate.created_at > original.created_at
+    or (
+      duplicate.created_at = original.created_at
+      and duplicate.id > original.id
+    )
+  );
+
+delete from public.social_posts as duplicate
+using public.social_posts as original
+where duplicate.url = original.url
+  and (
+    duplicate.created_at > original.created_at
+    or (
+      duplicate.created_at = original.created_at
+      and duplicate.id > original.id
+    )
+  );
+
+create unique index if not exists social_posts_canonical_url_unique_idx
+on public.social_posts (canonical_url);
+
+create unique index if not exists social_posts_url_unique_idx
+on public.social_posts (url);
 
 create table if not exists public.blog_posts (
   id uuid primary key default gen_random_uuid(),
@@ -570,6 +787,13 @@ create index if not exists trend_sources_rss_status_idx on public.trend_sources 
 create index if not exists sns_posts_sns_type_idx on public.sns_posts (sns_type);
 create index if not exists sns_posts_category_idx on public.sns_posts (category);
 create index if not exists sns_posts_saved_at_idx on public.sns_posts (saved_at desc);
+create index if not exists social_sources_sns_type_idx on public.social_sources (sns_type);
+create index if not exists social_sources_is_active_idx on public.social_sources (is_active);
+create index if not exists social_sources_priority_idx on public.social_sources (priority);
+create index if not exists social_posts_sns_type_idx on public.social_posts (sns_type);
+create index if not exists social_posts_category_idx on public.social_posts (category);
+create index if not exists social_posts_relevance_idx on public.social_posts (relevance);
+create index if not exists social_posts_imported_at_idx on public.social_posts (imported_at desc);
 create index if not exists blog_posts_created_at_idx on public.blog_posts (created_at desc);
 create index if not exists blog_posts_category_idx on public.blog_posts (category);
 create index if not exists blog_posts_status_idx on public.blog_posts (status);
@@ -605,6 +829,18 @@ before update on public.sns_posts
 for each row
 execute function public.set_updated_at();
 
+drop trigger if exists set_social_sources_updated_at on public.social_sources;
+create trigger set_social_sources_updated_at
+before update on public.social_sources
+for each row
+execute function public.set_updated_at();
+
+drop trigger if exists set_social_posts_updated_at on public.social_posts;
+create trigger set_social_posts_updated_at
+before update on public.social_posts
+for each row
+execute function public.set_updated_at();
+
 drop trigger if exists set_blog_posts_updated_at on public.blog_posts;
 create trigger set_blog_posts_updated_at
 before update on public.blog_posts
@@ -616,6 +852,8 @@ alter table public.trend_links enable row level security;
 alter table public.ai_outputs enable row level security;
 alter table public.trend_sources enable row level security;
 alter table public.sns_posts enable row level security;
+alter table public.social_sources enable row level security;
+alter table public.social_posts enable row level security;
 alter table public.blog_posts enable row level security;
 
 -- Explicit Data API grants for Supabase projects created after May 30, 2026.
@@ -628,6 +866,8 @@ on table
   public.ai_outputs,
   public.trend_sources,
   public.sns_posts,
+  public.social_sources,
+  public.social_posts,
   public.blog_posts
 to anon, authenticated, service_role;
 
@@ -680,6 +920,22 @@ to anon, authenticated
 using (true)
 with check (true);
 
+drop policy if exists "personal_social_sources_all" on public.social_sources;
+create policy "personal_social_sources_all"
+on public.social_sources
+for all
+to anon, authenticated
+using (true)
+with check (true);
+
+drop policy if exists "personal_social_posts_all" on public.social_posts;
+create policy "personal_social_posts_all"
+on public.social_posts
+for all
+to anon, authenticated
+using (true)
+with check (true);
+
 drop policy if exists "personal_blog_posts_all" on public.blog_posts;
 create policy "personal_blog_posts_all"
 on public.blog_posts
@@ -696,6 +952,7 @@ insert into storage.buckets (
   public,
   file_size_limit,
   allowed_mime_types
+)
 values (
   'hair-images',
   'hair-images',
