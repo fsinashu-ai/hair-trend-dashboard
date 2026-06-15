@@ -83,7 +83,7 @@ export function readLocalSocialSources() {
   const seenHandles = new Set<string>();
   const seenUrls = new Set<string>();
   const uniqueSources = upgradedSources.filter((source) => {
-    const handle = source.handle.toLowerCase();
+    const handle = (source.handle ?? "").toLowerCase();
     const profileUrl = source.profileUrl.toLowerCase();
     const isDuplicate =
       (handle !== "" && seenHandles.has(handle)) || seenUrls.has(profileUrl);
@@ -96,7 +96,7 @@ export function readLocalSocialSources() {
     return !isDuplicate;
   });
   const missingSources = defaultSources.filter((source) => {
-    const handle = source.handle.toLowerCase();
+    const handle = (source.handle ?? "").toLowerCase();
     const profileUrl = source.profileUrl.toLowerCase();
 
     if ((handle && seenHandles.has(handle)) || seenUrls.has(profileUrl)) {
@@ -135,7 +135,9 @@ export function createLocalSocialSource(input: NewSocialSource): SocialSource {
 
   return {
     ...input,
+    category: input.category ?? "その他",
     createdAt: now,
+    handle: input.handle ?? "",
     id: `social-source-${Date.now()}`,
     lastError: "",
     updatedAt: now,
