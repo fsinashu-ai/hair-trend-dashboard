@@ -7,12 +7,26 @@ export type SocialSourceMode =
   | "metadata_only";
 
 export type SocialPriority = "high" | "medium" | "low";
+export type SocialReviewStatus = "未確認" | "採用" | "保留" | "不要";
+
+export type SocialSourceCategory =
+  | "自社Instagram"
+  | "髪質改善美容師"
+  | "縮毛矯正専門美容師"
+  | "白髪ぼかし美容師"
+  | "大人女性向け美容師"
+  | "美容メーカー公式"
+  | "美容ディーラー公式"
+  | "海外ヘアトレンド"
+  | "その他";
 
 export type SocialSource = {
   id: string;
   snsType: SnsType;
   accountName: string;
+  handle: string;
   profileUrl: string;
+  category: SocialSourceCategory;
   sourceMode: SocialSourceMode;
   isActive: boolean;
   priority: SocialPriority;
@@ -70,6 +84,8 @@ export type SocialPost = {
   instagramPostIdea: string;
   blogIdea: string;
   counselingIdea: string;
+  reviewStatus: SocialReviewStatus;
+  isFavorite: boolean;
   importedAt: string;
   createdAt?: string;
   updatedAt?: string;
@@ -77,6 +93,8 @@ export type SocialPost = {
 
 export type NewSocialPost = Omit<
   SocialPost,
-  "id" | "createdAt" | "updatedAt"
->;
-
+  "id" | "reviewStatus" | "isFavorite" | "createdAt" | "updatedAt"
+> & {
+  reviewStatus?: SocialReviewStatus;
+  isFavorite?: boolean;
+};
