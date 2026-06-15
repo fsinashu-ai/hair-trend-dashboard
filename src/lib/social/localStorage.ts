@@ -4,6 +4,7 @@ import type {
   SocialPost,
   SocialSource,
 } from "@/types/social";
+import { initialInstagramSources } from "@/data/initialSocialSources";
 
 const postsKey = "hair-trend-social-posts";
 const sourcesKey = "hair-trend-social-sources";
@@ -11,6 +12,8 @@ const sourcesKey = "hair-trend-social-sources";
 const defaultSources: SocialSource[] = [
   {
     accountName: "Instagram 手動登録",
+    category: "その他",
+    handle: "",
     id: "social-source-instagram",
     isActive: true,
     lastError: "",
@@ -22,6 +25,8 @@ const defaultSources: SocialSource[] = [
   },
   {
     accountName: "Pinterest 公開URL",
+    category: "その他",
+    handle: "",
     id: "social-source-pinterest",
     isActive: true,
     lastError: "",
@@ -33,6 +38,8 @@ const defaultSources: SocialSource[] = [
   },
   {
     accountName: "YouTube Data API",
+    category: "その他",
+    handle: "",
     id: "social-source-youtube",
     isActive: true,
     lastError: "",
@@ -42,6 +49,7 @@ const defaultSources: SocialSource[] = [
     snsType: "YouTube",
     sourceMode: "official_api",
   },
+  ...initialInstagramSources,
 ];
 
 function readValue<T>(key: string, fallback: T): T {
@@ -66,7 +74,44 @@ function saveValue<T>(key: string, value: T) {
 }
 
 export function readLocalSocialSources() {
-  return readValue<SocialSource[]>(sourcesKey, defaultSources);
+  const storedSources = readValue<SocialSource[]>(sourcesKey, defaultSources);
+  const upgradedSources = storedSources.map((source) => ({
+    ...source,
+    category: source.category ?? "その他",
+    handle: source.handle ?? "",
+  }));
+  const seenHandles = new Set<string>();
+  const seenUrls = new Set<string>();
+  const uniqueSources = upgradedSources.filter((source) => {
+    const handle = source.handle.toLowerCase();
+    const profileUrl = source.profileUrl.toLowerCase();
+    const isDuplicate =
+      (handle !== "" && seenHandles.has(handle)) || seenUrls.has(profileUrl);
+
+    if (handle) {
+      seenHandles.add(handle);
+    }
+    seenUrls.add(profileUrl);
+
+    return !isDuplicate;
+  });
+  const missingSources = defaultSources.filter((source) => {
+    const handle = source.handle.toLowerCase();
+    const profileUrl = source.profileUrl.toLowerCase();
+
+    if ((handle && seenHandles.has(handle)) || seenUrls.has(profileUrl)) {
+      return false;
+    }
+
+    if (handle) {
+      seenHandles.add(handle);
+    }
+    seenUrls.add(profileUrl);
+
+    return true;
+  });
+
+  return [...uniqueSources, ...missingSources];
 }
 
 export function saveLocalSocialSources(sources: SocialSource[]) {
@@ -74,7 +119,11 @@ export function saveLocalSocialSources(sources: SocialSource[]) {
 }
 
 export function readLocalSocialPosts() {
-  return readValue<SocialPost[]>(postsKey, []);
+  return readValue<SocialPost[]>(postsKey, []).map((post) => ({
+    ...post,
+    isFavorite: post.isFavorite ?? false,
+    reviewStatus: post.reviewStatus ?? "未確認",
+  }));
 }
 
 export function saveLocalSocialPosts(posts: SocialPost[]) {
@@ -100,7 +149,8 @@ export function createLocalSocialPost(input: NewSocialPost): SocialPost {
     ...input,
     createdAt: now,
     id: `social-post-${Date.now()}`,
+    isFavorite: input.isFavorite ?? false,
+    reviewStatus: input.reviewStatus ?? "未確認",
     updatedAt: now,
   };
 }
-
