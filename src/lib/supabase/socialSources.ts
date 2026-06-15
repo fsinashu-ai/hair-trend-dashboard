@@ -11,9 +11,9 @@ type SocialSourceRow = {
   id: string;
   sns_type: string;
   account_name: string;
-  handle: string;
+  handle?: string | null;
   profile_url: string;
-  category: string;
+  category?: string | null;
   source_mode: string;
   is_active: boolean;
   priority: string;
@@ -54,9 +54,9 @@ function toPriority(value: string): SocialPriority {
 function toSocialSource(row: SocialSourceRow): SocialSource {
   return {
     accountName: row.account_name,
-    category: row.category as SocialSource["category"],
+    category: (row.category ?? "その他") as SocialSource["category"],
     createdAt: row.created_at,
-    handle: row.handle,
+    handle: row.handle ?? "",
     id: row.id,
     isActive: row.is_active,
     lastCheckedAt: row.last_checked_at ?? undefined,
@@ -73,8 +73,8 @@ function toSocialSource(row: SocialSourceRow): SocialSource {
 function toRow(input: NewSocialSource) {
   return {
     account_name: input.accountName,
-    category: input.category,
-    handle: input.handle,
+    category: input.category ?? "その他",
+    handle: input.handle ?? "",
     is_active: input.isActive,
     memo: input.memo,
     priority: input.priority,
