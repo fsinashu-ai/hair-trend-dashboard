@@ -11,7 +11,9 @@ type SocialSourceRow = {
   id: string;
   sns_type: string;
   account_name: string;
+  handle: string;
   profile_url: string;
+  category: string;
   source_mode: string;
   is_active: boolean;
   priority: string;
@@ -23,7 +25,7 @@ type SocialSourceRow = {
 };
 
 const selectFields =
-  "id,sns_type,account_name,profile_url,source_mode,is_active,priority,memo,last_checked_at,last_error,created_at,updated_at";
+  "id,sns_type,account_name,handle,profile_url,category,source_mode,is_active,priority,memo,last_checked_at,last_error,created_at,updated_at";
 
 function toSnsType(value: string): SnsType {
   return value === "Instagram" ||
@@ -52,7 +54,9 @@ function toPriority(value: string): SocialPriority {
 function toSocialSource(row: SocialSourceRow): SocialSource {
   return {
     accountName: row.account_name,
+    category: row.category as SocialSource["category"],
     createdAt: row.created_at,
+    handle: row.handle,
     id: row.id,
     isActive: row.is_active,
     lastCheckedAt: row.last_checked_at ?? undefined,
@@ -69,6 +73,8 @@ function toSocialSource(row: SocialSourceRow): SocialSource {
 function toRow(input: NewSocialSource) {
   return {
     account_name: input.accountName,
+    category: input.category,
+    handle: input.handle,
     is_active: input.isActive,
     memo: input.memo,
     priority: input.priority,
@@ -135,6 +141,8 @@ export async function updateSocialSourceInSupabase(
     ...(changes.accountName !== undefined
       ? { account_name: changes.accountName }
       : {}),
+    ...(changes.category !== undefined ? { category: changes.category } : {}),
+    ...(changes.handle !== undefined ? { handle: changes.handle } : {}),
     ...(changes.isActive !== undefined ? { is_active: changes.isActive } : {}),
     ...(changes.lastCheckedAt !== undefined
       ? { last_checked_at: changes.lastCheckedAt }
@@ -165,4 +173,3 @@ export async function updateSocialSourceInSupabase(
 
   return toSocialSource(data as SocialSourceRow);
 }
-
