@@ -24,9 +24,9 @@ export type SocialSource = {
   id: string;
   snsType: SnsType;
   accountName: string;
-  handle: string;
+  handle?: string;
   profileUrl: string;
-  category: SocialSourceCategory;
+  category?: SocialSourceCategory;
   sourceMode: SocialSourceMode;
   isActive: boolean;
   priority: SocialPriority;
