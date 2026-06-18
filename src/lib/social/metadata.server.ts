@@ -6,9 +6,9 @@ import type { SocialMetadata } from "@/types/social";
 
 const fetchTimeoutMs = 5_000;
 const maxHtmlBytes = 512 * 1024;
-const minimumDomainIntervalMs = 2_000;
 const maxRedirects = 3;
 const nextAllowedRequestAt = new Map<string, number>();
+const minimumDomainIntervalMs = 2_000;
 
 type MetadataErrorCode =
   | "blocked_address"
@@ -21,6 +21,12 @@ type MetadataErrorCode =
   | "timeout"
   | "unavailable";
 
+type TikTokOembedResponse = {
+  author_name?: string;
+  thumbnail_url?: string;
+  title?: string;
+};
+
 export class SocialMetadataError extends Error {
   code: MetadataErrorCode;
 
@@ -30,14 +36,9 @@ export class SocialMetadataError extends Error {
   }
 }
 
-type TikTokOembedResponse = {
-  author_name?: string;
-  author_url?: string;
-  provider_name?: string;
-  thumbnail_url?: string;
-  title?: string;
-  type?: string;
-};
+function cleanText(value: string | undefined, maxLength = 1_000) {
+  return (value ?? "").replace(/\s+/g, " ").trim().slice(0, maxLength);
+}
 
 function isPrivateIpv4(address: string) {
   const parts = address.split(".").map(Number);
@@ -102,10 +103,7 @@ async function assertPublicUrl(value: string) {
   try {
     url = new URL(normalizeSocialUrl(value));
   } catch {
-    throw new SocialMetadataError(
-      "invalid_url",
-      "httpまたはhttpsの公開URLを入力してください。",
-    );
+    throw new SocialMetadataError("invalid_url", "Public http or https URL is required.");
   }
 
   const hostname = url.hostname.toLowerCase();
@@ -116,10 +114,7 @@ async function assertPublicUrl(value: string) {
     hostname.endsWith(".local") ||
     hostname.endsWith(".internal")
   ) {
-    throw new SocialMetadataError(
-      "blocked_address",
-      "内部ネットワークのURLは取得できません。",
-    );
+    throw new SocialMetadataError("blocked_address", "Local network URLs are blocked.");
   }
 
   const directIpVersion = isIP(hostname);
@@ -131,10 +126,7 @@ async function assertPublicUrl(value: string) {
     addresses.length === 0 ||
     addresses.some(({ address }) => isPrivateAddress(address))
   ) {
-    throw new SocialMetadataError(
-      "blocked_address",
-      "安全を確認できないURLのため取得を停止しました。",
-    );
+    throw new SocialMetadataError("blocked_address", "This URL could not be verified safely.");
   }
 
   return url;
@@ -142,7 +134,7 @@ async function assertPublicUrl(value: string) {
 
 async function waitForDomain(hostname: string) {
   const now = Date.now();
-  const allowedAt = nextAlllowedRequestAt.set(hostname) ?? 0;
+  const allowedAt = nextAllowedRequestAt.get(hostname) ?? 0;
   const waitMs = Math.max(0, allowedAt - now);
 
   if (waitMs > 0) {
@@ -170,26 +162,17 @@ async function fetchWithValidatedRedirects(
     });
   } catch (error) {
     if (error instanceof Error && error.name === "TimeoutError") {
-      throw new SocialMetadataError(
-        "timeout",
-        "取得先の応答は噂間がかかったため停止しました。",
-      );
+      throw new SocialMetadataError("timeout", "The request timed out.");
     }
 
-    throw new SocialMetadataError(
-      "unavailable",
-      "公開ページへ�h�続できませんでした。手動入力を利用してください。",
-    );
+    throw new SocialMetadataError("unavailable", "Could not connect to the public URL.");
   }
 
   if (response.status >= 300 && response.status < 400) {
     const location = response.headers.get("location");
 
     if (!location || redirectCount >= maxRedirects) {
-      throw new SocialMetadataError(
-        "unavailable",
-        "転退先や安全に確認できませんでした。",
-      );
+      throw new SocialMetadataError("unavailable", "Redirect target could not be verified.");
     }
 
     return fetchWithValidatedRedirects(
@@ -202,87 +185,47 @@ async function fetchWithValidatedRedirects(
   return response;
 }
 
-function parseRobotsRules(text: string, pathname: string) {
-  const groups: Array<{
-    applies: boolean;
-    rules: Array<{ allow: boolean; path: string }>;
-  }> = [];
-  let currentAgents: string[] = [];
-  let currentRules: Array<{ allow: boolean; path: string }> = [];
-
-  function finishGroup() {
-    if (currentAgents.length > 0) {
-      groups.push({
-        applies: currentAgents.some(
-          (agent) =>
-            agent === "*" ||
-            agent.includes("hairtrenddashboard") ||
-            agent.includes("hair-trend-dashboard"),
-        ),
-        rules: currentRules,
-      });
-    }
-
-    currentAgents = [];
-    currentRules = [];
-  }
+function robotsAllows(text: string, pathname: string) {
+  let appliesToUs = false;
+  let currentAllows = true;
+  let bestMatchLength = -1;
 
   for (const rawLine of text.split(/\r?\n/)) {
     const line = rawLine.replace(/#.*$/, "").trim();
 
-    if (!line) {
+    if (!line.includes(":")) {
       continue;
     }
 
-    const separator = line.indexOf(":");
-
-    if (separator === -1) {
-      continue;
-    }
-
-    const field = line.slice(0, separator).trim().toLowerCase();
-    const value = line.slice(separator + 1).trim();
+    const [rawField, ...rawValue] = line.split(":");
+    const field = rawField.trim().toLowerCase();
+    const value = rawValue.join(":").trim();
 
     if (field === "user-agent") {
-      if (currentRules.length > 0) {
-        finishGroup();
-      }
-
-      currentAgents.push(value.toLowerCase());
+      const agent = value.toLowerCase();
+      appliesToUs =
+        agent === "*" ||
+        agent.includes("hairtrenddashboard") ||
+        agent.includes("hair-trend-dashboard");
       continue;
     }
 
-    if ((field === "allow" || field === "disallow") && currentAgents.length > 0) {
-      currentRules.push({
-        allow: field === "allow",
-        path: value,
-      });
+    if (!appliesToUs || (field !== "allow" && field !== "disallow") || !value) {
+      continue;
+    }
+
+    const plainPath = value.endsWith("$") ? value.slice(0, -1) : value;
+    const matches = value.endsWith("$")
+      ? pathname === plainPath
+      : pathname.startsWith(plainPath);
+
+    if (matches && plainPath.length >= bestMatchLength) {
+      bestMatchLength = plainPath.length;
+      currentAllows = field === "allow";
     }
   }
 
-  finishGroup();
-
-  const matchesPath = (rulePath: string) => {
-    const anchorsAtEnd = rulePath.endsWith("$");
-    const pathWithoutEndMarker = anchorsAtEnd ? rulePath.slice(0, -1) : rulePath;
-    const pattern = pathWithoutEndMarker
-      .replace(/[.+?$^{}()|[\]\\]/g, "\\$&")
-      .replace(/\*/g, ".*");
-    const expression = new RegExp(`^${pattern}${anchorsAtEnd ? "$" : ""}`);
-
-    return expression.test(pathname);
-  };
-  const matchingRules = groups
-    .filter((group) => group.applies)
-    .flatMap((group) => group.rules)
-    .filter((rule) => rule.path && matchesPath(rule.path))
-    .sort(
-      (first, second) =>
-        second.path.length - first.path.length ||
-        Number(second.allow) - Number(first.allow),
-    );
-
-  return matchingRules[0]?.allow !== false;
+  return currentAllows;
 }
 
 async function assertRobotsAllowed(targetUrl: URL) {
@@ -295,78 +238,34 @@ async function assertRobotsAllowed(targetUrl: URL) {
     method: "GET",
   });
 
-  if (response.status === 404) {
+  if (response.status === 404 || !response.ok) {
     return;
   }
 
   if (response.status === 401 || response.status === 403) {
-    throw new SocialMetadataError(
-      "blocked_by_robots",
-      "取得先のアクセス方針によりメタデータ取得を停止しました。",
-    );
+    throw new SocialMetadataError("blocked_by_robots", "Metadata access is blocked.");
   }
 
   if (response.status === 429) {
-    throw new SocialMetadataError(
-      "rate_limited",
-      "取得先のレート制限を検出したため停止しました。",
-    );
-  }
-
-  if (!response.ok) {
-    return;
+    throw new SocialMetadataError("rate_limited", "Rate limit was detected.");
   }
 
   const robotsText = (await response.text()).slice(0, 128 * 1024);
+  const pathname = `${targetUrl.pathname || "/"}${targetUrl.search}`;
 
-  if (
-    !parseRobotsRules(
-      robotsText,
-      `${targetUrl.pathname || "/"}${targetUrl.search}`,
-    )
-  ) {
-    throw new SocialMetadataError(
-      "blocked_by_robots",
-      "robots.txtで取得が許可されていないため停止しました。",
-    );
+  if (!robotsAllows(robotsText, pathname)) {
+    throw new SocialMetadataError("blocked_by_robots", "robots.txt does not allow this URL.");
   }
 }
 
-async function readLimitedHtml(response: Response) {
-  if (!response.body) {
-    return "";
+async function readLimitedText(response: Response) {
+  const text = await response.text();
+
+  if (new Blob([text]).size > maxHtmlBytes) {
+    throw new SocialMetadataError("response_too_large", "The response is too large.");
   }
 
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let totalBytes = 0;
-  let html = "";
-
-  while (true) {
-    const { done, value } = await reader.read();
-
-    if (done) {
-      break;
-    }
-
-    totalBytes += value.byteLength;
-
-    if (totalBytes > maxHtmlBytes) {
-      await reader.cancel();
-      throw new SocialMetadataError(
-        "response_too_large",
-        "ページが大きすぎるため、必要最小限に取得を停止しました。",
-      );
-    }
-
-    html += decoder.decode(value, { stream: true });
-  }
-
-  return html + decoder.decode();
-}
-
-function cleanText(value: string | undefined, maxLength = 1_000) {
-  return (value ?? "").replace(/\s+/g, " ").trim().slice(0, maxLength);
+  return text;
 }
 
 function resolveReferenceUrl(value: string | undefined, baseUrl: string) {
@@ -388,7 +287,7 @@ function getJsonLdPublishedAt(html: string) {
     try {
       const value = JSON.parse($(element).text()) as
         | Record<string, unknown>
-        | Array<Record<string, unknown>;
+        | Array<Record<string, unknown>>;
       const candidates = Array.isArray(value) ? value : [value];
 
       for (const candidate of candidates) {
@@ -406,11 +305,7 @@ function getJsonLdPublishedAt(html: string) {
   return undefined;
 }
 
-function extractMetadata(
-  html: string,
-  requestedUrl: string,
-  finalUrl: string,
-): SocialMetadata {
+function extractMetadata(html: string, requestedUrl: string, finalUrl: string): SocialMetadata {
   const $ = load(html);
   const meta = (selector: string) =>
     cleanText($(selector).first().attr("content"));
@@ -464,59 +359,30 @@ async function fetchTikTokOembedMetadata(
   });
 
   if (response.status === 403) {
-    throw new SocialMetadataError(
-      "forbidden",
-      "TikTok公式oEmbedで取得が許可されませんでした。手動入力を利用してください。",
-    );
+    throw new SocialMetadataError("forbidden", "TikTok oEmbed access is forbidden.");
   }
 
   if (response.status === 429) {
-    throw new SocialMetadataError(
-      "rate_limited",
-      "TikTok公式oEmbedのレート制限を検出したため停止しました。",
-    );
+    throw new SocialMetadataError("rate_limited", "TikTok oEmbed rate limit was detected.");
   }
 
   if (!response.ok) {
-    throw new SocialMetadataError(
-      "unavailable",
-      `TikTok公式oEmbedで取得できませんでした（${response.status}）。手動入力を利用してください。`,
-    );
+    throw new SocialMetadataError("unavailable", "TikTok oEmbed metadata is unavailable.");
   }
 
-  let data: TikTokOembedResponse;
-
-  try {
-    data = (await response.json()) as TikTokOembedResponse;
-  } catch {
-    throw new SocialMetadataError(
-      "invalid_content",
-      "TikTok公式oEmbedの応答を読み取れませんでした。手動入力を利用してください。",
-    );
-  }
-
+  const data = (await response.json()) as TikTokOembedResponse;
   const title = cleanText(data.title, 300);
   const authorName = cleanText(data.author_name, 120);
-  const thumbnailUrl = resolveReferenceUrl(
-    data.thumbnail_url,
-    endpoint.toString(),
-  );
+  const thumbnailUrl = resolveReferenceUrl(data.thumbnail_url, endpoint.toString());
+  const normalizedTargetUrl = normalizeSocialUrl(targetUrl.toString());
+  const fallbackTitle = authorName ? `${authorName} TikTok video` : "TikTok video";
+  const description = authorName
+    ? `${authorName} public TikTok video. Only oEmbed metadata was checked.`
+    : "Public TikTok video. Only oEmbed metadata was checked.";
 
   if (!title && !authorName && !thumbnailUrl) {
-    throw new SocialMetadataError(
-      "invalid_content",
-      "TikTok公式oEmbedから公開メタデータを取得できませんでした。手動入力を利用してください。",
-    );
+    throw new SocialMetadataError("invalid_content", "TikTok oEmbed metadata was empty.");
   }
-
-  const normalizedRequestedUrl = normalizeSocialUrl(requestedUrl);
-  const normalizedTargetUrl = normalizeSocialUrl(targetUrl.toString());
-  const fallbackTitle = authorName
-    ? `${authorName}のTikTok動画`
-    : "TikTok動画";
-  const description = authorName
-    ? `${authorName}のTikTok公開動画です。公式oEmbedでタイトルとサムネイルURLだけを確認しました。`
-    : "TikTok公開動画です。公式oEmbedでタイトルとサムネイルURLだけを確認しました。";
 
   return {
     canonicalUrl: normalizedTargetUrl,
@@ -525,7 +391,7 @@ async function fetchTikTokOembedMetadata(
     ogDescription: title || description,
     ogImageUrl: thumbnailUrl,
     ogTitle: title || fallbackTitle,
-    requestedUrl: normalizedRequestedUrl,
+    requestedUrl: normalizeSocialUrl(requestedUrl),
     snsType: "TikTok",
     title: title || fallbackTitle,
   };
@@ -540,76 +406,48 @@ export async function fetchSocialMetadata(value: string) {
 
   await assertRobotsAllowed(targetUrl);
 
-  let lastResponse: Response | null = null;
+  const response = await fetchWithValidatedRedirects(targetUrl.toString(), {
+    headers: {
+      Accept: "text/html,application/xhtml+xml",
+      "Accept-Language": "ja,en;q=0.8",
+      "User-Agent": "HairTrendDashboard/1.0",
+    },
+    method: "GET",
+  });
 
-  for (let attempt = 0; attempt < 2; attempt += 1) {
-    const response = await fetchWithValidatedRedirects(targetUrl.toString(), {
-      headers: {
-        Accept: "text/html,application/xhtml+xml",
-        "Accept-Language": "ja,en;q=0.8",
-        "User-Agent": "HairTrendDashboard/1.0",
-      },
-      method: "GET",
-    });
-    lastResponse = response;
-
-    if (response.status === 403) {
-      throw new SocialMetadataError(
-        "forbidden",
-        "取得先が自動取得を許可していません。手動入力を利用してください。",
-      );
-    }
-
-    if (response.status === 429) {
-      throw new SocialMetadataError(
-        "rate_limited",
-        "取得先のレート制限を検出したため停止しました。",
-      );
-    }
-
-    if (response.ok) {
-      const contentType = response.headers.get("content-type")?.toLowerCase() ?? "";
-
-      if (
-        !contentType.includes("text/html") &&
-        !contentType.includes("application/xhtml+xml")
-      ) {
-        throw new SocialMetadataError(
-          "invalid_content",
-          "HTML公開ページではないためメタデータを取得できません。",
-        );
-      }
-
-      const html = await readLimitedHtml(response);
-      const metadata = extractMetadata(
-        html,
-        value,
-        response.url || targetUrl.toString(),
-      );
-
-      if (
-        !metadata.title &&
-        !metadata.description &&
-        !metadata.ogTitle &&
-        !metadata.ogDescription &&
-        !metadata.ogImageUrl
-      ) {
-        throw new SocialMetadataError(
-          "invalid_content",
-          "タイトルやdescriptionなどの公開メタデータを取得できませんでした。手動入力を利用してください。",
-        );
-      }
-
-      return metadata;
-    }
-
-    if (response.status < 500 || attempt === 1) {
-      break;
-    }
+  if (response.status === 403) {
+    throw new SocialMetadataError("forbidden", "The URL does not allow metadata access.");
   }
 
-  throw new SocialMetadataError(
-    "unavailable",
-    `公開ページを取得できませんでした（${lastResponse?.status ?? "接続失敗"}）。手動入力を利用してください。`,
-  );
+  if (response.status === 429) {
+    throw new SocialMetadataError("rate_limited", "Rate limit was detected.");
+  }
+
+  if (!response.ok) {
+    throw new SocialMetadataError("unavailable", `Metadata request failed: ${response.status}`);
+  }
+
+  const contentType = response.headers.get("content-type")?.toLowerCase() ?? "";
+
+  if (
+    !contentType.includes("text/html") &&
+    !contentType.includes("application/xhtml+xml")
+  ) {
+    throw new SocialMetadataError("invalid_content", "The URL is not an HTML page.");
+  }
+
+  const html = await readLimitedText(response);
+  const metadata = extractMetadata(html, value, response.url || targetUrl.toString());
+
+  if (
+    !metadata.title &&
+    !metadata.description &&
+    !metadata.ogTitle &&
+    !metadata.ogDescription &&
+    !metadata.ogImageUrl
+  ) {
+    throw new SocialMetadataError("invalid_content", "No public metadata was found.");
+  }
+
+  return metadata;
 }
