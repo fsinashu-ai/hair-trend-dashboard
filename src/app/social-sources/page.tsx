@@ -1,4 +1,5 @@
 import { PageHeader } from "@/components/sections/PageHeader";
+import { SocialCrawlerPanel } from "@/components/social/SocialCrawlerPanel";
 import { SocialSourceManager } from "@/components/social/SocialSourceManager";
 
 export default function SocialSourcesPage() {
@@ -9,8 +10,8 @@ export default function SocialSourcesPage() {
         eyebrow="Social"
         title="SNS情報取得"
       />
+      <SocialCrawlerPanel />
       <SocialSourceManager />
     </main>
   );
 }
-
