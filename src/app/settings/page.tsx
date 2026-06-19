@@ -49,6 +49,29 @@ const envItems = [
     description: "YouTube周回1回あたりに扱う候補数の上限です。未設定時は30件です。",
   },
   {
+    name: "X_BEARER_TOKEN",
+    description:
+      "X公式APIのBearer Token。X巡回を使う場合だけ設定します。Bearerという文字は付けません。",
+  },
+  {
+    name: "X_KEYWORD_LIMIT",
+    description: "X巡回で1回に検索するキーワード数の上限です。未設定時は5個です。",
+  },
+  {
+    name: "X_RUN_POST_LIMIT",
+    description: "X巡回1回あたりに扱う投稿候補数の上限です。未設定時は20件です。",
+  },
+  {
+    name: "CRON_SECRET",
+    description:
+      "Vercel Cronや自動実行APIを保護する秘密文字列です。公開時は必ず長いランダム文字列を使います。",
+  },
+  {
+    name: "AUTOMATION_WEBHOOK_SECRET",
+    description:
+      "Apifyやn8nからSNS投稿候補を取り込む専用APIを保護する秘密文字列です。",
+  },
+  {
     name: "APP_USER",
     description: "任意のアプリ保護ユーザー名。未設定の場合はsalonを使います。",
   },
@@ -73,8 +96,63 @@ export default function SettingsPage() {
   const aiProvider = process.env.AI_PROVIDER ?? "auto";
   const isOpenAiReady = Boolean(process.env.OPENAI_API_KEY);
   const isGeminiReady = Boolean(process.env.GEMINI_API_KEY);
+  const isAiReady = aiProvider === "mock" || isOpenAiReady || isGeminiReady;
   const isYoutubeReady = Boolean(process.env.YOUTUBE_API_KEY);
+  const isXReady = Boolean(process.env.X_BEARER_TOKEN);
+  const isCronReady = Boolean(process.env.CRON_SECRET);
+  const isAutomationReady = Boolean(process.env.AUTOMATION_WEBHOOK_SECRET);
   const isAppPasswordReady = Boolean(process.env.APP_PASSWORD);
+  const phaseOneItems = [
+    {
+      label: "Supabase保存",
+      isReady: isSupabaseReady,
+      note: isSupabaseReady
+        ? "画面から登録・削除したデータをSupabaseへ保存できます。"
+        : "未設定時はダミーデータとlocalStorageで動作します。",
+    },
+    {
+      label: "AI生成",
+      isReady: isAiReady,
+      note: isAiReady
+        ? "Gemini/OpenAI、またはモックで生成結果を返せます。"
+        : "GeminiかOpenAIのAPIキーを設定すると実AI生成になります。",
+    },
+    {
+      label: "YouTube公式API",
+      isReady: isYoutubeReady,
+      note: isYoutubeReady
+        ? "YouTube周回で公式APIの検索結果を候補化できます。"
+        : "未設定時はYouTube周回がモック候補になります。",
+    },
+    {
+      label: "X公式API",
+      isReady: isXReady,
+      note: isXReady
+        ? "X巡回で公式APIのRecent Searchを使う準備があります。"
+        : "未設定時はX巡回がモック候補になります。X側の有料枠が必要な場合があります。",
+    },
+    {
+      label: "毎朝自動実行",
+      isReady: isCronReady,
+      note: isCronReady
+        ? "Vercel Cronからの自動生成APIを保護できます。"
+        : "Vercel Cronを使う場合はCRON_SECRETを設定してください。",
+    },
+    {
+      label: "Apify/n8n受け口",
+      isReady: isAutomationReady,
+      note: isAutomationReady
+        ? "外部自動化ツールからSNS投稿候補を安全に受け取れます。"
+        : "Apifyやn8nから取り込む場合はAUTOMATION_WEBHOOK_SECRETを設定してください。",
+    },
+    {
+      label: "公開版の保護",
+      isReady: isAppPasswordReady,
+      note: isAppPasswordReady
+        ? "Basic認証で画面とAPI Routeを保護できます。"
+        : "公開URLで使う場合はAPP_PASSWORDを設定してください。",
+    },
+  ];
 
   return (
     <main className="py-6">
@@ -118,6 +196,15 @@ export default function SettingsPage() {
               <Badge tone={isYoutubeReady ? "success" : "warning"}>
                 YouTube: {isYoutubeReady ? "設定済み" : "未設定"}
               </Badge>
+              <Badge tone={isXReady ? "success" : "warning"}>
+                X: {isXReady ? "設定済み" : "未設定"}
+              </Badge>
+              <Badge tone={isCronReady ? "success" : "warning"}>
+                Cron: {isCronReady ? "設定済み" : "未設定"}
+              </Badge>
+              <Badge tone={isAutomationReady ? "success" : "warning"}>
+                Apify/n8n: {isAutomationReady ? "設定済み" : "未設定"}
+              </Badge>
               <Badge tone="neutral">AI: {aiProvider}</Badge>
               <Badge tone={isAppPasswordReady ? "success" : "warning"}>
                 アプリ保護: {isAppPasswordReady ? "有効" : "未設定"}
@@ -127,6 +214,35 @@ export default function SettingsPage() {
               未設定でもアプリは動作します。Supabase未設定時はダミーデータ、AI
               APIキー未設定時はモックレスポンスを表示します。公開URLで使う場合はAPP_PASSWORDを設定してください。
             </p>
+          </section>
+
+          <section className="rounded-lg border border-teal-200 bg-teal-50 p-5 shadow-sm">
+            <h2 className="text-lg font-semibold text-teal-950">
+              フェーズ1 実データ接続チェック
+            </h2>
+            <p className="mt-3 text-sm leading-6 text-teal-900">
+              Supabase保存、AI生成、公式API、毎朝自動実行、公開保護の準備状況です。未設定の項目があってもアプリはモックやダミーデータで動作します。
+            </p>
+            <div className="mt-4 grid gap-3">
+              {phaseOneItems.map((item) => (
+                <div
+                  className="rounded-md border border-white/70 bg-white p-4"
+                  key={item.label}
+                >
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge tone={item.isReady ? "success" : "warning"}>
+                      {item.isReady ? "準備OK" : "要確認"}
+                    </Badge>
+                    <h3 className="text-sm font-semibold text-stone-950">
+                      {item.label}
+                    </h3>
+                  </div>
+                  <p className="mt-2 text-sm leading-6 text-stone-600">
+                    {item.note}
+                  </p>
+                </div>
+              ))}
+            </div>
           </section>
 
           <section className="rounded-lg border border-teal-200 bg-white p-5 shadow-sm">
