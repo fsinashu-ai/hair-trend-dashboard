@@ -79,6 +79,24 @@ function isAuthorizedCronRequest(request: NextRequest) {
   );
 }
 
+function isAuthorizedAutomationRequest(request: NextRequest) {
+  const automationSecret = process.env.AUTOMATION_WEBHOOK_SECRET?.trim();
+
+  if (!automationSecret) {
+    return false;
+  }
+
+  const authorization = request.headers.get("authorization");
+  const headerSecret = request.headers.get("x-automation-secret");
+
+  return (
+    request.method === "POST" &&
+    request.nextUrl.pathname === "/api/automation/import-social" &&
+    (authorization === `Bearer ${automationSecret}` ||
+      headerSecret === automationSecret)
+  );
+}
+
 function withSecurityHeaders(response: NextResponse) {
   Object.entries(securityHeaders).forEach(([key, value]) => {
     response.headers.set(key, value);
@@ -109,6 +127,10 @@ function createUnauthorizedResponse(request: NextRequest) {
 
 export function proxy(request: NextRequest) {
   if (isAuthorizedCronRequest(request)) {
+    return withSecurityHeaders(NextResponse.next());
+  }
+
+  if (isAuthorizedAutomationRequest(request)) {
     return withSecurityHeaders(NextResponse.next());
   }
 
