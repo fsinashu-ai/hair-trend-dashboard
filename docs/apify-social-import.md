@@ -139,3 +139,5 @@ HTTP Requestノード:
 ## Supabase SQL
 
 最新の `supabase/schema.sql` をSupabase SQL Editorで再実行してください。既存データは残し、足りないカラムだけ追加されます。
+
+GitHub上の `schema.sql` がまだ古い場合や、Apify連携分だけ先に追加したい場合は、`supabase/apify-social-import.sql` を実行してください。
