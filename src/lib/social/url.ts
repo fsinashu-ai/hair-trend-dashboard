@@ -86,6 +86,26 @@ export function normalizeSocialUrl(value: string) {
   return url.toString();
 }
 
+export function normalizeSocialHandle(value?: string) {
+  const normalized = (value ?? "")
+    .trim()
+    .normalize("NFKC")
+    .replace(/^@+/, "")
+    .toLowerCase();
+
+  if (!normalized) {
+    return "";
+  }
+
+  if (!/^[a-z0-9._]+$/.test(normalized)) {
+    throw new Error(
+      "ハンドルは英数字・ピリオド・アンダースコアで入力してください。",
+    );
+  }
+
+  return `@${normalized}`;
+}
+
 function normalizedTitleWords(value: string) {
   return new Set(
     value
