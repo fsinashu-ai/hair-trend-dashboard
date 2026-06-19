@@ -24,9 +24,9 @@ export type SocialSource = {
   id: string;
   snsType: SnsType;
   accountName: string;
-  handle?: string;
+  handle: string;
   profileUrl: string;
-  category?: SocialSourceCategory;
+  category: SocialSourceCategory;
   sourceMode: SocialSourceMode;
   isActive: boolean;
   priority: SocialPriority;
@@ -84,6 +84,15 @@ export type SocialPost = {
   instagramPostIdea: string;
   blogIdea: string;
   counselingIdea: string;
+  sourceName?: string;
+  accountName?: string;
+  handle?: string;
+  externalId?: string;
+  likeCount?: number;
+  commentCount?: number;
+  playCount?: number;
+  shareCount?: number;
+  rawPayload?: Record<string, unknown>;
   reviewStatus: SocialReviewStatus;
   isFavorite: boolean;
   importedAt: string;
