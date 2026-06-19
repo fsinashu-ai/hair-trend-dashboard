@@ -25,6 +25,15 @@ type SocialPostRow = {
   instagram_post_idea: string | null;
   blog_idea: string | null;
   counseling_idea: string | null;
+  source_name?: string | null;
+  account_name?: string | null;
+  handle?: string | null;
+  external_id?: string | null;
+  like_count?: number | null;
+  comment_count?: number | null;
+  play_count?: number | null;
+  share_count?: number | null;
+  raw_payload?: Record<string, unknown> | null;
   review_status?: string | null;
   is_favorite?: boolean | null;
   imported_at: string;
@@ -33,9 +42,22 @@ type SocialPostRow = {
 };
 
 const selectFields =
-  "id,source_id,sns_type,url,canonical_url,title,description,og_image_url,published_at,category,tags,ai_summary,relevance,instagram_post_idea,blog_idea,counseling_idea,review_status,is_favorite,imported_at,created_at,updated_at";
+  "id,source_id,sns_type,url,canonical_url,title,description,og_image_url,published_at,category,tags,ai_summary,relevance,instagram_post_idea,blog_idea,counseling_idea,source_name,account_name,handle,external_id,like_count,comment_count,play_count,share_count,raw_payload,review_status,is_favorite,imported_at,created_at,updated_at";
 const legacySelectFields =
   "id,source_id,sns_type,url,canonical_url,title,description,og_image_url,published_at,category,tags,ai_summary,relevance,instagram_post_idea,blog_idea,counseling_idea,imported_at,created_at,updated_at";
+const legacyInsertOnlyFields = [
+  "source_name",
+  "account_name",
+  "handle",
+  "external_id",
+  "like_count",
+  "comment_count",
+  "play_count",
+  "share_count",
+  "raw_payload",
+  "review_status",
+  "is_favorite",
+] as const;
 
 function toSnsType(value: string): SnsType {
   return value === "Instagram" ||
@@ -73,17 +95,26 @@ function toSocialPost(row: SocialPostRow): SocialPost {
     canonicalUrl: row.canonical_url,
     category: toCategory(row.category),
     counselingIdea: row.counseling_idea ?? "",
+    accountName: row.account_name ?? undefined,
+    commentCount: row.comment_count ?? undefined,
     isFavorite: row.is_favorite ?? false,
     createdAt: row.created_at,
     description: row.description ?? "",
+    externalId: row.external_id ?? undefined,
+    handle: row.handle ?? undefined,
     id: row.id,
     importedAt: row.imported_at,
     instagramPostIdea: row.instagram_post_idea ?? "",
+    likeCount: row.like_count ?? undefined,
     ogImageUrl: row.og_image_url ?? "",
+    playCount: row.play_count ?? undefined,
     publishedAt: row.published_at ?? undefined,
+    rawPayload: row.raw_payload ?? undefined,
     relevance: toRelevance(row.relevance),
     reviewStatus: toReviewStatus(row.review_status),
+    shareCount: row.share_count ?? undefined,
     snsType: toSnsType(row.sns_type),
+    sourceName: row.source_name ?? undefined,
     sourceId: row.source_id ?? undefined,
     tags: row.tags ?? [],
     title: row.title,
@@ -100,14 +131,23 @@ function toRow(input: NewSocialPost) {
     category: input.category,
     counseling_idea: input.counselingIdea,
     description: input.description,
+    account_name: input.accountName || null,
+    comment_count: input.commentCount ?? null,
+    external_id: input.externalId || null,
+    handle: input.handle || null,
     imported_at: input.importedAt,
     instagram_post_idea: input.instagramPostIdea,
+    like_count: input.likeCount ?? null,
     og_image_url: input.ogImageUrl,
+    play_count: input.playCount ?? null,
     published_at: input.publishedAt || null,
+    raw_payload: input.rawPayload ?? {},
     relevance: input.relevance,
     review_status: input.reviewStatus ?? "未確認",
     is_favorite: input.isFavorite ?? false,
+    share_count: input.shareCount ?? null,
     sns_type: input.snsType,
+    source_name: input.sourceName || null,
     source_id: input.sourceId || null,
     tags: input.tags,
     title: input.title,
@@ -162,8 +202,9 @@ export async function createSocialPostInSupabase(input: NewSocialPost) {
 
   const fallbackRow = toRow(input);
   const legacyRow = { ...fallbackRow };
-  delete (legacyRow as Partial<typeof fallbackRow>).review_status;
-  delete (legacyRow as Partial<typeof fallbackRow>).is_favorite;
+  legacyInsertOnlyFields.forEach((field) => {
+    delete (legacyRow as Partial<typeof fallbackRow>)[field];
+  });
   const fallback = await supabase
     .from("social_posts")
     .insert(legacyRow)
