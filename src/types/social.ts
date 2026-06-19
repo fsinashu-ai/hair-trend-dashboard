@@ -39,8 +39,17 @@ export type SocialSource = {
 
 export type NewSocialSource = Omit<
   SocialSource,
-  "id" | "lastCheckedAt" | "lastError" | "createdAt" | "updatedAt"
->;
+  | "category"
+  | "handle"
+  | "id"
+  | "lastCheckedAt"
+  | "lastError"
+  | "createdAt"
+  | "updatedAt"
+> & {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- keeps older source forms compatible while preserving required core fields.
+  [key: string]: any;
+};
 
 export type SocialMetadata = {
   requestedUrl: string;
