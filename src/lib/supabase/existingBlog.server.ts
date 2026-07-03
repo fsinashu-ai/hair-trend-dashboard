@@ -55,6 +55,12 @@ type RewriteHistoryRow = {
   updated_at: string;
 };
 
+function isUuid(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    value,
+  );
+}
+
 const articleSelectFields = [
   "id",
   "title",
@@ -246,7 +252,14 @@ export async function saveBlogRewriteHistory({
   suggestion: BlogRewriteSuggestion;
 }) {
   const supabase = getServerSupabaseClient();
-  if (!supabase || article.id.startsWith("dummy-")) return null;
+  if (
+    !supabase ||
+    article.id.startsWith("dummy-") ||
+    article.id.startsWith("existing-blog-") ||
+    !isUuid(article.id)
+  ) {
+    return null;
+  }
 
   const { data, error } = await supabase
     .from("blog_rewrite_histories")

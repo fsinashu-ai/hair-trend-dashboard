@@ -28,7 +28,17 @@ export async function POST(request: Request) {
 
   try {
     const suggestion = await generateBlogRewriteSuggestion(article);
-    const history = await saveBlogRewriteHistory({ article, suggestion });
+    let history = null;
+
+    try {
+      history = await saveBlogRewriteHistory({ article, suggestion });
+    } catch (historyError) {
+      console.warn("[blog-rewrite] history save skipped", {
+        errorType:
+          historyError instanceof Error ? historyError.name : "unknown",
+      });
+    }
+
     return NextResponse.json({ history, suggestion });
   } catch (error) {
     console.error("[blog-rewrite] failed", {
