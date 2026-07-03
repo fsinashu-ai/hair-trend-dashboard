@@ -21,7 +21,7 @@
 - 環境変数は `.env.local` に置く。
 - `.env.local` は Git に含めない。
 - ブラウザに公開してよい値だけ `NEXT_PUBLIC_` を付ける。
-- OpenAI APIキーやSupabaseの秘密鍵はサーバー側だけで使う。
+- Gemini APIキーやSupabaseの秘密鍵はサーバー側だけで使う。
 
 ## UIルール
 
@@ -34,7 +34,7 @@
 
 - Next.js App Router、TypeScript、Tailwind CSS の既存構成に合わせる。
 - ページは `src/app`、共通部品は `src/components`、ダミーデータは `src/data`、型は `src/types` に置く。
-- まずはダミーデータで画面を作り、あとからSupabaseやOpenAI APIに接続する。
+- まずはダミーデータで画面を作り、あとからSupabaseやGemini APIに接続する。
 - 変更後は必ず `npm run lint` で確認する。
 
 PowerShellで `npm` が実行ポリシーにより止まる場合は、同じ確認として `npm.cmd run lint` を使ってよい。

@@ -27,6 +27,7 @@ type QuickGenerateType =
   | "reel-script"
   | "customer-explanation"
   | "next-visit"
+  | "blog-article"
   | "morning-brief";
 
 type StatusTone = "neutral" | "info" | "success" | "warning" | "error";
@@ -69,6 +70,7 @@ const quickGenerateButtons: Array<{
     type: "customer-explanation",
   },
   { label: "次回来店提案", shortLabel: "次回", type: "next-visit" },
+  { label: "ブログ記事", shortLabel: "ブログ", type: "blog-article" },
   { label: "朝礼ネタ", shortLabel: "朝礼", type: "morning-brief" },
 ];
 
@@ -124,6 +126,12 @@ function createMockPost(type: QuickGenerateType, trend: Trend): GeneratedPost {
       tone: "上品 / 30代女性 / 標準",
       content: `今日の仕上がりを保つなら、次回は6〜8週間後を目安に見せていただくのがおすすめです。${trend.category}の状態を確認しながら、毛先のメンテナンスやケアを一緒に考えましょう。`,
       hashtags: ["#次回予約", "#メンテナンス", "#艶髪", `#${trend.category}`],
+    },
+    "blog-article": {
+      postType: "ブログ記事",
+      tone: "上品 / 30代女性 / 標準",
+      content: `タイトル案: ${trend.title}をサロンで提案するときに大切なこと\n\n${trend.summary}\n\nブログでは、まずお客様が感じやすい悩みに触れ、そのあとに髪質や履歴を確認する大切さを伝えると読みやすくなります。\n\nef.mayke\`sでは、${trend.keywords.slice(0, 3).join("、")}を手がかりに、無理のない施術やホームケアを一緒に考えていきます。気になる方は、今の髪の状態を見ながらカウンセリングでご相談ください。`,
+      hashtags: ["#美容室ブログ", "#髪質改善", "#艶髪", `#${trend.category}`],
     },
     "morning-brief": {
       postType: "朝礼ネタ",

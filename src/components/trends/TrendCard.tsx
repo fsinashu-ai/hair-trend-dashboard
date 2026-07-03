@@ -60,9 +60,20 @@ function createBlogHrefFromTrend(trend: Trend) {
   const params = new URLSearchParams({
     category: trend.category,
     keyword: trend.keywords[0] ?? trend.category,
+    memo: trend.memo,
+    searchIntent: "このトレンドを知り、松江市で自分の髪に合う相談先を探している。",
+    secondaryKeywords: [
+      ...trend.keywords.slice(1, 5),
+      "松江 美容室",
+      "松江 髪質改善",
+      "松江 縮毛矯正",
+    ].join("\n"),
+    summary: trend.summary,
+    targetAudience: "松江市周辺で髪の悩みを相談したい大人女性",
     title: trend.title,
     trendId: trend.id,
     url: trend.url,
+    view: "generator",
   });
 
   if (trend.url.includes("youtube")) {
@@ -192,7 +203,7 @@ export function TrendCard({
           className="inline-flex min-h-10 w-full items-center justify-center rounded-md border border-stone-300 px-3 text-sm font-semibold text-stone-700 hover:bg-stone-50 sm:w-auto"
           href={createBlogHrefFromTrend(trend)}
         >
-          ブログ化
+          SEOブログを作成
         </Link>
       </div>
     </article>

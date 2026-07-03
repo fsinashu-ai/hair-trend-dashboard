@@ -239,7 +239,7 @@ export async function generateTrendCandidates({
         }`,
         `登録日: ${today()}`,
         "各要素のキー: title, url, category, memo, tags, registered_at, salon_relevance",
-        "memoは、投稿・カウンセリング・店販・メニュー提案のどれに使いるかが分かる自然な文章にしてください。",
+        "memoは、投稿・カウンセリング・店販・メニュー提案のどれに使えるかが分かる自然な文章にしてください。",
         "tagsは3〜6個、#なしの文字列配列にしてください。",
         "salon_relevanceはef.mayke`sとの関連度として、高・中・低のどれかにしてください。",
         "髪質改善、縮毛矯正、くせ毛、パサつき、艶髪、白髪、大人女性、ショート、ボブ、ホームケア、松江市の美容室集客に関係する記事は関連度を高くしてください。",

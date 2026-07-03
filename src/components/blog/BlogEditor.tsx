@@ -8,8 +8,14 @@ import {
   blogStatusLabels,
   blogStatuses,
   createSlug,
+  faqToText,
+  headingsToText,
   splitBlogTags,
+  stringListToText,
   tagsToText,
+  textToFaq,
+  textToHeadings,
+  textToStringList,
 } from "@/lib/blog";
 import type { BlogPostInput } from "@/types/blog";
 import type { SnsPost } from "@/types/snsPost";
@@ -208,6 +214,75 @@ export function BlogEditor({
           </label>
 
           <label className="grid gap-2 text-sm font-medium text-stone-700">
+            補助キーワード（1行に1つ）
+            <textarea
+              className="min-h-24 rounded-md border border-stone-300 px-3 py-2 text-sm outline-none focus:border-teal-600"
+              onChange={(event) =>
+                onChange(
+                  updateField(
+                    draft,
+                    "secondaryKeywords",
+                    textToStringList(event.target.value).slice(0, 10),
+                  ),
+                )
+              }
+              value={stringListToText(draft.secondaryKeywords)}
+            />
+          </label>
+
+          <label className="grid gap-2 text-sm font-medium text-stone-700">
+            検索意図
+            <textarea
+              className="min-h-24 rounded-md border border-stone-300 px-3 py-2 text-sm outline-none focus:border-teal-600"
+              onChange={(event) =>
+                onChange(updateField(draft, "searchIntent", event.target.value))
+              }
+              value={draft.searchIntent ?? ""}
+            />
+          </label>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="grid gap-2 text-sm font-medium text-stone-700">
+              想定読者
+              <textarea
+                className="min-h-24 rounded-md border border-stone-300 px-3 py-2 text-sm outline-none focus:border-teal-600"
+                onChange={(event) =>
+                  onChange(updateField(draft, "targetAudience", event.target.value))
+                }
+                value={draft.targetAudience ?? ""}
+              />
+            </label>
+            <label className="grid gap-2 text-sm font-medium text-stone-700">
+              読者の悩み（1行に1つ）
+              <textarea
+                className="min-h-24 rounded-md border border-stone-300 px-3 py-2 text-sm outline-none focus:border-teal-600"
+                onChange={(event) =>
+                  onChange(
+                    updateField(
+                      draft,
+                      "readerProblems",
+                      textToStringList(event.target.value).slice(0, 8),
+                    ),
+                  )
+                }
+                value={stringListToText(draft.readerProblems)}
+              />
+            </label>
+          </div>
+
+          <label className="grid gap-2 text-sm font-medium text-stone-700">
+            メタタイトル
+            <input
+              className="min-h-11 rounded-md border border-stone-300 px-3 text-sm outline-none focus:border-teal-600"
+              maxLength={60}
+              onChange={(event) =>
+                onChange(updateField(draft, "metaTitle", event.target.value))
+              }
+              value={draft.metaTitle ?? ""}
+            />
+          </label>
+
+          <label className="grid gap-2 text-sm font-medium text-stone-700">
             メタディスクリプション
             <textarea
               className="min-h-20 rounded-md border border-stone-300 px-3 py-2 text-sm outline-none focus:border-teal-600"
@@ -227,6 +302,17 @@ export function BlogEditor({
                 onChange(updateField(draft, "excerpt", event.target.value))
               }
               value={draft.excerpt}
+            />
+          </label>
+
+          <label className="grid gap-2 text-sm font-medium text-stone-700">
+            記事概要
+            <textarea
+              className="min-h-24 rounded-md border border-stone-300 px-3 py-2 text-sm outline-none focus:border-teal-600"
+              onChange={(event) =>
+                onChange(updateField(draft, "articleSummary", event.target.value))
+              }
+              value={draft.articleSummary ?? ""}
             />
           </label>
 
@@ -254,6 +340,123 @@ export function BlogEditor({
               value={draft.content}
             />
           </label>
+
+          <label className="grid gap-2 text-sm font-medium text-stone-700">
+            h2／h3構成
+            <textarea
+              className="min-h-48 rounded-md border border-stone-300 px-3 py-2 font-mono text-sm leading-6 outline-none focus:border-teal-600"
+              onChange={(event) =>
+                onChange(
+                  updateField(draft, "headings", textToHeadings(event.target.value)),
+                )
+              }
+              placeholder={'## 大見出し\n### 小見出し'}
+              value={headingsToText(draft.headings)}
+            />
+          </label>
+
+          <label className="grid gap-2 text-sm font-medium text-stone-700">
+            本文HTML
+            <textarea
+              className="min-h-72 rounded-md border border-stone-300 px-3 py-2 font-mono text-xs leading-6 outline-none focus:border-teal-600"
+              onChange={(event) =>
+                onChange(updateField(draft, "bodyHtml", event.target.value))
+              }
+              value={draft.bodyHtml ?? ""}
+            />
+          </label>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="grid gap-2 text-sm font-medium text-stone-700">
+              Before／After画像用キャプション
+              <textarea
+                className="min-h-36 rounded-md border border-stone-300 px-3 py-2 text-sm leading-6 outline-none focus:border-teal-600"
+                onChange={(event) =>
+                  onChange(
+                    updateField(
+                      draft,
+                      "beforeAfterCaptions",
+                      textToStringList(event.target.value).slice(0, 4),
+                    ),
+                  )
+                }
+                value={stringListToText(draft.beforeAfterCaptions)}
+              />
+            </label>
+            <label className="grid gap-2 text-sm font-medium text-stone-700">
+              内部リンク候補
+              <textarea
+                className="min-h-36 rounded-md border border-stone-300 px-3 py-2 text-sm leading-6 outline-none focus:border-teal-600"
+                onChange={(event) =>
+                  onChange(
+                    updateField(
+                      draft,
+                      "internalLinkSuggestions",
+                      textToStringList(event.target.value).slice(0, 8),
+                    ),
+                  )
+                }
+                value={stringListToText(draft.internalLinkSuggestions)}
+              />
+            </label>
+          </div>
+
+          <label className="grid gap-2 text-sm font-medium text-stone-700">
+            よくある質問
+            <textarea
+              className="min-h-56 rounded-md border border-stone-300 px-3 py-2 text-sm leading-6 outline-none focus:border-teal-600"
+              onChange={(event) =>
+                onChange(updateField(draft, "faq", textToFaq(event.target.value)))
+              }
+              placeholder={'Q: 質問\nA: 回答'}
+              value={faqToText(draft.faq)}
+            />
+          </label>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="grid gap-2 text-sm font-medium text-stone-700">
+              LINE相談・予約CTA
+              <input
+                className="min-h-11 rounded-md border border-stone-300 px-3 text-sm outline-none focus:border-teal-600"
+                onChange={(event) =>
+                  onChange(updateField(draft, "ctaText", event.target.value))
+                }
+                value={draft.ctaText ?? ""}
+              />
+            </label>
+            <label className="grid gap-2 text-sm font-medium text-stone-700">
+              CTA URL
+              <input
+                className="min-h-11 rounded-md border border-stone-300 px-3 text-sm outline-none focus:border-teal-600"
+                onChange={(event) =>
+                  onChange(updateField(draft, "ctaUrl", event.target.value))
+                }
+                value={draft.ctaUrl ?? ""}
+              />
+            </label>
+          </div>
+
+          <label className="grid gap-2 text-sm font-medium text-stone-700">
+            WordPress貼り付け用HTML
+            <textarea
+              className="min-h-80 rounded-md border border-stone-300 px-3 py-2 font-mono text-xs leading-6 outline-none focus:border-teal-600"
+              onChange={(event) =>
+                onChange(updateField(draft, "wordpressHtml", event.target.value))
+              }
+              value={draft.wordpressHtml ?? ""}
+            />
+          </label>
+
+          <div className="flex flex-wrap gap-2 rounded-md bg-stone-50 p-3">
+            <Badge tone={draft.generatedBy === "gemini" ? "success" : "neutral"}>
+              {draft.generatedBy === "gemini"
+                ? "Gemini生成"
+                : draft.generatedBy === "mock"
+                  ? "モック生成"
+                  : "手動作成"}
+            </Badge>
+            {draft.aiModel ? <Badge tone="info">{draft.aiModel}</Badge> : null}
+          </div>
         </div>
 
         <div className="mt-5 flex flex-col gap-3 sm:flex-row">

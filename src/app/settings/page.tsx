@@ -21,16 +21,17 @@ const envItems = [
     description: "Supabaseのanonキー。RLS設定とセットで使います。",
   },
   {
-    name: "AI_PROVIDER",
-    description: "使うAIを選びます。openai、gemini、mockを指定できます。",
-  },
-  {
-    name: "OPENAI_API_KEY",
-    description: "OpenAI APIキー。サーバー側だけで使い、画面には出しません。",
+    name: "SUPABASE_SERVICE_ROLE_KEY",
+    description:
+      "Search Console CSVをサーバーAPIから保存する秘密鍵です。NEXT_PUBLIC_を付けず、ブラウザへ公開しません。",
   },
   {
     name: "GEMINI_API_KEY",
     description: "Gemini APIキー。サーバー側だけで使い、画面には出しません。",
+  },
+  {
+    name: "GEMINI_MODEL",
+    description: "使用するGeminiモデル。未設定時はアプリの既定モデルを使います。",
   },
   {
     name: "YOUTUBE_API_KEY",
@@ -93,10 +94,11 @@ export default function SettingsPage() {
     process.env.NEXT_PUBLIC_SUPABASE_URL &&
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
   );
-  const aiProvider = process.env.AI_PROVIDER ?? "auto";
-  const isOpenAiReady = Boolean(process.env.OPENAI_API_KEY);
   const isGeminiReady = Boolean(process.env.GEMINI_API_KEY);
-  const isAiReady = aiProvider === "mock" || isOpenAiReady || isGeminiReady;
+  const isSearchConsoleStorageReady = Boolean(
+    process.env.NEXT_PUBLIC_SUPABASE_URL &&
+      process.env.SUPABASE_SERVICE_ROLE_KEY,
+  );
   const isYoutubeReady = Boolean(process.env.YOUTUBE_API_KEY);
   const isXReady = Boolean(process.env.X_BEARER_TOKEN);
   const isCronReady = Boolean(process.env.CRON_SECRET);
@@ -111,11 +113,18 @@ export default function SettingsPage() {
         : "未設定時はダミーデータとlocalStorageで動作します。",
     },
     {
-      label: "AI生成",
-      isReady: isAiReady,
-      note: isAiReady
-        ? "Gemini/OpenAI、またはモックで生成結果を返せます。"
-        : "GeminiかOpenAIのAPIキーを設定すると実AI生成になります。",
+      label: "Gemini生成",
+      isReady: isGeminiReady,
+      note: isGeminiReady
+        ? "Geminiで生成結果を返せます。"
+        : "未設定時は確認用のモック生成で動作します。",
+    },
+    {
+      label: "Search Console保存",
+      isReady: isSearchConsoleStorageReady,
+      note: isSearchConsoleStorageReady
+        ? "CSVと分析結果をサーバー経由でSupabaseへ保存できます。"
+        : "未設定時は、この端末のlocalStorageで画面を確認できます。",
     },
     {
       label: "YouTube公式API",
@@ -187,9 +196,6 @@ export default function SettingsPage() {
               <Badge tone={isSupabaseReady ? "success" : "warning"}>
                 Supabase: {isSupabaseReady ? "設定済み" : "未設定"}
               </Badge>
-              <Badge tone={isOpenAiReady ? "success" : "warning"}>
-                OpenAI: {isOpenAiReady ? "設定済み" : "未設定"}
-              </Badge>
               <Badge tone={isGeminiReady ? "success" : "warning"}>
                 Gemini: {isGeminiReady ? "設定済み" : "未設定"}
               </Badge>
@@ -205,7 +211,6 @@ export default function SettingsPage() {
               <Badge tone={isAutomationReady ? "success" : "warning"}>
                 Apify/n8n: {isAutomationReady ? "設定済み" : "未設定"}
               </Badge>
-              <Badge tone="neutral">AI: {aiProvider}</Badge>
               <Badge tone={isAppPasswordReady ? "success" : "warning"}>
                 アプリ保護: {isAppPasswordReady ? "有効" : "未設定"}
               </Badge>

@@ -1,11 +1,15 @@
+import { salonProfile } from "@/lib/salonProfile";
 import type {
   BlogCategory,
+  BlogFaq,
   BlogGenerateRequest,
   BlogGenerateResponse,
-  BlogLength,
+  BlogGeneratedBy,
+  BlogHeading,
   BlogPost,
   BlogPostInput,
   BlogStatus,
+  SeoBlogFields,
 } from "@/types/blog";
 
 export const blogCategories: BlogCategory[] = [
@@ -35,23 +39,85 @@ export const blogStatusLabels: Record<BlogStatus, string> = {
   published: "公開済み",
 };
 
-export const lineReservationUrl = "https://lin.ee/jjqQEFX";
+export const lineReservationUrl = salonProfile.ctaUrl;
 export const lineCtaText =
   "本気で髪を綺麗にしたい方は、まずはLINEからご相談ください。";
+export const lineCtaButtonText = salonProfile.ctaText;
+
+const allowedHtmlTags = new Set([
+  "A",
+  "BLOCKQUOTE",
+  "BR",
+  "H2",
+  "H3",
+  "H4",
+  "LI",
+  "OL",
+  "P",
+  "STRONG",
+  "UL",
+]);
+const blockedHtmlTags = new Set([
+  "EMBED",
+  "FORM",
+  "IFRAME",
+  "INPUT",
+  "LINK",
+  "META",
+  "OBJECT",
+  "SCRIPT",
+  "STYLE",
+]);
 
 export function getTodayIsoDate() {
   return new Date().toISOString().slice(0, 10);
 }
 
+export function getEmptySeoBlogFields(): SeoBlogFields {
+  return {
+    aiModel: "",
+    articleSummary: "",
+    beforeAfterCaptions: [],
+    bodyHtml: "",
+    ctaText: lineCtaButtonText,
+    ctaUrl: lineReservationUrl,
+    faq: [],
+    generatedBy: "manual",
+    headings: [],
+    internalLinkSuggestions: [],
+    metaTitle: "",
+    readerProblems: [],
+    searchIntent: "",
+    secondaryKeywords: [],
+    sourceSeoKeywordId: "",
+    sourceSearchConsoleImportId: "",
+    targetAudience: "",
+    wordpressHtml: "",
+  };
+}
+
+export function withBlogSeoDefaults<T extends BlogPostInput | BlogPost>(input: T) {
+  return {
+    ...getEmptySeoBlogFields(),
+    ...input,
+    beforeAfterCaptions: input.beforeAfterCaptions ?? [],
+    faq: input.faq ?? [],
+    headings: input.headings ?? [],
+    internalLinkSuggestions: input.internalLinkSuggestions ?? [],
+    readerProblems: input.readerProblems ?? [],
+    secondaryKeywords: input.secondaryKeywords ?? [],
+  } as T & SeoBlogFields;
+}
+
 export function createLocalBlogPost(input: BlogPostInput): BlogPost {
   const now = new Date().toISOString();
 
-  return {
+  return withBlogSeoDefaults({
     ...input,
     createdAt: now,
     id: `blog-${Date.now()}`,
     updatedAt: now,
-  };
+  });
 }
 
 export function normalizeBlogCategory(value: string): BlogCategory {
@@ -66,19 +132,81 @@ export function normalizeBlogStatus(value: string): BlogStatus {
     : "draft";
 }
 
+export function normalizeBlogGeneratedBy(value: string): BlogGeneratedBy {
+  return value === "gemini" || value === "mock" ? value : "manual";
+}
+
 export function splitBlogTags(value: string) {
+  return textToStringList(value).slice(0, 12);
+}
+
+export function textToStringList(value: string) {
   return Array.from(
     new Set(
       value
         .split(/[,\n、]/)
-        .map((tag) => tag.replace(/^#/, "").trim())
+        .map((item) => item.replace(/^[-#・]\s*/, "").trim())
         .filter(Boolean),
     ),
-  ).slice(0, 12);
+  );
+}
+
+export function stringListToText(values: string[] | undefined) {
+  return (values ?? []).join("\n");
 }
 
 export function tagsToText(tags: string[]) {
   return tags.join("、");
+}
+
+export function headingsToText(headings: BlogHeading[] | undefined) {
+  return (headings ?? [])
+    .flatMap((heading) => [
+      `## ${heading.text}`,
+      ...heading.children.map((child) => `### ${child.text}`),
+    ])
+    .join("\n");
+}
+
+export function textToHeadings(value: string): BlogHeading[] {
+  const headings: BlogHeading[] = [];
+
+  value.split(/\r?\n/).forEach((line) => {
+    const trimmed = line.trim();
+
+    if (trimmed.startsWith("## ")) {
+      headings.push({
+        children: [],
+        level: "h2",
+        text: trimmed.replace(/^##\s+/, "").slice(0, 140),
+      });
+    } else if (trimmed.startsWith("### ") && headings.length > 0) {
+      headings[headings.length - 1].children.push({
+        level: "h3",
+        text: trimmed.replace(/^###\s+/, "").slice(0, 140),
+      });
+    }
+  });
+
+  return headings.slice(0, 12);
+}
+
+export function faqToText(faq: BlogFaq[] | undefined) {
+  return (faq ?? [])
+    .map((item) => `Q: ${item.question}\nA: ${item.answer}`)
+    .join("\n\n");
+}
+
+export function textToFaq(value: string): BlogFaq[] {
+  return value
+    .split(/\n{2,}/)
+    .map((block) => {
+      const question = block.match(/^Q[:：]\s*(.+)$/m)?.[1]?.trim() ?? "";
+      const answer = block.match(/^A[:：]\s*([\s\S]+)$/m)?.[1]?.trim() ?? "";
+      return { answer, question };
+    })
+    .filter((item) => item.question && item.answer)
+    .slice(0, 8);
 }
 
 export function createSlug(value: string) {
@@ -113,6 +241,12 @@ function paragraphToHtml(paragraph: string) {
     return "";
   }
 
+  if (lines.every((line) => /^[-・]\s*/.test(line))) {
+    return `<ul>${lines
+      .map((line) => `<li>${escapeHtml(line.replace(/^[-・]\s*/, ""))}</li>`)
+      .join("")}</ul>`;
+  }
+
   return `<p>${lines.map(escapeHtml).join("<br>")}</p>`;
 }
 
@@ -125,6 +259,10 @@ export function blogContentToWordPressHtml(content: string) {
 
   return blocks
     .map((block) => {
+      if (block.startsWith("#### ")) {
+        return `<h4>${escapeHtml(block.replace(/^####\s+/, ""))}</h4>`;
+      }
+
       if (block.startsWith("### ")) {
         return `<h3>${escapeHtml(block.replace(/^###\s+/, ""))}</h3>`;
       }
@@ -139,13 +277,79 @@ export function blogContentToWordPressHtml(content: string) {
     .join("\n\n");
 }
 
-export function createWordPressPreviewHtml(content: string) {
-  return [
-    blogContentToWordPressHtml(content),
-    `<p><a href="${lineReservationUrl}" class="wp-block-button__link">${escapeHtml(
-      lineCtaText,
-    )}</a></p>`,
-  ].join("\n\n");
+function sanitizeHtmlFallback(value: string) {
+  return value
+    .replace(/<(script|iframe|object|embed|style|form)[^>]*>[\s\S]*?<\/\1>/gi, "")
+    .replace(/<(script|iframe|object|embed|style|form|input|meta|link)[^>]*\/?\s*>/gi, "")
+    .replace(/\s(on\w+|style)\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "")
+    .replace(/javascript:/gi, "");
+}
+
+export function sanitizeWordPressHtml(value: string) {
+  if (typeof document === "undefined") {
+    return sanitizeHtmlFallback(value);
+  }
+
+  const template = document.createElement("template");
+  template.innerHTML = value;
+
+  Array.from(template.content.querySelectorAll("*")).forEach((element) => {
+    if (blockedHtmlTags.has(element.tagName)) {
+      element.remove();
+      return;
+    }
+
+    if (!allowedHtmlTags.has(element.tagName)) {
+      element.replaceWith(...Array.from(element.childNodes));
+      return;
+    }
+
+    Array.from(element.attributes).forEach((attribute) => {
+      if (
+        element.tagName !== "A" ||
+        !["href", "rel", "target"].includes(attribute.name)
+      ) {
+        element.removeAttribute(attribute.name);
+      }
+    });
+
+    if (element.tagName === "A") {
+      const href = element.getAttribute("href") ?? "";
+      const isSafeHref =
+        href.startsWith("/") ||
+        href.startsWith("https://ef-mayke-s.com/") ||
+        href === lineReservationUrl;
+
+      if (!isSafeHref) {
+        element.removeAttribute("href");
+      }
+
+      if (element.getAttribute("target") === "_blank") {
+        element.setAttribute("rel", "noopener noreferrer");
+      } else {
+        element.removeAttribute("target");
+        element.removeAttribute("rel");
+      }
+    }
+  });
+
+  return template.innerHTML.trim();
+}
+
+export function createWordPressPreviewHtml(
+  content: string,
+  storedWordPressHtml?: string,
+) {
+  const html = storedWordPressHtml?.trim()
+    ? storedWordPressHtml
+    : [
+        blogContentToWordPressHtml(content),
+        `<p><a href="${lineReservationUrl}" target="_blank" rel="noopener noreferrer">${escapeHtml(
+          lineCtaButtonText,
+        )}</a></p>`,
+      ].join("\n\n");
+
+  return sanitizeWordPressHtml(html);
 }
 
 function getCategoryFromKeyword(keyword: string): BlogCategory {
@@ -180,64 +384,151 @@ function getCategoryFromKeyword(keyword: string): BlogCategory {
   return "髪質改善";
 }
 
-function getLengthGuide(length: BlogLength) {
-  if (length === "3000文字") {
-    return "詳しく";
-  }
-
-  if (length === "2000文字") {
-    return "丁寧に";
-  }
-
-  if (length === "800文字") {
-    return "短く読みやすく";
-  }
-
-  return "読みやすく";
-}
-
 export function createMockBlogArticle(
   request: BlogGenerateRequest,
 ): BlogGenerateResponse {
-  const keyword = request.mainKeyword.trim() || "髪質改善";
+  const keyword = request.mainKeyword.trim() || "松江 髪質改善";
   const category = getCategoryFromKeyword(keyword);
-  const title = `松江市で${keyword}を考えている大人女性へ。髪をきれいに見せるために大切なこと`;
+  const title =
+    request.preferredTitle?.trim() ||
+    `松江市で髪質改善を考えている大人女性へ。髪をきれいに見せるために大切なこと`;
+  const metaTitle = `${title} | ef.mayke\`s`.slice(0, 60);
   const slug = createSlug(`matsue-${keyword}-hair-care`);
-  const referenceLine = request.referenceTitles?.length
-    ? `\n\n参考にしたトレンド: ${request.referenceTitles.slice(0, 3).join("、")}`
-    : "";
+  const secondaryKeywords = request.secondaryKeywords?.length
+    ? request.secondaryKeywords.slice(0, 8)
+    : ["松江 縮毛矯正", "40代 髪質改善", "松江 美容室"];
+  const readerProblems = request.readerProblems?.length
+    ? request.readerProblems.slice(0, 8)
+    : ["髪のうねり", "広がり", "パサつき", "年齢による艶不足"];
+  const headings: BlogHeading[] = [
+    {
+      children: [{ level: "h3", text: "うねり・広がり・パサつきが重なる理由" }],
+      level: "h2",
+      text: "大人女性によくある髪の悩みと原因",
+    },
+    {
+      children: [{ level: "h3", text: "髪質改善と縮毛矯正の考え方" }],
+      level: "h2",
+      text: "自宅ケアだけでは難しい時に美容室でできること",
+    },
+    {
+      children: [{ level: "h3", text: "施術履歴まで確認する理由" }],
+      level: "h2",
+      text: "ef.mayke`sのカウンセリングと施術方針",
+    },
+    {
+      children: [],
+      level: "h2",
+      text: "施術後のホームケアとよくある質問",
+    },
+  ];
+  const faq: BlogFaq[] = [
+    {
+      answer:
+        "目的が異なります。髪の状態やくせの強さ、過去の施術履歴を確認したうえで、必要な方法をご提案します。",
+      question: "髪質改善と縮毛矯正はどう違いますか？",
+    },
+    {
+      answer:
+        "髪の状態によって異なります。カラーや縮毛矯正の履歴も含め、まずはLINEまたはカウンセリングでご相談ください。",
+      question: "ダメージがあっても相談できますか？",
+    },
+  ];
+  const bodyHtml = [
+    `<p>松江市で${escapeHtml(keyword)}を検討している方の中には、髪のうねりや広がり、パサつきが重なり、毎朝のスタイリングに時間がかかると感じている方も多いと思います。</p>`,
+    "<h2>大人女性によくある髪の悩み</h2>",
+    "<p>年齢による髪質の変化、カラーや縮毛矯正の履歴、乾かし方など、悩みの原因は一つとは限りません。まずは今の状態を整理することが大切です。</p>",
+    "<h3>うねり・広がり・パサつきが重なる理由</h3>",
+    "<p>髪内部の水分バランスやダメージ、根元と毛先の状態の違いによって、同じケアでも仕上がりに差が出ます。</p>",
+    "<h2>自宅ケアだけでは改善が難しい時</h2>",
+    "<p>ホームケアは大切ですが、強いくせや施術履歴による扱いにくさは、髪の状態を見ながら美容室で方法を選ぶ必要があります。</p>",
+    "<h2>美容室でできる解決方法</h2>",
+    "<p>髪質改善、縮毛矯正、ストレート施術は、それぞれ目的が異なります。効果を断定せず、髪の状態と希望に合わせて無理のない施術を考えます。</p>",
+    "<h2>ef.mayke`sでのカウンセリングと施術方針</h2>",
+    `<p>${escapeHtml(salonProfile.summary)}施術前に髪質、履歴、普段のお手入れを確認します。</p>`,
+    "<blockquote>Before／After画像をここに挿入</blockquote>",
+    "<p>画像は同じ照明や角度を意識し、実際の施術結果だけを掲載してください。仕上がりには個人差があります。</p>",
+    "<h2>施術後の注意点とホームケア</h2>",
+    "<ul><li>強くこすらずに乾かす</li><li>根元から順に乾かす</li><li>髪の状態に合う保湿を続ける</li></ul>",
+    "<h2>よくある質問</h2>",
+    ...faq.flatMap((item) => [
+      `<h3>${escapeHtml(item.question)}</h3>`,
+      `<p>${escapeHtml(item.answer)}</p>`,
+    ]),
+  ].join("\n");
   const content = [
-    `松江市で${keyword}を検討している方の中には、「今の髪をもっと扱いやすくしたい」「年齢とともに髪のツヤが出にくくなった」と感じている方も多いと思います。ef.mayke\`sでは、髪質改善やストレートの考え方を大切にしながら、無理に変えるのではなく、毎日きれいに見える髪を一緒に目指します。`,
-    `## ${request.concern}が気になる時にまず確認したいこと`,
-    `${request.concern}が気になる時は、髪質だけでなく、これまでのカラーや縮毛矯正の履歴、毎日の乾かし方、使っているホームケアも関係します。カウンセリングでは、仕上がりの理想だけでなく、朝のセット時間や苦手なスタイリングも確認すると、提案がずれにくくなります。`,
-    "### 髪質改善と縮毛矯正は目的で選びます",
-    "髪質改善は手触りやまとまり、ツヤ感を整えたい時に向いています。縮毛矯正はくせや広がりをしっかり扱いやすくしたい時に選びやすいメニューです。どちらが良いかは髪の状態によって変わるため、自己判断よりも髪を見ながら相談するのがおすすめです。",
-    "## 白髪ぼかしや大人女性ヘアとの相性",
-    "大人女性の髪は、白髪、乾燥、うねり、パサつきが重なって見えることがあります。白髪ぼかしをする場合も、ベースの髪が整っているとツヤが出やすく、カラーの見え方もやわらかくなります。髪質改善やストレートの土台づくりは、白髪ぼかしとも相性の良い考え方です。",
-    `## ${getLengthGuide(request.length)}伝えたいホームケアのポイント`,
-    "サロンで整えた髪を長く楽しむには、家での乾かし方とシャンプー後のケアが大切です。強くこすらず、根元からしっかり乾かし、毛先には必要な保湿を足すだけでも見え方は変わります。無理なく続けられる方法を選ぶことが、きれいな髪を保つ近道です。",
-    "## まとめ",
-    `${keyword}は、今の髪の悩みと理想の仕上がりを整理してから選ぶと失敗しにくくなります。売り込みではなく、髪の状態を見ながら必要なことを一緒に決めていくことを大切にしています。${lineCtaText}${referenceLine}`,
+    `松江市で${keyword}を検討している大人女性へ向け、髪の悩みと美容室でできることを整理します。`,
+    ...headings.flatMap((heading) => [
+      `## ${heading.text}`,
+      ...heading.children.map((child) => `### ${child.text}`),
+    ]),
+    `Before／After画像をここに挿入\n\n${lineCtaText}`,
   ].join("\n\n");
+  const wordpressHtml = createWordPressPreviewHtml(content, [
+    bodyHtml,
+    `<p><a href="${lineReservationUrl}" target="_blank" rel="noopener noreferrer">${lineCtaButtonText}</a></p>`,
+  ].join("\n\n"));
 
   return {
+    aiModel: "mock",
+    articleSummary:
+      request.articleSummary ??
+      "大人女性の髪の悩みを整理し、髪質改善や縮毛矯正を選ぶ際の考え方をやさしく解説します。",
+    beforeAfterCaption: `${keyword}の施術前後を同じ角度で比較します。仕上がりには個人差があります。`,
+    beforeAfterCaptions: [
+      "施術前：うねりや広がりが気になる状態",
+      "施術後：乾かした状態のまとまりと艶感。仕上がりには個人差があります。",
+    ],
+    blogValue:
+      "来店前に髪質改善と縮毛矯正の違いを知りたいお客様の疑問に答えられるため、ブログ化する価値があります。",
+    bodyHtml,
     category,
     content,
-    excerpt: `${keyword}を考えている大人女性向けに、髪質改善・縮毛矯正・白髪ぼかしとの考え方をやさしく整理しました。`,
-    instagramCaption: `${keyword}で悩んでいる方へ。\n髪の状態によって、髪質改善が合う場合も、縮毛矯正が合う場合もあります。\nまずは今の髪の悩みを一緒に整理しましょう。\n#髪質改善 #縮毛矯正 #松江市美容室`,
-    beforeAfterCaption: `${keyword}でまとまりやツヤ感を整えたい大人女性向けのBefore/After紹介に使えます。`,
-    lineCta: lineCtaText,
-    metaDescription: `松江市で${keyword}を検討している大人女性へ。髪質改善・縮毛矯正・白髪ぼかしとの違いや相談前に知っておきたいポイントを美容室目線で解説します。`,
-    providerLabel: "モック記事",
+    ctaText: lineCtaButtonText,
+    ctaUrl: lineReservationUrl,
+    excerpt: `${keyword}を考えている大人女性向けに、髪質改善・縮毛矯正の考え方をやさしく整理しました。`,
+    faq,
+    generatedBy: "mock",
+    generationMode: "mock",
+    headings,
+    instagramCaption: `${keyword}で悩んでいる方へ。髪の状態に合わせて、必要な方法を一緒に整理しましょう。`,
+    internalLinkSuggestions: [
+      "https://ef-mayke-s.com/blog_toppage/",
+      request.sourceTargetPage || "https://ef-mayke-s.com/",
+    ],
+    lineCta: lineCtaButtonText,
+    metaDescription: `松江市で${keyword}を検討している大人女性へ。髪質改善や縮毛矯正の違い、カウンセリング、ホームケアを美容室目線で解説します。`.slice(
+      0,
+      160,
+    ),
+    metaTitle,
+    providerLabel: "モック生成",
+    readerProblems,
     relatedSnsPostIds: [],
-    relatedTrendIds: [],
+    relatedTrendIds: request.sourceTrendId ? [request.sourceTrendId] : [],
     relatedYoutubeUrls: [],
+    salonRelevance:
+      "髪質改善、縮毛矯正、大人女性の悩みと直接関係し、ef.mayke`sの専門性を自然に伝えられます。",
+    searchIntent:
+      request.searchIntent ||
+      "松江市で髪質改善や縮毛矯正を相談できる美容室と、施術前に知っておくべきことを探している。",
+    secondaryKeywords,
     slug,
+    sourceSeoKeywordId: request.sourceSeoKeywordId ?? "",
+    sourceSearchConsoleImportId:
+      request.sourceSearchConsoleImportId ?? "",
     status: "draft",
     tags: Array.from(
-      new Set([keyword, "髪質改善", "縮毛矯正", "白髪ぼかし", "松江市美容室"]),
-    ),
+      new Set([keyword, ...secondaryKeywords, "髪質改善", "松江市美容室"]),
+    ).slice(0, 12),
+    targetAudience:
+      request.targetAudience ||
+      `${request.targetAge}の、うねり・広がり・パサつきに悩む大人女性`,
     targetKeyword: keyword,
     title,
+    trendSummary:
+      request.referenceMemos?.[0] ||
+      "髪質改善と縮毛矯正を検討する大人女性に役立つテーマです。",
+    wordpressHtml,
   };
 }

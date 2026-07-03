@@ -1,0 +1,12 @@
+hair-trend-dashboard easy start
+================================
+
+1. Double-click START_HERE.cmd
+2. Wait until the browser opens http://localhost:3000
+3. Keep the black command window open while using the app
+4. To stop the app, press Ctrl + C in the black window
+
+First launch can take a few minutes because npm install may run.
+
+If npm is not found, install Node.js LTS:
+https://nodejs.org/

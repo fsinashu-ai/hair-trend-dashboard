@@ -29,16 +29,18 @@ import {
 } from "@/lib/supabase/socialPosts";
 import { createTrendLinkInSupabase } from "@/lib/supabase/trends";
 import type { SnsType } from "@/types/snsPost";
-import type { SocialPost, SocialReviewStatus } from "@/types/social";
+import type {
+  SocialPost,
+  SocialReviewStatus,
+} from "@/types/social";
 import type { SalonRelevance, TrendCategory } from "@/types/trend";
 
 type StorageMode = "supabase" | "local";
 type StatusTone = "neutral" | "info" | "success" | "warning" | "error";
 
 const supabaseEnabled = isSupabaseConfigured();
-const allFilter = "すべて";
-const snsTypes: Array<SnsType | typeof allFilter> = [
-  allFilter,
+const snsTypes: Array<SnsType | "すべて"> = [
+  "すべて",
   "Instagram",
   "YouTube",
   "Pinterest",
@@ -46,8 +48,8 @@ const snsTypes: Array<SnsType | typeof allFilter> = [
   "X",
   "Other",
 ];
-const relevanceOptions: Array<SalonRelevance | typeof allFilter> = [
-  allFilter,
+const relevanceOptions: Array<SalonRelevance | "すべて"> = [
+  "すべて",
   "高",
   "中",
   "低",
@@ -58,7 +60,11 @@ const reviewStatuses: SocialReviewStatus[] = [
   "保留",
   "不要",
 ];
-const reviewTone: Record<SocialReviewStatus, "info" | "success" | "warning" | "danger"> = {
+
+const reviewStatusTone: Record<
+  SocialReviewStatus,
+  "info" | "success" | "warning" | "danger"
+> = {
   未確認: "info",
   採用: "success",
   保留: "warning",
@@ -76,7 +82,7 @@ function formatDateTime(value: string) {
       }).format(date);
 }
 
-function relevanceTone(relevance: SalonRelevance) {
+function getRelevanceTone(relevance: SalonRelevance) {
   if (relevance === "高") {
     return "success" as const;
   }
@@ -96,19 +102,25 @@ export function SocialInbox() {
     supabaseEnabled ? [] : readLocalSocialPosts(),
   );
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [snsFilter, setSnsFilter] = useState<SnsType | typeof allFilter>(allFilter);
-  const [categoryFilter, setCategoryFilter] = useState<TrendCategory | typeof allFilter>(allFilter);
-  const [relevanceFilter, setRelevanceFilter] = useState<SalonRelevance | typeof allFilter>(allFilter);
+  const [snsFilter, setSnsFilter] = useState<SnsType | "すべて">("すべて");
+  const [categoryFilter, setCategoryFilter] = useState<
+    TrendCategory | "すべて"
+  >("すべて");
+  const [relevanceFilter, setRelevanceFilter] = useState<
+    SalonRelevance | "すべて"
+  >("すべて");
   const [onlyUnchecked, setOnlyUnchecked] = useState(true);
   const [visibleIdeaId, setVisibleIdeaId] = useState<string | null>(null);
   const [workingId, setWorkingId] = useState<string | null>(null);
-  const [isBulkUpdating, setIsBulkUpdating] = useState(false);
   const [isLoading, setIsLoading] = useState(supabaseEnabled);
-  const [tone, setTone] = useState<StatusTone>(supabaseEnabled ? "info" : "warning");
+  const [isBulkUpdating, setIsBulkUpdating] = useState(false);
+  const [statusTone, setStatusTone] = useState<StatusTone>(
+    supabaseEnabled ? "info" : "warning",
+  );
   const [message, setMessage] = useState(
     supabaseEnabled
       ? "SNS受信箱を読み込んでいます。"
-      : "Supabase未設定のため、この端末に保存されたSNS投稿を表示します。",
+      : "Supabase未設定のため、この端末に保存されたSNS情報を表示します。",
   );
 
   useEffect(() => {
@@ -116,24 +128,26 @@ export function SocialInbox() {
       return;
     }
 
-    let mounted = true;
+    let isMounted = true;
 
     async function loadPosts() {
       try {
         const data = await fetchSocialPostsFromSupabase();
 
-        if (mounted) {
+        if (isMounted) {
           setPosts(data ?? []);
-          setTone("success");
+          setStatusTone("success");
           setMessage("SNS受信箱を読み込みました。");
         }
       } catch {
-        if (mounted) {
-          setTone("error");
-          setMessage("SNS受信箱を読み込めませんでした。Supabaseのschema.sqlとRLS設定を確認してください。");
+        if (isMounted) {
+          setStatusTone("error");
+          setMessage(
+            "SNS受信箱を読み込めませんでした。Supabaseで最新のschema.sqlを実行してください。",
+          );
         }
       } finally {
-        if (mounted) {
+        if (isMounted) {
           setIsLoading(false);
         }
       }
@@ -142,19 +156,22 @@ export function SocialInbox() {
     loadPosts();
 
     return () => {
-      mounted = false;
+      isMounted = false;
     };
   }, []);
 
   const categories = useMemo(
-    () => Array.from(new Set(posts.map((post) => post.category))).sort((a, b) => a.localeCompare(b, "ja")),
+    () =>
+      Array.from(new Set(posts.map((post) => post.category))).sort((a, b) =>
+        a.localeCompare(b, "ja"),
+      ),
     [posts],
   );
 
-  const duplicateMap = useMemo(() => {
+  const duplicateCandidates = useMemo(() => {
     const result = new Map<string, SocialPost[]>();
 
-    posts.forEach((post) => {
+    for (const post of posts) {
       const matches = posts.filter(
         (candidate) =>
           candidate.id !== post.id &&
@@ -165,7 +182,7 @@ export function SocialInbox() {
       if (matches.length > 0) {
         result.set(post.id, matches);
       }
-    });
+    }
 
     return result;
   }, [posts]);
@@ -177,31 +194,50 @@ export function SocialInbox() {
           return false;
         }
 
-        if (snsFilter !== allFilter && post.snsType !== snsFilter) {
+        if (snsFilter !== "すべて" && post.snsType !== snsFilter) {
           return false;
         }
 
-        if (categoryFilter !== allFilter && post.category !== categoryFilter) {
+        if (
+          categoryFilter !== "すべて" &&
+          post.category !== categoryFilter
+        ) {
           return false;
         }
 
-        if (relevanceFilter !== allFilter && post.relevance !== relevanceFilter) {
+        if (
+          relevanceFilter !== "すべて" &&
+          post.relevance !== relevanceFilter
+        ) {
           return false;
         }
 
         return true;
       }),
-    [categoryFilter, onlyUnchecked, posts, relevanceFilter, snsFilter],
+    [
+      categoryFilter,
+      onlyUnchecked,
+      posts,
+      relevanceFilter,
+      snsFilter,
+    ],
   );
 
   const counts = useMemo(
     () =>
       reviewStatuses.reduce<Record<SocialReviewStatus, number>>(
         (result, status) => {
-          result[status] = posts.filter((post) => post.reviewStatus === status).length;
+          result[status] = posts.filter(
+            (post) => post.reviewStatus === status,
+          ).length;
           return result;
         },
-        { 未確認: 0, 採用: 0, 保留: 0, 不要: 0 },
+        {
+          未確認: 0,
+          採用: 0,
+          保留: 0,
+          不要: 0,
+        },
       ),
     [posts],
   );
@@ -216,7 +252,9 @@ export function SocialInbox() {
 
   async function updatePost(
     post: SocialPost,
-    changes: Partial<Pick<SocialPost, "reviewStatus" | "isFavorite">>,
+    changes: Partial<
+      Pick<SocialPost, "reviewStatus" | "isFavorite">
+    >,
   ) {
     setWorkingId(post.id);
 
@@ -230,16 +268,20 @@ export function SocialInbox() {
         throw new Error("SNS投稿を更新できませんでした。");
       }
 
-      replacePosts(posts.map((item) => (item.id === post.id ? updated : item)));
-      setTone("success");
+      replacePosts(
+        posts.map((item) => (item.id === post.id ? updated : item)),
+      );
+      setStatusTone("success");
       setMessage(
         changes.reviewStatus
           ? `「${post.title}」を${changes.reviewStatus}に変更しました。`
           : "お気に入りを更新しました。",
       );
     } catch {
-      setTone("error");
-      setMessage("更新できませんでした。Supabaseのschema.sqlとRLS設定を確認してください。");
+      setStatusTone("error");
+      setMessage(
+        "更新できませんでした。Supabaseで最新のschema.sqlを実行してください。",
+      );
     } finally {
       setWorkingId(null);
     }
@@ -247,13 +289,13 @@ export function SocialInbox() {
 
   async function bulkUpdate(reviewStatus: SocialReviewStatus) {
     if (selectedIds.length === 0) {
-      setTone("warning");
+      setStatusTone("warning");
       setMessage("先に投稿を選択してください。");
       return;
     }
 
     setIsBulkUpdating(true);
-    setTone("info");
+    setStatusTone("info");
     setMessage(`${selectedIds.length}件を${reviewStatus}に変更しています。`);
 
     try {
@@ -264,16 +306,22 @@ export function SocialInbox() {
       replacePosts(
         posts.map((post) =>
           selectedIds.includes(post.id)
-            ? { ...post, reviewStatus, updatedAt: new Date().toISOString() }
+            ? {
+                ...post,
+                reviewStatus,
+                updatedAt: new Date().toISOString(),
+              }
             : post,
         ),
       );
       setSelectedIds([]);
-      setTone("success");
+      setStatusTone("success");
       setMessage(`${selectedIds.length}件を${reviewStatus}に変更しました。`);
     } catch {
-      setTone("error");
-      setMessage("一括更新に失敗しました。Supabaseの設定を確認してください。");
+      setStatusTone("error");
+      setMessage(
+        "一括更新に失敗しました。Supabaseで最新のschema.sqlを実行してください。",
+      );
     } finally {
       setIsBulkUpdating(false);
     }
@@ -290,7 +338,8 @@ export function SocialInbox() {
   function toggleAllVisible() {
     const visibleIds = filteredPosts.map((post) => post.id);
     const allSelected =
-      visibleIds.length > 0 && visibleIds.every((id) => selectedIds.includes(id));
+      visibleIds.length > 0 &&
+      visibleIds.every((id) => selectedIds.includes(id));
 
     setSelectedIds((current) =>
       allSelected
@@ -301,13 +350,13 @@ export function SocialInbox() {
 
   async function sendToTrend(post: SocialPost) {
     if (post.reviewStatus !== "採用") {
-      setTone("warning");
-      setMessage("トレンド化する前に、この投稿を採用にしてください。");
+      setStatusTone("warning");
+      setMessage("トレンド化する前に、この投稿を「採用」にしてください。");
       return;
     }
 
     setWorkingId(post.id);
-    setTone("info");
+    setStatusTone("info");
     setMessage("採用したSNS投稿をトレンド一覧へ追加しています。");
 
     try {
@@ -330,11 +379,13 @@ export function SocialInbox() {
         ]);
       }
 
-      setTone("success");
+      setStatusTone("success");
       setMessage("トレンド一覧へ追加しました。");
     } catch {
-      setTone("error");
-      setMessage("トレンド化できませんでした。同じURLが保存済みか、Supabase設定を確認してください。");
+      setStatusTone("error");
+      setMessage(
+        "トレンド化できませんでした。同じURLが保存済みか、Supabase設定を確認してください。",
+      );
     } finally {
       setWorkingId(null);
     }
@@ -342,7 +393,7 @@ export function SocialInbox() {
 
   async function sendToBlog(post: SocialPost) {
     setWorkingId(post.id);
-    setTone("info");
+    setStatusTone("info");
     setMessage("SNS投稿からブログ下書きを作成しています。");
 
     try {
@@ -361,31 +412,42 @@ export function SocialInbox() {
         ]);
       }
 
-      setTone("success");
-      setMessage("ブログ管理へ下書きを保存しました。");
+      setStatusTone("success");
+      setMessage("ブログ管理へ下書き保存しました。");
     } catch {
-      setTone("error");
-      setMessage("ブログ化できませんでした。Supabase設定とblog_postsテーブルを確認してください。");
+      setStatusTone("error");
+      setMessage(
+        "ブログ化できませんでした。Supabase設定とblog_postsテーブルを確認してください。",
+      );
     } finally {
       setWorkingId(null);
     }
   }
 
   const allVisibleSelected =
-    filteredPosts.length > 0 && filteredPosts.every((post) => selectedIds.includes(post.id));
+    filteredPosts.length > 0 &&
+    filteredPosts.every((post) => selectedIds.includes(post.id));
 
   return (
     <div className="grid gap-5">
       <section className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         {reviewStatuses.map((status) => (
-          <div className="rounded-lg border border-stone-200 bg-white p-3 shadow-sm" key={status}>
+          <div
+            className="rounded-lg border border-stone-200 bg-white p-3 shadow-sm"
+            key={status}
+          >
             <p className="text-xs font-semibold text-stone-500">{status}</p>
-            <p className="mt-1 text-2xl font-semibold text-stone-950">{counts[status]}</p>
+            <p className="mt-1 text-2xl font-semibold text-stone-950">
+              {counts[status]}
+            </p>
           </div>
         ))}
       </section>
 
-      <StatusMessage isLoading={isLoading || isBulkUpdating || Boolean(workingId)} tone={tone}>
+      <StatusMessage
+        isLoading={isLoading || isBulkUpdating || Boolean(workingId)}
+        tone={statusTone}
+      >
         {message}
       </StatusMessage>
 
@@ -395,11 +457,15 @@ export function SocialInbox() {
             SNS種類
             <select
               className="min-h-11 rounded-md border border-stone-300 bg-white px-3 text-sm"
-              onChange={(event) => setSnsFilter(event.target.value as SnsType | typeof allFilter)}
+              onChange={(event) =>
+                setSnsFilter(event.target.value as SnsType | "すべて")
+              }
               value={snsFilter}
             >
               {snsTypes.map((snsType) => (
-                <option key={snsType} value={snsType}>{snsType}</option>
+                <option key={snsType} value={snsType}>
+                  {snsType}
+                </option>
               ))}
             </select>
           </label>
@@ -408,12 +474,18 @@ export function SocialInbox() {
             カテゴリ
             <select
               className="min-h-11 rounded-md border border-stone-300 bg-white px-3 text-sm"
-              onChange={(event) => setCategoryFilter(event.target.value as TrendCategory | typeof allFilter)}
+              onChange={(event) =>
+                setCategoryFilter(
+                  event.target.value as TrendCategory | "すべて",
+                )
+              }
               value={categoryFilter}
             >
-              <option value={allFilter}>{allFilter}</option>
+              <option value="すべて">すべて</option>
               {categories.map((category) => (
-                <option key={category} value={category}>{category}</option>
+                <option key={category} value={category}>
+                  {category}
+                </option>
               ))}
             </select>
           </label>
@@ -422,11 +494,17 @@ export function SocialInbox() {
             関連度
             <select
               className="min-h-11 rounded-md border border-stone-300 bg-white px-3 text-sm"
-              onChange={(event) => setRelevanceFilter(event.target.value as SalonRelevance | typeof allFilter)}
+              onChange={(event) =>
+                setRelevanceFilter(
+                  event.target.value as SalonRelevance | "すべて",
+                )
+              }
               value={relevanceFilter}
             >
               {relevanceOptions.map((relevance) => (
-                <option key={relevance} value={relevance}>{relevance}</option>
+                <option key={relevance} value={relevance}>
+                  {relevance}
+                </option>
               ))}
             </select>
           </label>
@@ -482,7 +560,10 @@ export function SocialInbox() {
       {isLoading ? (
         <div className="grid gap-4">
           {[0, 1].map((item) => (
-            <div className="rounded-lg border border-stone-200 bg-white p-5 shadow-sm" key={item}>
+            <div
+              className="rounded-lg border border-stone-200 bg-white p-5 shadow-sm"
+              key={item}
+            >
               <div className="h-5 w-40 animate-pulse rounded bg-stone-100" />
               <div className="mt-4 h-4 w-full animate-pulse rounded bg-stone-100" />
               <div className="mt-2 h-4 w-3/4 animate-pulse rounded bg-stone-100" />
@@ -496,18 +577,24 @@ export function SocialInbox() {
               ? "SNS情報取得画面から公開投稿URLを取り込むと、ここに未確認として届きます。"
               : "現在の絞り込み条件に一致する投稿はありません。"
           }
-          title={posts.length === 0 ? "受信箱は空です" : "該当するSNS投稿はありません"}
+          title={
+            posts.length === 0
+              ? "受信箱は空です"
+              : "該当するSNS投稿はありません"
+          }
         />
       ) : (
         <section className="grid gap-4">
           {filteredPosts.map((post) => {
-            const duplicates = duplicateMap.get(post.id) ?? [];
+            const duplicates = duplicateCandidates.get(post.id) ?? [];
             const isWorking = workingId === post.id;
 
             return (
               <article
                 className={`rounded-lg border bg-white p-4 shadow-sm sm:p-5 ${
-                  selectedIds.includes(post.id) ? "border-teal-400" : "border-stone-200"
+                  selectedIds.includes(post.id)
+                    ? "border-teal-400"
+                    : "border-stone-200"
                 }`}
                 key={post.id}
               >
@@ -522,13 +609,21 @@ export function SocialInbox() {
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div className="flex flex-wrap gap-2">
-                        <Badge tone={reviewTone[post.reviewStatus]}>{post.reviewStatus}</Badge>
+                        <Badge tone={reviewStatusTone[post.reviewStatus]}>
+                          {post.reviewStatus}
+                        </Badge>
                         <Badge tone="info">{post.snsType}</Badge>
                         <Badge>{post.category}</Badge>
-                        <Badge tone={relevanceTone(post.relevance)}>関連度 {post.relevance}</Badge>
-                        {post.isFavorite ? <Badge tone="warning">お気に入り</Badge> : null}
+                        <Badge tone={getRelevanceTone(post.relevance)}>
+                          関連度 {post.relevance}
+                        </Badge>
+                        {post.isFavorite ? (
+                          <Badge tone="warning">お気に入り</Badge>
+                        ) : null}
                       </div>
-                      <span className="text-xs text-stone-500">{formatDateTime(post.importedAt)}</span>
+                      <span className="text-xs text-stone-500">
+                        {formatDateTime(post.importedAt)}
+                      </span>
                     </div>
 
                     <h2 className="mt-3 break-words text-lg font-semibold leading-7 text-stone-950">
@@ -539,12 +634,16 @@ export function SocialInbox() {
                     </p>
 
                     <div className="mt-3 flex flex-wrap gap-2">
-                      {post.tags.map((tag) => <Badge key={tag}>{tag}</Badge>)}
+                      {post.tags.map((tag) => (
+                        <Badge key={tag}>{tag}</Badge>
+                      ))}
                     </div>
 
                     {duplicates.length > 0 ? (
                       <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 p-3">
-                        <p className="text-sm font-semibold text-amber-800">重複候補 {duplicates.length}件</p>
+                        <p className="text-sm font-semibold text-amber-800">
+                          重複候補 {duplicates.length}件
+                        </p>
                         <ul className="mt-2 grid gap-1 text-xs leading-5 text-amber-800">
                           {duplicates.slice(0, 3).map((duplicate) => (
                             <li key={duplicate.id}>・{duplicate.title}</li>
@@ -555,7 +654,9 @@ export function SocialInbox() {
 
                     {visibleIdeaId === post.id ? (
                       <div className="mt-4 rounded-md bg-teal-50 p-3">
-                        <p className="text-xs font-semibold text-teal-800">Instagram投稿案</p>
+                        <p className="text-xs font-semibold text-teal-800">
+                          Instagram投稿案
+                        </p>
                         <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-stone-800">
                           {post.instagramPostIdea}
                         </p>
@@ -566,7 +667,9 @@ export function SocialInbox() {
                       <button
                         className="min-h-10 rounded-md border border-teal-200 px-2 text-xs font-semibold text-teal-700 hover:bg-teal-50 disabled:text-stone-400"
                         disabled={isWorking}
-                        onClick={() => updatePost(post, { reviewStatus: "採用" })}
+                        onClick={() =>
+                          updatePost(post, { reviewStatus: "採用" })
+                        }
                         type="button"
                       >
                         採用
@@ -574,7 +677,9 @@ export function SocialInbox() {
                       <button
                         className="min-h-10 rounded-md border border-amber-200 px-2 text-xs font-semibold text-amber-700 hover:bg-amber-50 disabled:text-stone-400"
                         disabled={isWorking}
-                        onClick={() => updatePost(post, { reviewStatus: "保留" })}
+                        onClick={() =>
+                          updatePost(post, { reviewStatus: "保留" })
+                        }
                         type="button"
                       >
                         保留
@@ -582,7 +687,9 @@ export function SocialInbox() {
                       <button
                         className="min-h-10 rounded-md border border-rose-200 px-2 text-xs font-semibold text-rose-700 hover:bg-rose-50 disabled:text-stone-400"
                         disabled={isWorking}
-                        onClick={() => updatePost(post, { reviewStatus: "不要" })}
+                        onClick={() =>
+                          updatePost(post, { reviewStatus: "不要" })
+                        }
                         type="button"
                       >
                         不要
@@ -592,7 +699,9 @@ export function SocialInbox() {
                     <div className="mt-3 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
                       <button
                         className="min-h-11 rounded-md bg-teal-700 px-3 text-sm font-semibold text-white hover:bg-teal-800 disabled:bg-stone-300"
-                        disabled={isWorking || post.reviewStatus !== "採用"}
+                        disabled={
+                          isWorking || post.reviewStatus !== "採用"
+                        }
                         onClick={() => sendToTrend(post)}
                         type="button"
                       >
@@ -608,7 +717,11 @@ export function SocialInbox() {
                       </button>
                       <button
                         className="min-h-11 rounded-md border border-stone-300 px-3 text-sm font-semibold text-stone-700 hover:bg-stone-50"
-                        onClick={() => setVisibleIdeaId((current) => (current === post.id ? null : post.id))}
+                        onClick={() =>
+                          setVisibleIdeaId((current) =>
+                            current === post.id ? null : post.id,
+                          )
+                        }
                         type="button"
                       >
                         Instagram投稿案
@@ -617,7 +730,11 @@ export function SocialInbox() {
                         aria-pressed={post.isFavorite}
                         className="min-h-11 rounded-md border border-amber-200 px-3 text-sm font-semibold text-amber-700 hover:bg-amber-50 disabled:text-stone-400"
                         disabled={isWorking}
-                        onClick={() => updatePost(post, { isFavorite: !post.isFavorite })}
+                        onClick={() =>
+                          updatePost(post, {
+                            isFavorite: !post.isFavorite,
+                          })
+                        }
                         type="button"
                       >
                         {post.isFavorite ? "★ お気に入り" : "☆ お気に入り"}
@@ -634,7 +751,7 @@ export function SocialInbox() {
 
                     {post.reviewStatus !== "採用" ? (
                       <p className="mt-2 text-xs text-stone-500">
-                        トレンド化は、採用にした投稿だけ利用できます。
+                        トレンド化は「採用」にした投稿だけ利用できます。
                       </p>
                     ) : null}
                   </div>

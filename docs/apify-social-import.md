@@ -31,7 +31,7 @@ NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 ```
 
-AI分類を実AIで行う場合は、GeminiまたはOpenAIのキーも設定します。
+AI分類を実AIで行う場合は、`GEMINI_API_KEY`も設定します。
 
 ## 送信できる形式
 
@@ -139,5 +139,3 @@ HTTP Requestノード:
 ## Supabase SQL
 
 最新の `supabase/schema.sql` をSupabase SQL Editorで再実行してください。既存データは残し、足りないカラムだけ追加されます。
-
-GitHub上の `schema.sql` がまだ古い場合や、Apify連携分だけ先に追加したい場合は、`supabase/apify-social-import.sql` を実行してください。

@@ -20,7 +20,7 @@ async function copyText(value: string) {
 
 export function WordPressPreview({ post }: WordPressPreviewProps) {
   const [message, setMessage] = useState("");
-  const html = createWordPressPreviewHtml(post.content);
+  const html = createWordPressPreviewHtml(post.content, post.wordpressHtml);
 
   async function handleCopy(label: string, value: string) {
     const copied = await copyText(value);
@@ -65,6 +65,18 @@ export function WordPressPreview({ post }: WordPressPreviewProps) {
             handleCopy("メタディスクリプション", post.metaDescription)
           }
         />
+        <PreviewField
+          label="メタタイトル"
+          value={post.metaTitle ?? ""}
+          onCopy={() => handleCopy("メタタイトル", post.metaTitle ?? "")}
+        />
+        <div>
+          <p className="text-sm font-semibold text-stone-700">表示プレビュー</p>
+          <div
+            className="mt-2 rounded-md border border-stone-200 bg-white p-4 text-sm leading-7 text-stone-800 [&_a]:font-semibold [&_a]:text-teal-700 [&_blockquote]:border-l-4 [&_blockquote]:border-teal-200 [&_blockquote]:pl-3 [&_h2]:mt-6 [&_h2]:text-xl [&_h2]:font-semibold [&_h3]:mt-4 [&_h3]:text-base [&_h3]:font-semibold [&_li]:ml-5 [&_ol]:list-decimal [&_ul]:list-disc"
+            dangerouslySetInnerHTML={{ __html: html }}
+          />
+        </div>
         <div>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <p className="text-sm font-semibold text-stone-700">本文HTML</p>

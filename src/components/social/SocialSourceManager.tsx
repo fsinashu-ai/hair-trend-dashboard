@@ -5,11 +5,20 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { StatusMessage } from "@/components/ui/StatusMessage";
+import { XSocialCrawler } from "@/components/social/XSocialCrawler";
 import { snsProviderConfigs } from "@/config/snsProviders";
 import {
+  initialInstagramSources,
+  recommendedInstagramSourceCount,
+  socialSourceCategories,
+} from "@/data/initialSocialSources";
+import {
+  readLocalBackupBlogPosts,
   readLocalBackupTrends,
+  saveLocalBackupBlogPosts,
   saveLocalBackupTrends,
 } from "@/lib/backup/localStorage";
+import { createLocalBlogPost } from "@/lib/blog";
 import {
   createLocalSocialPost,
   createLocalSocialSource,
@@ -21,10 +30,16 @@ import {
 import {
   detectSocialType,
   getTitleSimilarity,
+  normalizeSocialHandle,
   normalizeSocialUrl,
 } from "@/lib/social/url";
+import {
+  createBlogDraftFromSocialPost,
+  createTrendFromSocialPost,
+} from "@/lib/social/workflow";
 import { snsTrendCategories, splitTags, tagsToInputValue } from "@/lib/sns";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
+import { createBlogPostInSupabase } from "@/lib/supabase/blogPosts";
 import {
   createSocialPostInSupabase,
   fetchSocialPostsFromSupabase,
@@ -46,9 +61,9 @@ import type {
   SocialSource,
   SocialSourceMode,
 } from "@/types/social";
-import type { Trend, TrendCategory } from "@/types/trend";
+import type { TrendCategory } from "@/types/trend";
 
-type ViewMode = "import" | "sources";
+type ViewMode = "import" | "xCrawler" | "sources";
 type StorageMode = "supabase" | "local";
 type StatusTone = "neutral" | "info" | "success" | "warning" | "error";
 
@@ -106,6 +121,8 @@ function createEmptyImportForm(): ImportForm {
 function createEmptySourceForm(): SourceForm {
   return {
     accountName: "",
+    category: "その他",
+    handle: "",
     isActive: true,
     memo: "",
     priority: "medium",
@@ -142,37 +159,6 @@ function getRelevanceTone(relevance: SocialPost["relevance"]) {
   return "warning" as const;
 }
 
-function createTrendFromSocialPost(post: SocialPost): Trend {
-  const registeredAt = post.importedAt.slice(0, 10);
-
-  return {
-    category: post.category,
-    heat: "中",
-    id: `social-trend-${post.id}-${Date.now()}`,
-    keywords: post.tags.map((tag) => tag.replace(/^#/, "")).slice(0, 8),
-    memo: post.aiSummary,
-    publishedAt: post.publishedAt?.slice(0, 10) || registeredAt,
-    registeredAt,
-    salonRelevance: post.relevance,
-    sourceName: post.snsType,
-    summary: post.aiSummary,
-    tags: post.tags,
-    title: post.title,
-    url: post.canonicalUrl,
-  };
-}
-
-function createBlogHref(post: SocialPost) {
-  const params = new URLSearchParams({
-    category: post.category,
-    keyword: post.tags[0]?.replace(/^#/, "") ?? post.category,
-    title: post.title,
-    url: post.canonicalUrl,
-  });
-
-  return `/blog?${params.toString()}`;
-}
-
 export function SocialSourceManager() {
   const [view, setView] = useState<ViewMode>("import");
   const [storageMode, setStorageMode] = useState<StorageMode>(
@@ -199,6 +185,8 @@ export function SocialSourceManager() {
   const [allowSimilarDuplicate, setAllowSimilarDuplicate] = useState(false);
   const [visibleIdeaId, setVisibleIdeaId] = useState<string | null>(null);
   const [sendingTrendId, setSendingTrendId] = useState<string | null>(null);
+  const [sendingBlogId, setSendingBlogId] = useState<string | null>(null);
+  const [bloggedPostIds, setBloggedPostIds] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(supabaseEnabled);
   const [isImporting, setIsImporting] = useState(false);
   const [isSavingSource, setIsSavingSource] = useState(false);
@@ -426,9 +414,11 @@ export function SocialSourceManager() {
         importForm.memo,
       importedAt: new Date().toISOString(),
       instagramPostIdea: resolvedClassification.instagramPostIdea,
+      isFavorite: false,
       ogImageUrl: resolvedMetadata?.ogImageUrl ?? "",
       publishedAt: resolvedMetadata?.publishedAt,
       relevance: resolvedClassification.relevance,
+      reviewStatus: "未確認",
       snsType: resolvedMetadata?.snsType ?? importForm.snsType,
       sourceId: importForm.sourceId || undefined,
       tags: resolvedClassification.tags,
@@ -582,9 +572,28 @@ export function SocialSourceManager() {
       const input: NewSocialSource = {
         ...sourceForm,
         accountName: sourceForm.accountName.trim(),
+        handle: normalizeSocialHandle(sourceForm.handle),
         memo: sourceForm.memo.trim(),
         profileUrl: normalizeSocialUrl(sourceForm.profileUrl),
       };
+      const duplicateHandle = input.handle
+        ? sources.some(
+            (source) =>
+              source.handle.toLowerCase() === input.handle.toLowerCase(),
+          )
+        : false;
+      const duplicateUrl = sources.some(
+        (source) =>
+          normalizeSocialUrl(source.profileUrl) === input.profileUrl,
+      );
+
+      if (duplicateHandle || duplicateUrl) {
+        throw new Error(
+          duplicateHandle
+            ? "同じハンドルの取得元がすでに登録されています。"
+            : "同じプロフィールURLの取得元がすでに登録されています。",
+        );
+      }
       const savedSource =
         storageMode === "supabase"
           ? await createSocialSourceInSupabase(input)
@@ -633,6 +642,14 @@ export function SocialSourceManager() {
   }
 
   async function sendToTrend(post: SocialPost) {
+    if (post.reviewStatus !== "採用") {
+      setStatusTone("warning");
+      setMessage(
+        "トレンド化する前に、SNS受信箱でこの投稿を「採用」にしてください。",
+      );
+      return;
+    }
+
     setSendingTrendId(post.id);
     setStatusTone("info");
     setMessage("SNS情報からトレンド候補を作成しています。");
@@ -669,6 +686,42 @@ export function SocialSourceManager() {
     }
   }
 
+  async function sendToBlog(post: SocialPost) {
+    setSendingBlogId(post.id);
+    setStatusTone("info");
+    setMessage("SNS情報からブログ下書きを作成しています。");
+
+    try {
+      const draft = createBlogDraftFromSocialPost(post);
+
+      if (storageMode === "supabase") {
+        const saved = await createBlogPostInSupabase(draft);
+
+        if (!saved) {
+          throw new Error("Blog draft was not saved.");
+        }
+      } else {
+        saveLocalBackupBlogPosts([
+          createLocalBlogPost(draft),
+          ...(readLocalBackupBlogPosts() ?? []),
+        ]);
+      }
+
+      setBloggedPostIds((current) =>
+        current.includes(post.id) ? current : [...current, post.id],
+      );
+      setStatusTone("success");
+      setMessage("ブログ管理へ下書き保存しました。");
+    } catch {
+      setStatusTone("error");
+      setMessage(
+        "ブログ化できませんでした。Supabase設定とblog_postsテーブルを確認してください。",
+      );
+    } finally {
+      setSendingBlogId(null);
+    }
+  }
+
   return (
     <div className="grid gap-5">
       <div className="flex gap-2 overflow-x-auto pb-1">
@@ -682,6 +735,17 @@ export function SocialSourceManager() {
           type="button"
         >
           URLから取り込む
+        </button>
+        <button
+          className={`min-h-10 shrink-0 rounded-md border px-4 text-sm font-semibold ${
+            view === "xCrawler"
+              ? "border-teal-700 bg-teal-50 text-teal-800"
+              : "border-stone-300 bg-white text-stone-700"
+          }`}
+          onClick={() => setView("xCrawler")}
+          type="button"
+        >
+          X公式API巡回
         </button>
         <button
           className={`min-h-10 shrink-0 rounded-md border px-4 text-sm font-semibold ${
@@ -946,7 +1010,15 @@ export function SocialSourceManager() {
               <h2 className="text-lg font-semibold text-stone-950">
                 取り込み済みSNS情報
               </h2>
-              <Badge tone="neutral">{posts.length}件</Badge>
+              <div className="flex items-center gap-2">
+                <Badge tone="neutral">{posts.length}件</Badge>
+                <Link
+                  className="inline-flex min-h-10 items-center rounded-md border border-teal-200 px-3 text-sm font-semibold text-teal-700 hover:bg-teal-50"
+                  href="/social-inbox"
+                >
+                  受信箱で確認
+                </Link>
+              </div>
             </div>
 
             {isLoading ? (
@@ -967,6 +1039,19 @@ export function SocialSourceManager() {
                 >
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="flex flex-wrap gap-2">
+                      <Badge
+                        tone={
+                          post.reviewStatus === "採用"
+                            ? "success"
+                            : post.reviewStatus === "保留"
+                              ? "warning"
+                              : post.reviewStatus === "不要"
+                                ? "danger"
+                                : "info"
+                        }
+                      >
+                        {post.reviewStatus}
+                      </Badge>
                       <Badge tone="info">{post.snsType}</Badge>
                       <Badge tone="neutral">{post.category}</Badge>
                       <Badge tone={getRelevanceTone(post.relevance)}>
@@ -1005,18 +1090,30 @@ export function SocialSourceManager() {
                   <div className="mt-5 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
                     <button
                       className="min-h-10 rounded-md border border-teal-200 px-3 text-sm font-semibold text-teal-700 hover:bg-teal-50 disabled:text-stone-400"
-                      disabled={sendingTrendId === post.id}
+                      disabled={
+                        sendingTrendId === post.id ||
+                        post.reviewStatus !== "採用"
+                      }
                       onClick={() => sendToTrend(post)}
                       type="button"
                     >
                       {sendingTrendId === post.id ? "追加中" : "トレンド化"}
                     </button>
-                    <Link
-                      className="inline-flex min-h-10 items-center justify-center rounded-md border border-stone-300 px-3 text-sm font-semibold text-stone-700 hover:bg-stone-50"
-                      href={createBlogHref(post)}
+                    <button
+                      className="min-h-10 rounded-md border border-stone-300 px-3 text-sm font-semibold text-stone-700 hover:bg-stone-50 disabled:bg-stone-50 disabled:text-stone-400"
+                      disabled={
+                        sendingBlogId === post.id ||
+                        bloggedPostIds.includes(post.id)
+                      }
+                      onClick={() => sendToBlog(post)}
+                      type="button"
                     >
-                      ブログ化
-                    </Link>
+                      {sendingBlogId === post.id
+                        ? "保存中"
+                        : bloggedPostIds.includes(post.id)
+                          ? "保存済み"
+                          : "ブログ化"}
+                    </button>
                     <button
                       className="min-h-10 rounded-md border border-stone-300 px-3 text-sm font-semibold text-stone-700 hover:bg-stone-50"
                       onClick={() =>
@@ -1037,11 +1134,28 @@ export function SocialSourceManager() {
                       元投稿
                     </a>
                   </div>
+                  {post.reviewStatus !== "採用" ? (
+                    <p className="mt-2 text-xs text-stone-500">
+                      トレンド化はSNS受信箱で「採用」にした後で利用できます。
+                    </p>
+                  ) : null}
                 </article>
               ))
             )}
           </section>
         </div>
+      ) : view === "xCrawler" ? (
+        <XSocialCrawler
+          onPostsSaved={(savedPosts) =>
+            setPosts((current) => [
+              ...savedPosts.filter(
+                (savedPost) =>
+                  !current.some((post) => post.id === savedPost.id),
+              ),
+              ...current,
+            ])
+          }
+        />
       ) : (
         <div className="grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
           <section className="rounded-lg border border-stone-200 bg-white p-4 shadow-sm sm:p-5">
@@ -1050,6 +1164,10 @@ export function SocialSourceManager() {
             </h2>
             <p className="mt-2 text-sm leading-6 text-stone-600">
               公式API、手動URL、メタデータのみのどれで扱うかを記録します。
+            </p>
+            <p className="mt-2 text-xs leading-5 text-stone-500">
+              Instagram初期候補は{initialInstagramSources.length}件です。おすすめ
+              {recommendedInstagramSourceCount}件だけを最初から有効にしています。
             </p>
 
             <form className="mt-5 grid gap-4" onSubmit={handleAddSource}>
@@ -1110,6 +1228,45 @@ export function SocialSourceManager() {
                   value={sourceForm.accountName}
                 />
               </label>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className="grid gap-2 text-sm font-medium text-stone-700">
+                  ハンドル
+                  <input
+                    className="min-h-11 rounded-md border border-stone-300 px-3"
+                    onChange={(event) =>
+                      setSourceForm((current) => ({
+                        ...current,
+                        handle: event.target.value,
+                      }))
+                    }
+                    placeholder="@ef_maykes"
+                    required={sourceForm.snsType === "Instagram"}
+                    value={sourceForm.handle}
+                  />
+                </label>
+
+                <label className="grid gap-2 text-sm font-medium text-stone-700">
+                  カテゴリ
+                  <select
+                    className="min-h-11 rounded-md border border-stone-300 bg-white px-3"
+                    onChange={(event) =>
+                      setSourceForm((current) => ({
+                        ...current,
+                        category: event.target
+                          .value as NewSocialSource["category"],
+                      }))
+                    }
+                    value={sourceForm.category}
+                  >
+                    {socialSourceCategories.map((category) => (
+                      <option key={category} value={category}>
+                        {category}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
 
               <label className="grid gap-2 text-sm font-medium text-stone-700">
                 プロフィールURL
@@ -1215,6 +1372,7 @@ export function SocialSourceManager() {
                     <div>
                       <div className="flex flex-wrap gap-2">
                         <Badge tone="info">{source.snsType}</Badge>
+                        <Badge tone="neutral">{source.category}</Badge>
                         <Badge tone="neutral">
                           {sourceModeLabels[source.sourceMode]}
                         </Badge>
@@ -1228,6 +1386,11 @@ export function SocialSourceManager() {
                       <h3 className="mt-3 text-lg font-semibold text-stone-950">
                         {source.accountName}
                       </h3>
+                      {source.handle ? (
+                        <p className="mt-1 text-sm font-medium text-teal-700">
+                          {source.handle}
+                        </p>
+                      ) : null}
                     </div>
                     <button
                       className="min-h-10 rounded-md border border-stone-300 px-3 text-sm font-semibold text-stone-700 hover:bg-stone-50"
@@ -1273,6 +1436,7 @@ export function SocialSourceManager() {
         <p className="mt-2 text-sm leading-7 text-stone-600">
           ログイン回避、CAPTCHA回避、Cookie使い回し、IPローテーション、非公開投稿取得、大量スクレイピングは行いません。
           403・429・robots.txtによる禁止を検出した場合は取得を停止し、URL・タイトル・メモの手動登録へ戻します。
+          TikTok投稿URLは公式oEmbedで取得できるタイトルとサムネイルURLだけを確認し、動画や画像ファイルは保存しません。
         </p>
       </section>
     </div>

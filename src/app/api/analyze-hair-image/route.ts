@@ -180,7 +180,7 @@ export async function POST(request: Request) {
     });
   } catch {
     return NextResponse.json(
-      { error: "ヘア画像のAI分析に失敗しました。画像、AI_PROVIDER、APIキーを確認してください。" },
+      { error: "Geminiで画像を分析できませんでした。画像を確認し、時間をおいてもう一度お試しください。" },
       { status: 500 },
     );
   }

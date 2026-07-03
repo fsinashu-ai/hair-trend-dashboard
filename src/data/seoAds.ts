@@ -1,0 +1,206 @@
+import type {
+  AdCampaignNote,
+  AdReport,
+  SeoKeyword,
+  SeoPage,
+  SeoReport,
+  SeoTask,
+} from "@/types/seoAds";
+
+export const seoMockAnalysis =
+  "現在のデータを見ると、松江 髪質改善、松江 縮毛矯正、40代 髪質改善に関する記事追加と、LINE相談ボタンへの導線改善が優先です。";
+
+export const dummySeoKeywords: SeoKeyword[] = [
+  {
+    id: "seo-keyword-1",
+    keyword: "松江 髪質改善",
+    intent: "施術できる美容室を探している",
+    priority: "high",
+    targetPage: "https://ef-mayke-s.com/",
+    status: "強化中",
+    memo: "トップページと髪質改善記事の両方で自然に扱う",
+  },
+  {
+    id: "seo-keyword-2",
+    keyword: "松江 縮毛矯正",
+    intent: "くせ毛を相談できる美容室を比較している",
+    priority: "high",
+    targetPage: "https://ef-mayke-s.com/blog_toppage/",
+    status: "記事追加",
+    memo: "失敗例だけでなく、施術前の判断基準も説明する",
+  },
+  {
+    id: "seo-keyword-3",
+    keyword: "40代 髪質改善",
+    intent: "年齢による広がりや艶不足を解決したい",
+    priority: "high",
+    targetPage: "https://ef-mayke-s.com/blog_toppage/",
+    status: "未着手",
+    memo: "大人女性向けの事例記事を追加する",
+  },
+  {
+    id: "seo-keyword-4",
+    keyword: "松江 くせ毛 美容室",
+    intent: "くせ毛に詳しい美容師へ相談したい",
+    priority: "medium",
+    targetPage: "https://ef-mayke-s.com/",
+    status: "確認中",
+    memo: "カウンセリングの流れを追記する",
+  },
+  {
+    id: "seo-keyword-5",
+    keyword: "白髪ぼかし 松江",
+    intent: "白髪を自然に活かすカラーを探している",
+    priority: "medium",
+    targetPage: "https://ef-mayke-s.com/single-post/siragazome-osharezome/",
+    status: "改善中",
+    memo: "髪質改善との同時提案を分かりやすくする",
+  },
+];
+
+export const dummySeoPages: SeoPage[] = [
+  {
+    id: "seo-page-1",
+    pageTitle: "ef.mayke`s 公式サイト",
+    pageUrl: "https://ef-mayke-s.com/",
+    targetKeyword: "松江 髪質改善",
+    currentIssue: "髪質改善の強みは伝わるが、相談までの導線が離れている",
+    suggestedAction: "施術事例の直後にLINE相談への案内を追加する",
+    ctaMemo: "本気で髪を綺麗にしたい方は、まずはLINEからご相談ください。",
+  },
+  {
+    id: "seo-page-2",
+    pageTitle: "髪質改善ブログ一覧",
+    pageUrl: "https://ef-mayke-s.com/blog_toppage/",
+    targetKeyword: "松江 縮毛矯正",
+    currentIssue: "記事の入口は多いが、悩み別に探しにくい",
+    suggestedAction: "くせ毛・広がり・パサつきの悩み別リンクを設置する",
+    ctaMemo: "記事末尾のLINE相談文を統一する",
+  },
+  {
+    id: "seo-page-3",
+    pageTitle: "白髪染めとダメージ記事",
+    pageUrl: "https://ef-mayke-s.com/single-post/siragazome-osharezome/",
+    targetKeyword: "白髪ぼかし 松江",
+    currentIssue: "検索意図に対して白髪ぼかしの説明が少ない",
+    suggestedAction: "向いている方・注意点・施術周期を追記する",
+    ctaMemo: "カラー履歴をLINEで相談できることを案内する",
+  },
+];
+
+export const dummySeoTasks: SeoTask[] = [
+  {
+    id: "seo-task-1",
+    title: "40代向け髪質改善の記事構成を作る",
+    taskType: "新規記事",
+    priority: "high",
+    status: "未着手",
+    relatedKeyword: "40代 髪質改善",
+    relatedPageUrl: "https://ef-mayke-s.com/blog_toppage/",
+    dueDate: "2026-06-25",
+    memo: "広がりと艶不足の悩みを中心にする",
+  },
+  {
+    id: "seo-task-2",
+    title: "トップページのLINE相談導線を確認する",
+    taskType: "CTA改善",
+    priority: "high",
+    status: "対応中",
+    relatedKeyword: "松江 髪質改善",
+    relatedPageUrl: "https://ef-mayke-s.com/",
+    dueDate: "2026-06-22",
+    memo: "スマホ表示で押しやすい位置を確認する",
+  },
+  {
+    id: "seo-task-3",
+    title: "白髪ぼかし記事に施術周期を追記する",
+    taskType: "リライト",
+    priority: "medium",
+    status: "未着手",
+    relatedKeyword: "白髪ぼかし 松江",
+    relatedPageUrl: "https://ef-mayke-s.com/single-post/siragazome-osharezome/",
+    dueDate: "2026-06-30",
+    memo: "髪質や履歴で変わることも明記する",
+  },
+];
+
+export const dummySeoReports: SeoReport[] = [
+  {
+    id: "seo-report-2026-06",
+    reportMonth: "2026-06-01",
+    summary: "髪質改善関連の記事への流入が安定し、縮毛矯正と40代向け記事に改善余地があります。",
+    clicks: 482,
+    impressions: 12840,
+    ctr: 3.75,
+    averagePosition: 9.4,
+    aiAnalysis: seoMockAnalysis,
+    nextActions: [
+      "40代向け髪質改善記事を追加",
+      "縮毛矯正記事からLINE相談へ誘導",
+      "白髪ぼかし記事のタイトルを見直す",
+    ],
+  },
+  {
+    id: "seo-report-2026-05",
+    reportMonth: "2026-05-01",
+    summary: "自社ブログの更新により表示回数が増えました。",
+    clicks: 431,
+    impressions: 11520,
+    ctr: 3.74,
+    averagePosition: 10.1,
+    aiAnalysis: "検索結果1ページ目前後の記事を優先して更新すると効率的です。",
+    nextActions: ["既存記事の導入文を改善", "髪質改善事例を1件追加"],
+  },
+];
+
+export const dummyAdCampaignNotes: AdCampaignNote[] = [
+  {
+    id: "ad-note-1",
+    campaignName: "松江市 髪質改善 検索広告",
+    platform: "Google広告",
+    purpose: "LINE相談の獲得",
+    targetArea: "松江市と周辺地域",
+    budgetMemo: "月3万円以内で少額テスト",
+    offer: "髪質や施術履歴をLINEで事前相談",
+    landingPageUrl: "https://ef-mayke-s.com/",
+    memo: "広告の自動出稿や予算変更は行わず、案だけを管理する",
+  },
+  {
+    id: "ad-note-2",
+    campaignName: "大人女性向け髪質改善",
+    platform: "Instagram広告",
+    purpose: "サロン認知と事例閲覧",
+    targetArea: "松江市から車で来店できる範囲",
+    budgetMemo: "写真と訴求文を比較してから判断",
+    offer: "広がり・パサつきの相談",
+    landingPageUrl: "https://ef-mayke-s.com/blog_toppage/",
+    memo: "Before/Afterの転載許可と表現を確認する",
+  },
+];
+
+export const dummyAdReports: AdReport[] = [
+  {
+    id: "ad-report-2026-06-google",
+    reportMonth: "2026-06-01",
+    platform: "Google広告",
+    campaignName: "松江市 髪質改善 検索広告",
+    cost: 18400,
+    clicks: 126,
+    conversions: 7,
+    cpa: 2629,
+    aiAnalysis: "検索語句とLPの内容を揃え、LINE相談ボタンを最初の画面でも見つけやすくする余地があります。",
+    nextActions: ["検索語句を確認", "LPのCTA位置を確認"],
+  },
+  {
+    id: "ad-report-2026-06-instagram",
+    reportMonth: "2026-06-01",
+    platform: "Instagram広告",
+    campaignName: "大人女性向け髪質改善",
+    cost: 9200,
+    clicks: 84,
+    conversions: 3,
+    cpa: 3067,
+    aiAnalysis: "パサつき改善より、くせ毛と広がりの悩みを具体的にした投稿案を比較してください。",
+    nextActions: ["訴求文を2案作る", "画像掲載許可を確認"],
+  },
+];

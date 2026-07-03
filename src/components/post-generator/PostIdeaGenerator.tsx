@@ -15,6 +15,7 @@ type GenerateOutputType =
   | "customer-explanation"
   | "next-visit"
   | "retail-product"
+  | "blog-article"
   | "morning-brief"
   | "trend-explanation";
 
@@ -78,6 +79,15 @@ const outputConfigs: OutputConfig[] = [
     content:
       "今日の仕上がりを長く楽しむために、ご自宅では乾燥を防ぐケアを続けるのがおすすめです。\n\n特に毛先のパサつきが出やすい方は、洗い流さないトリートメントを中間から毛先につけてから乾かすと、まとまりが変わりやすくなります。無理に商品を増やすより、まずは毎日続けやすい1本から始めましょう。",
     hashtags: ["#店販", "#ホームケア", "#ヘアケア", "#艶髪"],
+  },
+  {
+    type: "blog-article",
+    label: "ブログ記事",
+    postType: "ブログ記事",
+    theme: "髪質改善ブログ",
+    content:
+      "タイトル案: くせ毛やパサつきが気になる方へ。髪質改善で大切にしたいこと\n\n髪の広がりやうねり、毛先のパサつきは、毎日のスタイリングを大変に感じる大きな理由になります。\n\nef.mayke`sでは、見た目の艶だけでなく、髪質やこれまでの施術履歴を確認しながら、無理なく扱いやすい状態を目指します。\n\n髪質改善は、すべての髪に同じ施術をするものではありません。くせの出方、ダメージの状態、カラーや縮毛矯正の履歴によって、必要なケアや施術の強さは変わります。\n\nまずはカウンセリングで今のお悩みを伺い、ストレートが向いているのか、トリートメントで整えるのか、ホームケアを見直すのかを一緒に考えていきましょう。",
+    hashtags: ["#髪質改善", "#くせ毛改善", "#艶髪", "#美容室ブログ"],
   },
   {
     type: "morning-brief",
@@ -224,7 +234,7 @@ export function PostIdeaGenerator() {
       );
       setStatusTone("warning");
       setMessage(
-        "AI APIで生成できなかったため、実務用のモックレスポンスを表示しています。AI_PROVIDERとAPIキーを確認してください。",
+        "Geminiで生成できなかったため、実務用のモックレスポンスを表示しています。時間をおいてもう一度お試しください。",
       );
     } finally {
       setIsGenerating(false);

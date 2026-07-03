@@ -11,6 +11,7 @@ type GeneratePostType =
   | "customer-explanation"
   | "next-visit"
   | "retail-product"
+  | "blog-article"
   | "trend-explanation"
   | "salon-menu"
   | "weekly-summary";
@@ -65,6 +66,12 @@ const outputSettings: Record<
     instruction:
       "店販提案を作成してください。お客様の悩みに寄り添い、商品を使う理由、使い方、期待できる変化を美容師らしく自然に説明してください。",
   },
+  "blog-article": {
+    postType: "ブログ記事",
+    theme: "美容ブログ記事",
+    instruction:
+      "美容室ブログ記事を作成してください。タイトル案、導入文、見出し、本文、まとめを含め、来店前のお客様が安心して相談できる内容にしてください。SEOを意識しつつ、読み物として自然な文章にしてください。",
+  },
   "morning-brief": {
     postType: "朝礼ネタ",
     theme: "朝礼ネタ",
@@ -99,6 +106,7 @@ function getRequestType(type: GeneratePostRequest["type"]): GeneratePostType {
     type === "customer-explanation" ||
     type === "next-visit" ||
     type === "retail-product" ||
+    type === "blog-article" ||
     type === "trend-explanation" ||
     type === "salon-menu" ||
     type === "weekly-summary"
@@ -136,7 +144,19 @@ function getLength(length: GeneratePostRequest["length"]): LengthOption {
     : "標準";
 }
 
-function getLengthGuide(length: LengthOption) {
+function getLengthGuide(length: LengthOption, type: GeneratePostType) {
+  if (type === "blog-article") {
+    if (length === "短め") {
+      return "ブログ本文は600〜900文字程度。タイトル案、導入文、見出し2つ、まとめを入れてください。";
+    }
+
+    if (length === "長め") {
+      return "ブログ本文は1500〜2200文字程度。タイトル案、導入文、見出し4〜5つ、カウンセリングにつながるまとめまで丁寧に書いてください。途中で終わらせないでください。";
+    }
+
+    return "ブログ本文は1000〜1400文字程度。タイトル案、導入文、見出し3つ、まとめを入れてください。途中で終わらせないでください。";
+  }
+
   if (length === "短め") {
     return "本文は120〜180文字程度。要点を絞り、必ず自然な締めの一文まで書いてください。";
   }
@@ -181,7 +201,7 @@ export async function POST(request: Request) {
         `出力タイプ: ${settings.postType}`,
         `対象: ${ageGroup}${genderTarget}`,
         `文体: ${writingTone}`,
-        `文字数: ${length}。${getLengthGuide(length)}`,
+        `文字数: ${length}。${getLengthGuide(length, requestType)}`,
         `参照トレンド: ${trendTitles.join("、") || "未指定"}`,
         `使用キーワード: ${keywords.join("、") || "未指定"}`,
         "文章は途中で終わらせず、最後の一文まで完成させてください。",
@@ -190,7 +210,14 @@ export async function POST(request: Request) {
         "最後に、本文とは別に「ハッシュタグ:」という行を作り、Instagramで使いやすいハッシュタグを8〜12個生成してください。",
         "ハッシュタグは美容室、髪質改善、地域名なしで使える一般的なものを中心にしてください。",
       ].join("\n"),
-      maxOutputTokens: length === "長め" ? 2600 : 2000,
+      maxOutputTokens:
+        requestType === "blog-article"
+          ? length === "長め"
+            ? 4600
+            : 3400
+          : length === "長め"
+            ? 2600
+            : 2000,
     });
     const content = result.text.trim();
 
@@ -214,7 +241,7 @@ export async function POST(request: Request) {
     });
   } catch {
     return NextResponse.json(
-      { error: "AI生成に失敗しました。AI_PROVIDER、APIキー、利用上限を確認してください。" },
+      { error: "Geminiで生成できませんでした。時間をおいてもう一度お試しください。" },
       { status: 500 },
     );
   }

@@ -185,7 +185,7 @@ export function HairImageAnalyzer() {
       setAnalysis(createMockAnalysis(selectedImage.name));
       setStatusTone("warning");
       setMessage(
-        "画像保存またはAI分析に失敗したため、モック分析を表示しています。Supabase Storage、AI_PROVIDER、APIキーを確認してください。",
+        "画像保存またはGemini分析に失敗したため、モック分析を表示しています。Supabase Storageを確認し、時間をおいてもう一度お試しください。",
       );
     } finally {
       setIsProcessing(false);

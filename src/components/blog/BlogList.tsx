@@ -139,6 +139,13 @@ export function BlogList({
                   <Badge tone={statusTone[post.status]}>
                     {blogStatusLabels[post.status]}
                   </Badge>
+                  <Badge tone={post.generatedBy === "gemini" ? "success" : "neutral"}>
+                    {post.generatedBy === "gemini"
+                      ? "Gemini"
+                      : post.generatedBy === "mock"
+                        ? "モック"
+                        : "手動"}
+                  </Badge>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <button
@@ -171,6 +178,11 @@ export function BlogList({
               </h3>
               <p className="mt-2 text-sm leading-6 text-stone-600">
                 {post.excerpt || "概要はまだありません。"}
+              </p>
+              <p className="mt-2 text-xs text-stone-500">
+                生成日時 {new Date(post.createdAt).toLocaleString("ja-JP")} / 最終更新{" "}
+                {new Date(post.updatedAt).toLocaleString("ja-JP")}
+                {post.aiModel ? ` / ${post.aiModel}` : ""}
               </p>
 
               <div className="mt-4 rounded-md bg-stone-50 p-3">

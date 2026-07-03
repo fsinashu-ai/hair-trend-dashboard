@@ -60,9 +60,9 @@ function getTagValue(item: string, tagName: string) {
 
 function getAtomLink(item: string) {
   const alternateMatch = item.match(
-    /<link[^>]+rel=[#']alternate["'][^>]+href=[#']([^#']+)[#'][^>]*>/i,
+    /<link[^>]+rel=["']alternate["'][^>]+href=["']([^"']+)["'][^>]*>/i,
   );
-  const hrefMatch = item.match(/<link[^>]+href=[#']([^#']+)[#'][^>]*>/i);
+  const hrefMatch = item.match(/<link[^>]+href=["']([^"']+)["'][^>]*>/i);
 
   return alternateMatch
     ? decodeXml(alternateMatch[1])

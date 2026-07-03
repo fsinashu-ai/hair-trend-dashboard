@@ -10,10 +10,15 @@ import { StatusMessage } from "@/components/ui/StatusMessage";
 import { dummyBlogPosts } from "@/data/dummyBlogPosts";
 import { dummyTrends } from "@/data/dummyTrends";
 import {
+  createWordPressPreviewHtml,
   createLocalBlogPost,
   createSlug,
+  getEmptySeoBlogFields,
   getTodayIsoDate,
   normalizeBlogCategory,
+  sanitizeWordPressHtml,
+  textToStringList,
+  withBlogSeoDefaults,
 } from "@/lib/blog";
 import {
   readLocalBackupBlogPosts,
@@ -29,7 +34,12 @@ import {
 } from "@/lib/supabase/blogPosts";
 import { fetchSnsPostsFromSupabase } from "@/lib/supabase/snsPosts";
 import { fetchTrendLinksFromSupabase } from "@/lib/supabase/trends";
-import type { BlogCategory, BlogPost, BlogPostInput } from "@/types/blog";
+import type {
+  BlogCategory,
+  BlogGenerateRequest,
+  BlogPost,
+  BlogPostInput,
+} from "@/types/blog";
 import type { SnsPost } from "@/types/snsPost";
 import type { Trend } from "@/types/trend";
 
@@ -40,6 +50,7 @@ const supabaseEnabled = isSupabaseConfigured();
 
 function createEmptyDraft(): BlogPostInput {
   return {
+    ...getEmptySeoBlogFields(),
     category: "髪質改善",
     content: "",
     excerpt: "",
@@ -71,6 +82,8 @@ function createDraftFromParams(searchParams: URLSearchParams): BlogPostInput {
 
   return {
     ...draft,
+    articleSummary:
+      searchParams.get("summary") ?? searchParams.get("memo") ?? "",
     category,
     content: title
       ? [
@@ -84,27 +97,56 @@ function createDraftFromParams(searchParams: URLSearchParams): BlogPostInput {
     relatedSnsPostIds: snsPostId ? [snsPostId] : [],
     relatedTrendIds: trendId ? [trendId] : [],
     relatedYoutubeUrls: youtubeUrl?.includes("youtube") ? [youtubeUrl] : [],
+    searchIntent: searchParams.get("searchIntent") ?? "",
+    secondaryKeywords: textToStringList(
+      searchParams.get("secondaryKeywords") ?? "",
+    ),
     slug: createSlug(`${keyword}-${title || "blog"}`),
+    sourceSeoKeywordId: searchParams.get("seoKeywordId") ?? "",
+    sourceSearchConsoleImportId:
+      searchParams.get("sourceSearchConsoleImportId") ?? "",
     tags: Array.from(new Set([keyword, category, "松江市美容室"])).filter(Boolean),
     targetKeyword: keyword,
+    targetAudience: searchParams.get("targetAudience") ?? "",
     title: title ? `${title}をブログ化` : draft.title,
   };
 }
 
 function toBlogInput(post: BlogPost): BlogPostInput {
+  const { createdAt, id, updatedAt, ...input } = withBlogSeoDefaults(post);
+  void createdAt;
+  void id;
+  void updatedAt;
+  return input;
+}
+
+function createGenerateRequestFromParams(
+  searchParams: URLSearchParams,
+): Partial<BlogGenerateRequest> {
+  const title = searchParams.get("title") ?? "";
+  const memo = searchParams.get("memo") ?? searchParams.get("summary") ?? "";
+
   return {
-    category: post.category,
-    content: post.content,
-    excerpt: post.excerpt,
-    metaDescription: post.metaDescription,
-    relatedSnsPostIds: post.relatedSnsPostIds,
-    relatedTrendIds: post.relatedTrendIds,
-    relatedYoutubeUrls: post.relatedYoutubeUrls,
-    slug: post.slug,
-    status: post.status,
-    tags: post.tags,
-    targetKeyword: post.targetKeyword,
-    title: post.title,
+    articleSummary: memo,
+    mainKeyword:
+      searchParams.get("keyword") ??
+      searchParams.get("category") ??
+      "松江 髪質改善",
+    preferredTitle: title,
+    readerProblems: textToStringList(searchParams.get("readerProblems") ?? ""),
+    referenceMemos: memo ? [memo] : [],
+    referenceTitles: title ? [title] : [],
+    searchIntent: searchParams.get("searchIntent") ?? "",
+    secondaryKeywords: textToStringList(
+      searchParams.get("secondaryKeywords") ?? "",
+    ),
+    sourcePriority: searchParams.get("priority") ?? "",
+    sourceSeoKeywordId: searchParams.get("seoKeywordId") ?? "",
+    sourceSearchConsoleImportId:
+      searchParams.get("sourceSearchConsoleImportId") ?? "",
+    sourceTargetPage: searchParams.get("targetPage") ?? "",
+    sourceTrendId: searchParams.get("trendId") ?? "",
+    targetAudience: searchParams.get("targetAudience") ?? "",
   };
 }
 
@@ -133,6 +175,10 @@ export function BlogManager() {
   const searchParams = useSearchParams();
   const hasBlogSource =
     Boolean(searchParams.get("title")) || Boolean(searchParams.get("keyword"));
+  const initialGeneratorRequest = useMemo(
+    () => createGenerateRequestFromParams(searchParams),
+    [searchParams],
+  );
   const [posts, setPosts] = useState<BlogPost[]>(() =>
     supabaseEnabled ? [] : readLocalBackupBlogPosts() ?? dummyBlogPosts,
   );
@@ -142,7 +188,13 @@ export function BlogManager() {
   const [snsPosts, setSnsPosts] = useState<SnsPost[]>(() =>
     supabaseEnabled ? [] : readLocalBackupSnsPosts() ?? [],
   );
-  const [view, setView] = useState<BlogView>(hasBlogSource ? "editor" : "list");
+  const [view, setView] = useState<BlogView>(
+    searchParams.get("view") === "generator"
+      ? "generator"
+      : hasBlogSource
+        ? "editor"
+        : "list",
+  );
   const [draft, setDraft] = useState<BlogPostInput>(() =>
     hasBlogSource ? createDraftFromParams(searchParams) : createEmptyDraft(),
   );
@@ -270,6 +322,16 @@ export function BlogManager() {
       return;
     }
 
+    const safeDraft = withBlogSeoDefaults({
+      ...draft,
+      bodyHtml: sanitizeWordPressHtml(draft.bodyHtml ?? ""),
+      wordpressHtml: sanitizeWordPressHtml(
+        draft.wordpressHtml?.trim()
+          ? draft.wordpressHtml
+          : createWordPressPreviewHtml(draft.content),
+      ),
+    });
+
     setIsSaving(true);
     setStatusTone("info");
     setMessage("ブログ下書きを保存しています。");
@@ -278,8 +340,8 @@ export function BlogManager() {
       if (supabaseEnabled) {
         const shouldUpdate = editingId && !editingId.startsWith("dummy-");
         const savedPost = shouldUpdate
-          ? await updateBlogPostInSupabase(editingId, draft)
-          : await createBlogPostInSupabase(draft);
+          ? await updateBlogPostInSupabase(editingId, safeDraft)
+          : await createBlogPostInSupabase(safeDraft);
 
         if (savedPost) {
           setPosts((currentPosts) => {
@@ -299,7 +361,7 @@ export function BlogManager() {
             post.id === editingId
               ? {
                   ...post,
-                  ...draft,
+                  ...safeDraft,
                   updatedAt: new Date().toISOString(),
                 }
               : post,
@@ -308,7 +370,10 @@ export function BlogManager() {
         setStatusTone("warning");
         setMessage("この端末のブログ下書きを更新しました。");
       } else {
-        setPosts((currentPosts) => [createLocalBlogPost(draft), ...currentPosts]);
+        setPosts((currentPosts) => [
+          createLocalBlogPost(safeDraft),
+          ...currentPosts,
+        ]);
         setStatusTone("warning");
         setMessage("この端末にブログ下書きを保存しました。");
       }
@@ -457,6 +522,9 @@ export function BlogManager() {
 
       {view === "generator" ? (
         <BlogGenerator
+          initialRequest={initialGeneratorRequest}
+          initialSeoKeywordId={searchParams.get("seoKeywordId") ?? undefined}
+          initialTrendId={searchParams.get("trendId") ?? undefined}
           snsPosts={snsPosts}
           trends={trends}
           onGenerated={applyGeneratedDraft}

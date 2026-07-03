@@ -1,4 +1,40 @@
 export type BlogStatus = "idea" | "draft" | "ready" | "published";
+export type BlogGeneratedBy = "gemini" | "mock" | "manual";
+
+export type BlogHeading = {
+  level: "h2";
+  text: string;
+  children: Array<{
+    level: "h3";
+    text: string;
+  }>;
+};
+
+export type BlogFaq = {
+  question: string;
+  answer: string;
+};
+
+export type SeoBlogFields = {
+  articleSummary: string;
+  secondaryKeywords: string[];
+  searchIntent: string;
+  targetAudience: string;
+  readerProblems: string[];
+  metaTitle: string;
+  headings: BlogHeading[];
+  bodyHtml: string;
+  wordpressHtml: string;
+  beforeAfterCaptions: string[];
+  internalLinkSuggestions: string[];
+  faq: BlogFaq[];
+  ctaText: string;
+  ctaUrl: string;
+  sourceSeoKeywordId: string;
+  sourceSearchConsoleImportId: string;
+  generatedBy: BlogGeneratedBy;
+  aiModel: string;
+};
 
 export type BlogCategory =
   | "髪質改善"
@@ -28,7 +64,7 @@ export type BlogPost = {
   relatedYoutubeUrls: string[];
   createdAt: string;
   updatedAt: string;
-};
+} & Partial<SeoBlogFields>;
 
 export type BlogPostInput = Omit<BlogPost, "id" | "createdAt" | "updatedAt">;
 
@@ -60,11 +96,27 @@ export type BlogGenerateRequest = {
   length: BlogLength;
   referenceTitles?: string[];
   referenceMemos?: string[];
+  secondaryKeywords?: string[];
+  searchIntent?: string;
+  targetAudience?: string;
+  readerProblems?: string[];
+  preferredTitle?: string;
+  articleSummary?: string;
+  sourceSeoKeywordId?: string;
+  sourceSearchConsoleImportId?: string;
+  sourceTrendId?: string;
+  sourcePriority?: string;
+  sourceTargetPage?: string;
 };
 
-export type BlogGenerateResponse = BlogPostInput & {
+export type BlogGenerateResponse = BlogPostInput & SeoBlogFields & {
   instagramCaption: string;
   beforeAfterCaption: string;
   lineCta: string;
   providerLabel: string;
+  generationMode: "gemini" | "mock";
+  generationNotice?: string;
+  trendSummary: string;
+  blogValue: string;
+  salonRelevance: string;
 };
