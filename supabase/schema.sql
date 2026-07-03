@@ -525,7 +525,9 @@ create table if not exists public.social_sources (
   id uuid primary key default gen_random_uuid(),
   sns_type text not null default 'Other',
   account_name text not null,
+  handle text not null default '',
   profile_url text not null,
+  category text not null default 'その他',
   source_mode text not null default 'manual_url',
   is_active boolean not null default true,
   priority text not null default 'medium',
@@ -538,7 +540,9 @@ create table if not exists public.social_sources (
 
 alter table public.social_sources add column if not exists sns_type text not null default 'Other';
 alter table public.social_sources add column if not exists account_name text not null default '';
+alter table public.social_sources add column if not exists handle text not null default '';
 alter table public.social_sources add column if not exists profile_url text not null default '';
+alter table public.social_sources add column if not exists category text not null default 'その他';
 alter table public.social_sources add column if not exists source_mode text not null default 'manual_url';
 alter table public.social_sources add column if not exists is_active boolean not null default true;
 alter table public.social_sources add column if not exists priority text not null default 'medium';
@@ -555,6 +559,20 @@ where source_mode is null
 update public.social_sources
 set priority = 'medium'
 where priority is null or priority not in ('high', 'medium', 'low');
+update public.social_sources
+set category = 'その他'
+where category is null
+  or category not in (
+    '自社Instagram',
+    '髪質改善美容師',
+    '縮毛矯正専門美容師',
+    '白髪ぼかし美容師',
+    '大人女性向け美容師',
+    '美容メーカー公式',
+    '美容ディーラー公式',
+    '海外ヘアトレンド',
+    'その他'
+  );
 alter table public.social_sources drop constraint if exists social_sources_sns_type_check;
 alter table public.social_sources add constraint social_sources_sns_type_check
 check (sns_type in ('Instagram', 'YouTube', 'Pinterest', 'TikTok', 'X', 'Other'));
@@ -564,6 +582,21 @@ check (source_mode in ('official_api', 'manual_url', 'metadata_only'));
 alter table public.social_sources drop constraint if exists social_sources_priority_check;
 alter table public.social_sources add constraint social_sources_priority_check
 check (priority in ('high', 'medium', 'low'));
+alter table public.social_sources drop constraint if exists social_sources_category_check;
+alter table public.social_sources add constraint social_sources_category_check
+check (
+  category in (
+    '自社Instagram',
+    '髪質改善美容師',
+    '縮毛矯正専門美容師',
+    '白髪ぼかし美容師',
+    '大人女性向け美容師',
+    '美容メーカー公式',
+    '美容ディーラー公式',
+    '海外ヘアトレンド',
+    'その他'
+  )
+);
 
 delete from public.social_sources as duplicate
 using public.social_sources as original
@@ -576,8 +609,24 @@ where duplicate.profile_url = original.profile_url
     )
   );
 
+delete from public.social_sources as duplicate
+using public.social_sources as original
+where duplicate.handle <> ''
+  and lower(duplicate.handle) = lower(original.handle)
+  and (
+    duplicate.created_at > original.created_at
+    or (
+      duplicate.created_at = original.created_at
+      and duplicate.id > original.id
+    )
+  );
+
 create unique index if not exists social_sources_profile_url_unique_idx
 on public.social_sources (profile_url);
+
+create unique index if not exists social_sources_handle_unique_idx
+on public.social_sources (lower(handle))
+where handle <> '';
 
 insert into public.social_sources (
   sns_type,
@@ -642,6 +691,369 @@ set
   priority = excluded.priority,
   memo = excluded.memo;
 
+insert into public.social_sources (
+  sns_type,
+  account_name,
+  handle,
+  profile_url,
+  category,
+  source_mode,
+  is_active,
+  priority,
+  memo
+)
+values
+  (
+    'Instagram',
+    'ef mayke''s',
+    '@ef_maykes',
+    'https://www.instagram.com/ef_maykes/',
+    '自社Instagram',
+    'manual_url',
+    true,
+    'high',
+    'ef.mayke`sの投稿確認と改善に使う最優先アカウント。髪質改善・ストレート・くせ毛・艶髪の自社発信を整理します。'
+  ),
+  (
+    'Instagram',
+    '中本翔大',
+    '@nakasyoex',
+    'https://www.instagram.com/nakasyoex/',
+    '髪質改善美容師',
+    'manual_url',
+    true,
+    'high',
+    '髪質改善の見せ方や施術説明を、ef.mayke`sの艶髪提案と投稿づくりの参考にします。'
+  ),
+  (
+    'Instagram',
+    '島野伊央汰',
+    '@iota_shimano',
+    'https://www.instagram.com/iota_shimano/',
+    '髪質改善美容師',
+    'manual_url',
+    true,
+    'high',
+    '髪質改善の仕上がり表現やお客様への伝え方を、ef.mayke`sのカウンセリング改善に活用します。'
+  ),
+  (
+    'Instagram',
+    '長門政和',
+    '@mnagato0724',
+    'https://www.instagram.com/mnagato0724/',
+    '縮毛矯正専門美容師',
+    'manual_url',
+    true,
+    'high',
+    '縮毛矯正の技術発信や薬剤・ダメージへの考え方を、ef.mayke`sのストレート提案の参考にします。'
+  ),
+  (
+    'Instagram',
+    '左近研人',
+    '@sakon.kento_nex',
+    'https://www.instagram.com/sakon.kento_nex/',
+    '縮毛矯正専門美容師',
+    'manual_url',
+    true,
+    'high',
+    'くせ毛と縮毛矯正の専門的な発信を、ef.mayke`sの施術説明やブログテーマに活用します。'
+  ),
+  (
+    'Instagram',
+    'A・One',
+    '@hair_clinic_aone',
+    'https://www.instagram.com/hair_clinic_aone/',
+    '縮毛矯正専門美容師',
+    'manual_url',
+    true,
+    'high',
+    'ヘアクリニック型の髪質改善・ストレート提案を、ef.mayke`sの専門性の見せ方に活用します。'
+  ),
+  (
+    'Instagram',
+    'Dears',
+    '@dears.tuyagami',
+    'https://www.instagram.com/dears.tuyagami/',
+    '髪質改善美容師',
+    'manual_url',
+    true,
+    'high',
+    '艶髪と髪質改善のビジュアル・説明構成を、ef.mayke`sの大人女性向け発信の参考にします。'
+  ),
+  (
+    'Instagram',
+    '松田政也',
+    '@good_by_graycolor_masayan',
+    'https://www.instagram.com/good_by_graycolor_masayan/',
+    '白髪ぼかし美容師',
+    'manual_url',
+    true,
+    'high',
+    '白髪ぼかしのデザインと説明を、ef.mayke`sの大人女性向けカラー提案に活用します。'
+  ),
+  (
+    'Instagram',
+    '金子圭介',
+    '@keisuke_redeal_balayage',
+    'https://www.instagram.com/keisuke_redeal_balayage/',
+    '白髪ぼかし美容師',
+    'manual_url',
+    true,
+    'high',
+    '白髪ぼかしとバレイヤージュの表現を、ef.mayke`sの上品なカラー提案の参考にします。'
+  ),
+  (
+    'Instagram',
+    '伊熊奈美',
+    '@namiikuma_hairista',
+    'https://www.instagram.com/namiikuma_hairista/',
+    '大人女性向け美容師',
+    'manual_url',
+    true,
+    'high',
+    '大人女性の髪悩みに寄り添う言葉選びを、ef.mayke`sのカウンセリングや記事づくりに活用します。'
+  ),
+  (
+    'Instagram',
+    '大野道寛',
+    '@michi1011ohno',
+    'https://www.instagram.com/michi1011ohno/',
+    '大人女性向け美容師',
+    'manual_url',
+    true,
+    'high',
+    '大人女性向けヘアの提案や見せ方を、ef.mayke`sのショート・ボブ提案に活用します。'
+  ),
+  (
+    'Instagram',
+    '横井拓徹',
+    '@yokkoi_beautician',
+    'https://www.instagram.com/yokkoi_beautician/',
+    '大人女性向け美容師',
+    'manual_url',
+    false,
+    'medium',
+    '大人女性向けのスタイル提案を、ef.mayke`sの髪質改善後のデザイン提案の参考にします。'
+  ),
+  (
+    'Instagram',
+    'くせ毛マイスター',
+    '@kusegemeister',
+    'https://www.instagram.com/kusegemeister/',
+    '縮毛矯正専門美容師',
+    'manual_url',
+    true,
+    'high',
+    'くせ毛診断と扱い方の説明を、ef.mayke`sのくせ毛カウンセリングとホームケア提案に活用します。'
+  ),
+  (
+    'Instagram',
+    'ミルボン',
+    '@milbon.japan',
+    'https://www.instagram.com/milbon.japan/',
+    '美容メーカー公式',
+    'metadata_only',
+    true,
+    'high',
+    'ヘアケア・店販・美容市場の公式情報を、ef.mayke`sの商品提案と季節記事に活用します。'
+  ),
+  (
+    'Instagram',
+    'ミルボン美容師向け',
+    '@milbon.education',
+    'https://www.instagram.com/milbon.education/',
+    '美容メーカー公式',
+    'metadata_only',
+    false,
+    'medium',
+    '美容師向け技術・教育情報を、ef.mayke`sの技術整理や朝礼ネタの参考にします。'
+  ),
+  (
+    'Instagram',
+    'ミルボンカラー',
+    '@milboncolor_official',
+    'https://www.instagram.com/milboncolor_official/',
+    '美容メーカー公式',
+    'metadata_only',
+    false,
+    'medium',
+    '公式カラー情報を、ef.mayke`sの艶カラー・白髪対応カラー提案の参考にします。'
+  ),
+  (
+    'Instagram',
+    'アリミノ',
+    '@arimino_official',
+    'https://www.instagram.com/arimino_official/',
+    '美容メーカー公式',
+    'metadata_only',
+    false,
+    'medium',
+    '新商品やスタイリング情報を、ef.mayke`sのメニュー・店販提案の候補として確認します。'
+  ),
+  (
+    'Instagram',
+    'アリミノプロ',
+    '@arimino_professional',
+    'https://www.instagram.com/arimino_professional/',
+    '美容メーカー公式',
+    'metadata_only',
+    false,
+    'medium',
+    '美容師向けの技術・商品情報を、ef.mayke`sのサロンワーク改善に活用します。'
+  ),
+  (
+    'Instagram',
+    'ナプラ',
+    '@napla_official',
+    'https://www.instagram.com/napla_official/',
+    '美容メーカー公式',
+    'metadata_only',
+    false,
+    'medium',
+    'カラー・ヘアケア・スタイリングの公式情報を、ef.mayke`sの提案材料として確認します。'
+  ),
+  (
+    'Instagram',
+    'オージュア',
+    '@aujua.official',
+    'https://www.instagram.com/aujua.official/',
+    '美容メーカー公式',
+    'metadata_only',
+    true,
+    'high',
+    '髪悩み別のケア情報を、ef.mayke`sの髪質改善後のホームケア・店販提案に活用します。'
+  ),
+  (
+    'Instagram',
+    'ガモウ広島',
+    '@gamo_hiroshima',
+    'https://www.instagram.com/gamo_hiroshima/',
+    '美容ディーラー公式',
+    'metadata_only',
+    false,
+    'medium',
+    '中国地方のセミナー・商材情報を、松江市のef.mayke`sで導入を検討する材料にします。'
+  ),
+  (
+    'Instagram',
+    'ガモニュー',
+    '@gamonew_official',
+    'https://www.instagram.com/gamonew_official/',
+    '美容ディーラー公式',
+    'metadata_only',
+    false,
+    'medium',
+    '美容業界の新商品・新着情報を、ef.mayke`sの店販やメニュー企画の参考にします。'
+  ),
+  (
+    'Instagram',
+    'ガモウセミナー',
+    '@gamo_seminar',
+    'https://www.instagram.com/gamo_seminar/',
+    '美容ディーラー公式',
+    'metadata_only',
+    false,
+    'medium',
+    '美容師向けセミナー情報を、ef.mayke`sの技術学習とスタッフ共有の候補にします。'
+  ),
+  (
+    'Instagram',
+    'ガモウ関西',
+    '@gamokansai',
+    'https://www.instagram.com/gamokansai/',
+    '美容ディーラー公式',
+    'metadata_only',
+    false,
+    'medium',
+    '関西圏の美容トレンド・イベント情報を、ef.mayke`sの情報収集の補助に使います。'
+  ),
+  (
+    'Instagram',
+    'ガモウ関西商材情報',
+    '@gamokansai_gselect',
+    'https://www.instagram.com/gamokansai_gselect/',
+    '美容ディーラー公式',
+    'metadata_only',
+    false,
+    'medium',
+    'サロン商材の新着情報を、ef.mayke`sの店販候補や施術商材の比較に活用します。'
+  ),
+  (
+    'Instagram',
+    'ミツイ東京',
+    '@mitsui_tokyo',
+    'https://www.instagram.com/mitsui_tokyo/',
+    '美容ディーラー公式',
+    'metadata_only',
+    false,
+    'medium',
+    '美容商材・イベントの情報を、ef.mayke`sの新しい提案候補として確認します。'
+  ),
+  (
+    'Instagram',
+    'きくや美粧堂福岡',
+    '@kikuya_fukuoka',
+    'https://www.instagram.com/kikuya_fukuoka/',
+    '美容ディーラー公式',
+    'metadata_only',
+    false,
+    'medium',
+    '九州エリアの美容商材・講習情報を、ef.mayke`sの業界動向確認に使います。'
+  ),
+  (
+    'Instagram',
+    'Behind The Chair',
+    '@behindthechair_com',
+    'https://www.instagram.com/behindthechair_com/',
+    '海外ヘアトレンド',
+    'metadata_only',
+    true,
+    'high',
+    '海外美容師のカラー・カット・質感表現を、ef.mayke`sのトレンド提案や投稿構成に活用します。'
+  ),
+  (
+    'Instagram',
+    'MODERN SALON',
+    '@modernsalon',
+    'https://www.instagram.com/modernsalon/',
+    '海外ヘアトレンド',
+    'metadata_only',
+    false,
+    'medium',
+    '海外サロンの技術・経営・商品動向を、ef.mayke`sの幅広い情報収集に使います。'
+  ),
+  (
+    'Instagram',
+    'Hairbrained',
+    '@hairbrained_official',
+    'https://www.instagram.com/hairbrained_official/',
+    '海外ヘアトレンド',
+    'metadata_only',
+    false,
+    'medium',
+    '海外美容師コミュニティの技術表現を、ef.mayke`sのクリエイティブな投稿案に活用します。'
+  ),
+  (
+    'Instagram',
+    'Allure',
+    '@allure',
+    'https://www.instagram.com/allure/',
+    '海外ヘアトレンド',
+    'metadata_only',
+    false,
+    'medium',
+    '海外の一般向け美容トレンドを、ef.mayke`sの大人女性向け提案へ自然に翻訳する材料にします。'
+  )
+on conflict (profile_url) do update
+set
+  sns_type = excluded.sns_type,
+  account_name = excluded.account_name,
+  handle = excluded.handle,
+  category = excluded.category,
+  source_mode = excluded.source_mode,
+  priority = excluded.priority,
+  memo = excluded.memo;
+
 create table if not exists public.social_posts (
   id uuid primary key default gen_random_uuid(),
   source_id uuid references public.social_sources(id) on delete set null,
@@ -659,6 +1071,17 @@ create table if not exists public.social_posts (
   instagram_post_idea text not null default '',
   blog_idea text not null default '',
   counseling_idea text not null default '',
+  source_name text not null default '',
+  account_name text not null default '',
+  handle text not null default '',
+  external_id text not null default '',
+  like_count integer,
+  comment_count integer,
+  play_count integer,
+  share_count integer,
+  raw_payload jsonb not null default '{}'::jsonb,
+  review_status text not null default '未確認',
+  is_favorite boolean not null default false,
   imported_at timestamptz not null default now(),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -677,6 +1100,17 @@ alter table public.social_posts add column if not exists relevance text not null
 alter table public.social_posts add column if not exists instagram_post_idea text not null default '';
 alter table public.social_posts add column if not exists blog_idea text not null default '';
 alter table public.social_posts add column if not exists counseling_idea text not null default '';
+alter table public.social_posts add column if not exists source_name text not null default '';
+alter table public.social_posts add column if not exists account_name text not null default '';
+alter table public.social_posts add column if not exists handle text not null default '';
+alter table public.social_posts add column if not exists external_id text not null default '';
+alter table public.social_posts add column if not exists like_count integer;
+alter table public.social_posts add column if not exists comment_count integer;
+alter table public.social_posts add column if not exists play_count integer;
+alter table public.social_posts add column if not exists share_count integer;
+alter table public.social_posts add column if not exists raw_payload jsonb not null default '{}'::jsonb;
+alter table public.social_posts add column if not exists review_status text not null default '未確認';
+alter table public.social_posts add column if not exists is_favorite boolean not null default false;
 alter table public.social_posts add column if not exists imported_at timestamptz not null default now();
 update public.social_posts
 set canonical_url = url
@@ -687,12 +1121,30 @@ where sns_type is null or sns_type not in ('Instagram', 'YouTube', 'Pinterest', 
 update public.social_posts
 set relevance = '中'
 where relevance is null or relevance not in ('高', '中', '低');
+update public.social_posts
+set review_status = '未確認'
+where review_status is null or review_status not in ('未確認', '採用', '保留', '不要');
 alter table public.social_posts drop constraint if exists social_posts_sns_type_check;
 alter table public.social_posts add constraint social_posts_sns_type_check
 check (sns_type in ('Instagram', 'YouTube', 'Pinterest', 'TikTok', 'X', 'Other'));
 alter table public.social_posts drop constraint if exists social_posts_relevance_check;
 alter table public.social_posts add constraint social_posts_relevance_check
 check (relevance in ('高', '中', '低'));
+alter table public.social_posts drop constraint if exists social_posts_review_status_check;
+alter table public.social_posts add constraint social_posts_review_status_check
+check (review_status in ('未確認', '採用', '保留', '不要'));
+alter table public.social_posts drop constraint if exists social_posts_like_count_check;
+alter table public.social_posts add constraint social_posts_like_count_check
+check (like_count is null or like_count >= 0);
+alter table public.social_posts drop constraint if exists social_posts_comment_count_check;
+alter table public.social_posts add constraint social_posts_comment_count_check
+check (comment_count is null or comment_count >= 0);
+alter table public.social_posts drop constraint if exists social_posts_play_count_check;
+alter table public.social_posts add constraint social_posts_play_count_check
+check (play_count is null or play_count >= 0);
+alter table public.social_posts drop constraint if exists social_posts_share_count_check;
+alter table public.social_posts add constraint social_posts_share_count_check
+check (share_count is null or share_count >= 0);
 
 do $$
 begin
@@ -737,6 +1189,21 @@ on public.social_posts (canonical_url);
 
 create unique index if not exists social_posts_url_unique_idx
 on public.social_posts (url);
+
+create index if not exists social_posts_review_status_idx
+on public.social_posts (review_status, imported_at desc);
+
+create index if not exists social_posts_favorite_idx
+on public.social_posts (is_favorite, imported_at desc);
+
+create index if not exists social_posts_source_name_idx
+on public.social_posts (source_name);
+
+create index if not exists social_posts_handle_idx
+on public.social_posts (handle);
+
+create index if not exists social_posts_external_id_idx
+on public.social_posts (external_id);
 
 create table if not exists public.blog_posts (
   id uuid primary key default gen_random_uuid(),
@@ -984,3 +1451,433 @@ on storage.objects
 for delete
 to anon, authenticated
 using (bucket_id = 'hair-images');
+
+-- SEO and ads assistant MVP tables.
+create table if not exists public.seo_keywords (
+  id uuid primary key default gen_random_uuid(),
+  keyword text not null,
+  intent text not null default '',
+  priority text not null default 'medium',
+  target_page text not null default '',
+  status text not null default 'tracking',
+  memo text not null default '',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint seo_keywords_priority_check check (priority in ('high', 'medium', 'low'))
+);
+
+create table if not exists public.seo_pages (
+  id uuid primary key default gen_random_uuid(),
+  page_title text not null,
+  page_url text not null,
+  target_keyword text not null default '',
+  current_issue text not null default '',
+  suggested_action text not null default '',
+  cta_memo text not null default '',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.seo_reports (
+  id uuid primary key default gen_random_uuid(),
+  report_month date not null,
+  summary text not null default '',
+  clicks bigint not null default 0,
+  impressions bigint not null default 0,
+  ctr numeric(7, 4) not null default 0,
+  average_position numeric(7, 2) not null default 0,
+  ai_analysis text not null default '',
+  next_actions text[] not null default '{}',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint seo_reports_metrics_check check (
+    clicks >= 0 and impressions >= 0 and ctr >= 0 and average_position >= 0
+  )
+);
+
+create table if not exists public.seo_tasks (
+  id uuid primary key default gen_random_uuid(),
+  title text not null,
+  task_type text not null default 'other',
+  priority text not null default 'medium',
+  status text not null default 'todo',
+  related_keyword text not null default '',
+  related_page_url text not null default '',
+  due_date date,
+  memo text not null default '',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint seo_tasks_priority_check check (priority in ('high', 'medium', 'low')),
+  constraint seo_tasks_status_check check (status in ('todo', 'doing', 'done', 'hold'))
+);
+
+create table if not exists public.ad_campaign_notes (
+  id uuid primary key default gen_random_uuid(),
+  campaign_name text not null,
+  platform text not null,
+  purpose text not null default '',
+  target_area text not null default '',
+  budget_memo text not null default '',
+  offer text not null default '',
+  landing_page_url text not null default '',
+  memo text not null default '',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.ad_reports (
+  id uuid primary key default gen_random_uuid(),
+  report_month date not null,
+  platform text not null,
+  campaign_name text not null,
+  cost numeric(12, 2) not null default 0,
+  clicks bigint not null default 0,
+  conversions bigint not null default 0,
+  cpa numeric(12, 2) not null default 0,
+  ai_analysis text not null default '',
+  next_actions text[] not null default '{}',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint ad_reports_metrics_check check (
+    cost >= 0 and clicks >= 0 and conversions >= 0 and cpa >= 0
+  )
+);
+
+create index if not exists seo_keywords_priority_idx on public.seo_keywords (priority);
+create index if not exists seo_keywords_status_idx on public.seo_keywords (status);
+create index if not exists seo_pages_target_keyword_idx on public.seo_pages (target_keyword);
+create index if not exists seo_reports_month_idx on public.seo_reports (report_month desc);
+create index if not exists seo_tasks_status_due_date_idx on public.seo_tasks (status, due_date);
+create index if not exists ad_campaign_notes_platform_idx on public.ad_campaign_notes (platform);
+create index if not exists ad_reports_month_platform_idx on public.ad_reports (report_month desc, platform);
+
+drop trigger if exists set_seo_keywords_updated_at on public.seo_keywords;
+create trigger set_seo_keywords_updated_at before update on public.seo_keywords
+for each row execute function public.set_updated_at();
+drop trigger if exists set_seo_pages_updated_at on public.seo_pages;
+create trigger set_seo_pages_updated_at before update on public.seo_pages
+for each row execute function public.set_updated_at();
+drop trigger if exists set_seo_reports_updated_at on public.seo_reports;
+create trigger set_seo_reports_updated_at before update on public.seo_reports
+for each row execute function public.set_updated_at();
+drop trigger if exists set_seo_tasks_updated_at on public.seo_tasks;
+create trigger set_seo_tasks_updated_at before update on public.seo_tasks
+for each row execute function public.set_updated_at();
+drop trigger if exists set_ad_campaign_notes_updated_at on public.ad_campaign_notes;
+create trigger set_ad_campaign_notes_updated_at before update on public.ad_campaign_notes
+for each row execute function public.set_updated_at();
+drop trigger if exists set_ad_reports_updated_at on public.ad_reports;
+create trigger set_ad_reports_updated_at before update on public.ad_reports
+for each row execute function public.set_updated_at();
+
+alter table public.seo_keywords enable row level security;
+alter table public.seo_pages enable row level security;
+alter table public.seo_reports enable row level security;
+alter table public.seo_tasks enable row level security;
+alter table public.ad_campaign_notes enable row level security;
+alter table public.ad_reports enable row level security;
+
+grant usage on schema public to authenticated, service_role;
+revoke all on table
+  public.seo_keywords,
+  public.seo_pages,
+  public.seo_reports,
+  public.seo_tasks,
+  public.ad_campaign_notes,
+  public.ad_reports
+from anon;
+grant select, insert, update, delete on table
+  public.seo_keywords,
+  public.seo_pages,
+  public.seo_reports,
+  public.seo_tasks,
+  public.ad_campaign_notes,
+  public.ad_reports
+to authenticated, service_role;
+
+drop policy if exists "authenticated_seo_keywords_all" on public.seo_keywords;
+create policy "authenticated_seo_keywords_all" on public.seo_keywords
+for all to authenticated using ((select auth.uid()) is not null)
+with check ((select auth.uid()) is not null);
+drop policy if exists "authenticated_seo_pages_all" on public.seo_pages;
+create policy "authenticated_seo_pages_all" on public.seo_pages
+for all to authenticated using ((select auth.uid()) is not null)
+with check ((select auth.uid()) is not null);
+drop policy if exists "authenticated_seo_reports_all" on public.seo_reports;
+create policy "authenticated_seo_reports_all" on public.seo_reports
+for all to authenticated using ((select auth.uid()) is not null)
+with check ((select auth.uid()) is not null);
+drop policy if exists "authenticated_seo_tasks_all" on public.seo_tasks;
+create policy "authenticated_seo_tasks_all" on public.seo_tasks
+for all to authenticated using ((select auth.uid()) is not null)
+with check ((select auth.uid()) is not null);
+drop policy if exists "authenticated_ad_campaign_notes_all" on public.ad_campaign_notes;
+create policy "authenticated_ad_campaign_notes_all" on public.ad_campaign_notes
+for all to authenticated using ((select auth.uid()) is not null)
+with check ((select auth.uid()) is not null);
+drop policy if exists "authenticated_ad_reports_all" on public.ad_reports;
+create policy "authenticated_ad_reports_all" on public.ad_reports
+for all to authenticated using ((select auth.uid()) is not null)
+with check ((select auth.uid()) is not null);
+
+-- Gemini SEO blog fields. Existing blog_posts rows keep working with defaults.
+alter table public.blog_posts add column if not exists secondary_keywords text[] not null default '{}';
+alter table public.blog_posts add column if not exists search_intent text not null default '';
+alter table public.blog_posts add column if not exists target_audience text not null default '';
+alter table public.blog_posts add column if not exists reader_problems text[] not null default '{}';
+alter table public.blog_posts add column if not exists meta_title text not null default '';
+alter table public.blog_posts add column if not exists article_summary text not null default '';
+alter table public.blog_posts add column if not exists headings jsonb not null default '[]'::jsonb;
+alter table public.blog_posts add column if not exists body_html text not null default '';
+alter table public.blog_posts add column if not exists wordpress_html text not null default '';
+alter table public.blog_posts add column if not exists before_after_captions text[] not null default '{}';
+alter table public.blog_posts add column if not exists internal_link_suggestions text[] not null default '{}';
+alter table public.blog_posts add column if not exists faq jsonb not null default '[]'::jsonb;
+alter table public.blog_posts add column if not exists cta_text text not null default '';
+alter table public.blog_posts add column if not exists cta_url text not null default 'https://lin.ee/jjqQEFX';
+alter table public.blog_posts add column if not exists source_seo_keyword_id text not null default '';
+alter table public.blog_posts add column if not exists generated_by text not null default 'manual';
+alter table public.blog_posts add column if not exists ai_model text not null default '';
+
+update public.blog_posts
+set generated_by = 'manual'
+where generated_by is null or generated_by not in ('gemini', 'mock', 'manual');
+
+alter table public.blog_posts drop constraint if exists blog_posts_generated_by_check;
+alter table public.blog_posts add constraint blog_posts_generated_by_check
+check (generated_by in ('gemini', 'mock', 'manual'));
+
+create index if not exists blog_posts_generated_by_idx on public.blog_posts (generated_by);
+create index if not exists blog_posts_source_seo_keyword_id_idx
+on public.blog_posts (source_seo_keyword_id)
+where source_seo_keyword_id <> '';
+
+-- Google Search Console CSV import and Gemini SEO analysis MVP.
+create table if not exists public.seo_search_console_imports (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users(id) on delete cascade default auth.uid(),
+  import_type text not null,
+  file_name text not null,
+  period_start date not null,
+  period_end date not null,
+  report_month date not null,
+  comparison_label text not null default '',
+  memo text not null default '',
+  row_count integer not null default 0,
+  excluded_row_count integer not null default 0,
+  warning_count integer not null default 0,
+  status text not null default 'preview',
+  error_message text not null default '',
+  content_hash text not null,
+  total_clicks bigint not null default 0,
+  total_impressions bigint not null default 0,
+  average_ctr numeric(10, 8) not null default 0,
+  average_position numeric(10, 4) not null default 0,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint seo_sc_import_type_check check (import_type in ('query', 'page', 'device', 'country', 'date')),
+  constraint seo_sc_import_status_check check (status in ('preview', 'imported', 'analyzed', 'failed')),
+  constraint seo_sc_import_period_check check (period_end >= period_start),
+  constraint seo_sc_import_counts_check check (row_count >= 0 and excluded_row_count >= 0 and warning_count >= 0),
+  constraint seo_sc_import_metrics_check check (total_clicks >= 0 and total_impressions >= 0 and average_ctr >= 0 and average_ctr <= 1 and average_position >= 0)
+);
+
+create table if not exists public.seo_search_console_rows (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users(id) on delete cascade default auth.uid(),
+  import_id uuid not null references public.seo_search_console_imports(id) on delete cascade,
+  row_type text not null,
+  query text,
+  page_url text,
+  device text,
+  country text,
+  record_date date,
+  clicks bigint not null default 0,
+  impressions bigint not null default 0,
+  ctr numeric(10, 8) not null default 0,
+  position numeric(10, 4) not null default 0,
+  created_at timestamptz not null default now(),
+  constraint seo_sc_row_type_check check (row_type in ('query', 'page', 'device', 'country', 'date')),
+  constraint seo_sc_row_metrics_check check (clicks >= 0 and impressions >= 0 and ctr >= 0 and ctr <= 1 and position >= 0),
+  constraint seo_sc_row_subject_check check (
+    nullif(query, '') is not null or nullif(page_url, '') is not null or
+    nullif(device, '') is not null or nullif(country, '') is not null or record_date is not null
+  )
+);
+
+alter table public.seo_reports add column if not exists user_id uuid references auth.users(id) on delete cascade default auth.uid();
+alter table public.seo_reports add column if not exists search_console_import_id uuid references public.seo_search_console_imports(id) on delete set null;
+alter table public.seo_reports add column if not exists comparison jsonb not null default '{}'::jsonb;
+alter table public.seo_reports add column if not exists analysis_json jsonb not null default '{}'::jsonb;
+alter table public.seo_reports add column if not exists positive_points text[] not null default '{}';
+alter table public.seo_reports add column if not exists negative_points text[] not null default '{}';
+alter table public.seo_reports add column if not exists priority_keywords jsonb not null default '[]'::jsonb;
+alter table public.seo_reports add column if not exists priority_pages jsonb not null default '[]'::jsonb;
+alter table public.seo_reports add column if not exists new_article_ideas jsonb not null default '[]'::jsonb;
+alter table public.seo_reports add column if not exists generated_by text not null default 'manual';
+alter table public.seo_reports add column if not exists ai_model text not null default '';
+alter table public.seo_reports add column if not exists input_hash text not null default '';
+alter table public.seo_reports add column if not exists analyzed_at timestamptz;
+
+alter table public.seo_tasks add column if not exists user_id uuid references auth.users(id) on delete cascade default auth.uid();
+alter table public.seo_tasks add column if not exists reason text not null default '';
+alter table public.seo_tasks add column if not exists source_search_console_import_id uuid references public.seo_search_console_imports(id) on delete set null;
+alter table public.blog_posts add column if not exists source_search_console_import_id uuid references public.seo_search_console_imports(id) on delete set null;
+
+update public.seo_reports set generated_by = 'manual'
+where generated_by is null or generated_by not in ('gemini', 'mock', 'manual');
+alter table public.seo_reports drop constraint if exists seo_reports_generated_by_check;
+alter table public.seo_reports add constraint seo_reports_generated_by_check
+check (generated_by in ('gemini', 'mock', 'manual'));
+
+create index if not exists seo_sc_imports_user_period_idx on public.seo_search_console_imports (user_id, period_end desc);
+create index if not exists seo_sc_imports_hash_idx on public.seo_search_console_imports (content_hash, import_type, period_start, period_end);
+create index if not exists seo_sc_rows_import_idx on public.seo_search_console_rows (import_id);
+create index if not exists seo_sc_rows_query_idx on public.seo_search_console_rows (query) where query is not null;
+create index if not exists seo_sc_rows_page_idx on public.seo_search_console_rows (page_url) where page_url is not null;
+create index if not exists seo_reports_sc_import_idx on public.seo_reports (search_console_import_id, created_at desc);
+create index if not exists seo_tasks_sc_import_idx on public.seo_tasks (source_search_console_import_id);
+
+drop trigger if exists set_seo_sc_imports_updated_at on public.seo_search_console_imports;
+create trigger set_seo_sc_imports_updated_at before update on public.seo_search_console_imports
+for each row execute function public.set_updated_at();
+
+alter table public.seo_search_console_imports enable row level security;
+alter table public.seo_search_console_rows enable row level security;
+revoke all on table public.seo_search_console_imports, public.seo_search_console_rows from anon;
+grant select, insert, update, delete on table public.seo_search_console_imports, public.seo_search_console_rows to authenticated, service_role;
+
+drop policy if exists "authenticated_seo_sc_imports_own" on public.seo_search_console_imports;
+create policy "authenticated_seo_sc_imports_own" on public.seo_search_console_imports
+for all to authenticated using ((select auth.uid()) = user_id)
+with check ((select auth.uid()) = user_id);
+drop policy if exists "authenticated_seo_sc_rows_own" on public.seo_search_console_rows;
+create policy "authenticated_seo_sc_rows_own" on public.seo_search_console_rows
+for all to authenticated using ((select auth.uid()) = user_id)
+with check ((select auth.uid()) = user_id);
+
+drop policy if exists "authenticated_seo_reports_all" on public.seo_reports;
+drop policy if exists "authenticated_seo_reports_select" on public.seo_reports;
+drop policy if exists "authenticated_seo_reports_insert" on public.seo_reports;
+drop policy if exists "authenticated_seo_reports_update" on public.seo_reports;
+drop policy if exists "authenticated_seo_reports_delete" on public.seo_reports;
+create policy "authenticated_seo_reports_select" on public.seo_reports for select to authenticated
+using (user_id is null or (select auth.uid()) = user_id);
+create policy "authenticated_seo_reports_insert" on public.seo_reports for insert to authenticated
+with check ((select auth.uid()) = user_id);
+create policy "authenticated_seo_reports_update" on public.seo_reports for update to authenticated
+using ((select auth.uid()) = user_id) with check ((select auth.uid()) = user_id);
+create policy "authenticated_seo_reports_delete" on public.seo_reports for delete to authenticated
+using ((select auth.uid()) = user_id);
+drop policy if exists "authenticated_seo_tasks_all" on public.seo_tasks;
+drop policy if exists "authenticated_seo_tasks_select" on public.seo_tasks;
+drop policy if exists "authenticated_seo_tasks_insert" on public.seo_tasks;
+drop policy if exists "authenticated_seo_tasks_update" on public.seo_tasks;
+drop policy if exists "authenticated_seo_tasks_delete" on public.seo_tasks;
+create policy "authenticated_seo_tasks_select" on public.seo_tasks for select to authenticated
+using (user_id is null or (select auth.uid()) = user_id);
+create policy "authenticated_seo_tasks_insert" on public.seo_tasks for insert to authenticated
+with check ((select auth.uid()) = user_id);
+create policy "authenticated_seo_tasks_update" on public.seo_tasks for update to authenticated
+using ((select auth.uid()) = user_id) with check ((select auth.uid()) = user_id);
+create policy "authenticated_seo_tasks_delete" on public.seo_tasks for delete to authenticated
+using ((select auth.uid()) = user_id);
+
+-- Phase 6: existing published blog management and rewrite history.
+create table if not exists public.published_blog_articles (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users(id) on delete cascade default auth.uid(),
+  title text not null,
+  url text not null,
+  normalized_url text not null,
+  canonical_url text not null default '',
+  category text not null default '髪質改善',
+  status text not null default 'published',
+  target_keyword text not null default '',
+  secondary_keywords text[] not null default '{}',
+  published_at date,
+  last_updated_at date,
+  source_type text not null default 'manual',
+  memo text not null default '',
+  last_checked_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint published_blog_articles_status_check check (
+    status in ('published', 'needs_rewrite', 'rewriting', 'updated', 'archived')
+  ),
+  constraint published_blog_articles_source_type_check check (
+    source_type in ('manual', 'csv', 'sitemap')
+  ),
+  constraint published_blog_articles_url_check check (url ~* '^https?://'),
+  constraint published_blog_articles_normalized_url_check check (normalized_url <> '')
+);
+
+create table if not exists public.blog_rewrite_histories (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users(id) on delete cascade default auth.uid(),
+  article_id uuid not null references public.published_blog_articles(id) on delete cascade,
+  source_search_console_import_id uuid references public.seo_search_console_imports(id) on delete set null,
+  before_title text not null default '',
+  before_meta_description text not null default '',
+  suggested_title text not null default '',
+  suggested_meta_description text not null default '',
+  suggested_headings text[] not null default '{}',
+  suggested_faq jsonb not null default '[]'::jsonb,
+  internal_link_suggestions text[] not null default '{}',
+  cta_suggestion text not null default '',
+  rewrite_reason text not null default '',
+  suggestion_json jsonb not null default '{}'::jsonb,
+  generated_by text not null default 'gemini',
+  ai_model text not null default '',
+  status text not null default 'proposal',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint blog_rewrite_histories_generated_by_check check (
+    generated_by in ('gemini', 'mock', 'manual')
+  ),
+  constraint blog_rewrite_histories_status_check check (
+    status in ('proposal', 'applied', 'dismissed')
+  )
+);
+
+create unique index if not exists published_blog_articles_normalized_url_uidx
+on public.published_blog_articles (normalized_url);
+create index if not exists published_blog_articles_user_status_idx
+on public.published_blog_articles (user_id, status, updated_at desc);
+create index if not exists published_blog_articles_target_keyword_idx
+on public.published_blog_articles (target_keyword)
+where target_keyword <> '';
+create index if not exists blog_rewrite_histories_article_created_idx
+on public.blog_rewrite_histories (article_id, created_at desc);
+create index if not exists blog_rewrite_histories_user_created_idx
+on public.blog_rewrite_histories (user_id, created_at desc);
+
+drop trigger if exists set_published_blog_articles_updated_at on public.published_blog_articles;
+create trigger set_published_blog_articles_updated_at
+before update on public.published_blog_articles
+for each row execute function public.set_updated_at();
+drop trigger if exists set_blog_rewrite_histories_updated_at on public.blog_rewrite_histories;
+create trigger set_blog_rewrite_histories_updated_at
+before update on public.blog_rewrite_histories
+for each row execute function public.set_updated_at();
+
+alter table public.published_blog_articles enable row level security;
+alter table public.blog_rewrite_histories enable row level security;
+revoke all on table public.published_blog_articles, public.blog_rewrite_histories from anon;
+grant select, insert, update, delete on table
+  public.published_blog_articles,
+  public.blog_rewrite_histories
+to authenticated, service_role;
+
+drop policy if exists "authenticated_published_blog_articles_own" on public.published_blog_articles;
+create policy "authenticated_published_blog_articles_own"
+on public.published_blog_articles
+for all to authenticated
+using ((select auth.uid()) = user_id)
+with check ((select auth.uid()) = user_id);
+drop policy if exists "authenticated_blog_rewrite_histories_own" on public.blog_rewrite_histories;
+create policy "authenticated_blog_rewrite_histories_own"
+on public.blog_rewrite_histories
+for all to authenticated
+using ((select auth.uid()) = user_id)
+with check ((select auth.uid()) = user_id);

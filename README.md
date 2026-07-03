@@ -36,14 +36,26 @@ SNSスクレイピングは行いません。外部情報は、手動登録、�
 
 - SNS情報取得
   - Instagram、YouTube、Pinterest、TikTok、X、Otherの公開投稿URLを登録
+  - X公式APIで登録キーワードに合う公開投稿を検索
   - URLからSNS種別を自動判定
+  - TikTok投稿URLは公式oEmbedでタイトル、投稿者名、サムネイルURLを補助取得
   - サーバー側でtitle、description、OGP、canonical URL、公開日候補を確認
   - robots.txt、タイムアウト、応答サイズ、ドメイン間隔を確認
   - AIでトレンド名、カテゴリ、要約、タグ、関連度を分類
   - Instagram投稿案、ブログ記事案、カウンセリング活用例を生成
   - canonical URLとタイトル類似度で重複候補を確認
-  - SNS取得元の取得方式、有効/無効、優先度、最終確認、警告を管理
-  - 取り込み済み情報からトレンド化、ブログ化、投稿案作成
+  - SNS取得元のアカウント名、ハンドル、カテゴリ、取得方式、優先度、有効/無効を管理
+  - ef.mayke`s向けInstagram初期候補31件を収録し、おすすめ15件だけを初期有効化
+  - ハンドルとプロフィールURLの重複登録を防止
+  - 取り込んだ投稿はSNS受信箱へ「未確認」として保存
+
+- SNS受信箱
+  - 未確認、採用、保留、不要の4状態で整理
+  - SNS種類、カテゴリ、関連度で絞り込み
+  - 複数投稿をまとめて採用・不要へ変更
+  - canonical URLとタイトル類似度から重複候補を表示
+  - お気に入り、ブログ化、Instagram投稿案を利用
+  - 採用した投稿だけをトレンド一覧へ保存
 
 - ブログ管理
   - SEOブログ記事の下書きを作成、保存、編集
@@ -52,6 +64,24 @@ SNSスクレイピングは行いません。外部情報は、手動登録、�
   - Instagram投稿文、Before/After画像用キャプション、LINE予約CTAを生成
   - WordPress貼り付け用HTMLプレビューを表示
   - トレンド、SNS投稿、YouTube取得データからブログ化
+  - SEOキーワード一覧から検索意図、優先度、対象ページを引き継いで生成
+  - Gemini生成、モック生成、使用モデル、更新日時を履歴で確認
+
+- SEO管理
+  - 今月のクリック数、表示回数、CTR、平均掲載順位を確認
+  - 優先キーワード、改善ページ、SEOタスクを整理
+  - 月次SEOレポートをダミーデータで確認
+  - Gemini APIで改善提案を生成し、未設定時はモック提案を表示
+  - Search Consoleの日本語・英語CSVをプレビューして取り込み
+  - クリック、表示回数、CTR、掲載順位をアプリ側で集計・期間比較
+  - 改善候補からSEOタスク登録と既存ブログ生成へ連携
+  - Search Consoleの取り込み・分析履歴を確認
+
+- 広告管理
+  - 広告媒体、キャンペーン名、目的、対象エリア、予算、LPをメモ
+  - 広告メモをブラウザのlocalStorageへ保存
+  - 広告レポートをダミーデータで確認
+  - 分析と提案だけを行い、広告の自動出稿や予算変更は実行しない
 
 - 投稿ネタ生成
   - Instagram投稿文案
@@ -67,7 +97,7 @@ SNSスクレイピングは行いません。外部情報は、手動登録、�
   - 上品、カジュアルの文体切り替え
   - 短め、標準、長めの文字数切り替え
   - ハッシュタグ自動生成
-  - OpenAI API、Gemini API、モックレスポンスを切り替え
+  - Gemini APIで生成し、未設定時はモックレスポンスを表示
 
 - 画像分析
   - ヘア画像アップロード
@@ -92,9 +122,21 @@ SNSスクレイピングは行いません。外部情報は、手動登録、�
 - TypeScript
 - Tailwind CSS
 - Supabase
-- OpenAI API
 - Gemini API
 - Vercel
+
+## Phase 1 実データ接続チェック
+
+モック表示から実データ運用へ進めるときは、[docs/phase1-readiness.md](<docs/phase1-readiness.md>) を上から確認してください。
+
+確認する主な項目:
+
+- SupabaseのテーブルとRLS
+- GeminiのAI生成
+- YouTube公式API
+- X公式API
+- Vercel Cron
+- APP_PASSWORDによる公開版保護
 
 ## まず動かす
 
@@ -197,16 +239,17 @@ npm.cmd run build
 ```bash
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
-AI_PROVIDER=mock
-OPENAI_API_KEY=
-OPENAI_MODEL=gpt-5.4-mini
-OPENAI_VISION_MODEL=gpt-5.4-mini
+SUPABASE_SERVICE_ROLE_KEY=
 GEMINI_API_KEY=
 GEMINI_MODEL=gemini-2.5-flash
 YOUTUBE_API_KEY=
 YOUTUBE_DAILY_VIDEO_LIMIT=30
 YOUTUBE_KEYWORD_LIMIT=6
 YOUTUBE_RUN_VIDEO_LIMIT=30
+X_BEARER_TOKEN=
+X_KEYWORD_LIMIT=5
+X_RUN_POST_LIMIT=20
+AUTOMATION_WEBHOOK_SECRET=
 CRON_SECRET=
 APP_USER=salon
 APP_PASSWORD=
@@ -216,23 +259,24 @@ APP_PASSWORD=
 | --- | --- | --- |
 | `NEXT_PUBLIC_SUPABASE_URL` | 任意 | SupabaseのプロジェクトURL |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | 任意 | Supabaseのanon key |
-| `AI_PROVIDER` | 任意 | `openai`、`gemini`、`mock`。未設定時はGemini、OpenAIの順で自動判定 |
-| `OPENAI_API_KEY` | 任意 | 投稿生成、画像分析で使うOpenAI APIキー |
-| `OPENAI_MODEL` | 任意 | 投稿生成で使うモデル名 |
-| `OPENAI_VISION_MODEL` | 任意 | 画像分析で使うモデル名 |
-| `GEMINI_API_KEY` | 任意 | 投稿生成、画像分析で使うGemini APIキー |
-| `GEMINI_MODEL` | 任意 | Geminiで使うモデル名 |
+| `SUPABASE_SERVICE_ROLE_KEY` | Search ConsoleをSupabase保存する場合は必須 | サーバーAPIだけで使う秘密鍵。`NEXT_PUBLIC_`を付けない |
+| `GEMINI_API_KEY` | 任意 | ブログ、投稿、SEO分析、画像分析で使うGemini APIキー。未設定時はモック生成 |
+| `GEMINI_MODEL` | 任意 | Geminiで使うモデル名。未設定時は`gemini-2.5-flash` |
 | `YOUTUBE_API_KEY` | YouTube周回利用時は必須 | YouTube Data APIのAPIキー。サーバー側だけで使います |
 | `YOUTUBE_DAILY_VIDEO_LIMIT` | 任意 | YouTube周回で1日に保存する動画候補数の上限。未設定時は30件、最大30件 |
 | `YOUTUBE_KEYWORD_LIMIT` | 任意 | YouTube周回で1回に検索するキーワード数の上限。未設定時は6個、最大6個 |
 | `YOUTUBE_RUN_VIDEO_LIMIT` | 任意 | YouTube周回1回あたりに扱う候補数の上限。未設定時は30件、最大30件 |
+| `X_BEARER_TOKEN` | X巡回利用時は必須 | X公式APIのBearer Token。サーバー側だけで使います |
+| `X_KEYWORD_LIMIT` | 任意 | X巡回で1回に検索するキーワード数の上限。未設定時は5個、最大5個 |
+| `X_RUN_POST_LIMIT` | 任意 | X巡回1回あたりに扱う投稿候補数の上限。未設定時は20件、最大20件 |
+| `AUTOMATION_WEBHOOK_SECRET` | Apify/n8n連携時は必須 | 外部自動化ツールからSNS投稿候補を受け取るAPIを保護する秘密文字列 |
 | `CRON_SECRET` | Vercel Cron利用時は必須 | 毎朝の自動生成APIを保護する秘密文字列 |
 | `APP_USER` | 任意 | アプリ全体のパスワード保護ユーザー名 |
 | `APP_PASSWORD` | 公開時は推奨 | アプリ全体のパスワード保護パスワード |
 
 `NEXT_PUBLIC_` で始まる値はブラウザ側にも公開されます。Supabaseのanon keyは、RLS設定やアプリ全体のパスワード保護とセットで使ってください。
 
-`OPENAI_API_KEY`、`GEMINI_API_KEY`、`YOUTUBE_API_KEY`、`APP_PASSWORD` は秘密情報です。GitHubへpushしないでください。
+`SUPABASE_SERVICE_ROLE_KEY`、`GEMINI_API_KEY`、`YOUTUBE_API_KEY`、`X_BEARER_TOKEN`、`AUTOMATION_WEBHOOK_SECRET`、`APP_PASSWORD` は秘密情報です。GitHubへpushしないでください。
 
 ## Supabase設定
 
@@ -249,6 +293,7 @@ Supabaseを設定すると、トレンド、キーワード、AI生成結果、�
 ```bash
 NEXT_PUBLIC_SUPABASE_URL=your-project-url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 ```
 
 ### 2. 作成されるテーブル
@@ -261,6 +306,14 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 - `social_posts`
 - `blog_posts`
 - `ai_outputs`
+- `seo_keywords`
+- `seo_pages`
+- `seo_reports`
+- `seo_tasks`
+- `seo_search_console_imports`
+- `seo_search_console_rows`
+- `ad_campaign_notes`
+- `ad_reports`
 
 画像アップロード用に、Supabase Storageの `hair-images` バケットも作成します。
 
@@ -272,11 +325,25 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 
 `sns_posts` は手動登録したSNS投稿URLを管理するテーブルです。SNS本文を自動取得せず、入力したタイトル、メモ、カテゴリ、タグをAI分類して保存します。
 
-`social_sources` はSNS名、アカウント名、プロフィールURL、取得方式、優先度、有効/無効、最終確認日時、取得警告を管理します。
+`social_sources` はSNS名、アカウント名、ハンドル、カテゴリ、プロフィールURL、取得方式、優先度、有効/無効、最終確認日時、取得警告を管理します。
 
-`social_posts` は確認済みの公開投稿URLと、title、description、OGP画像URL、canonical URL、公開日候補、AI分類結果を保存します。OGP画像はURLだけを参考表示し、画像ファイルをSupabase Storageへコピーしません。
+最新のSQLでは、ef.mayke`s向けInstagram初期候補31件も追加されます。髪質改善、縮毛矯正、白髪ぼかし、大人女性、美容メーカー、美容ディーラー、海外ヘアトレンドから選び、おすすめ15件だけを最初から有効にしています。`schema.sql` を再実行しても、管理画面で変更した既存行の有効・無効は上書きしません。
 
-`blog_posts` はブログ下書きを管理するテーブルです。WordPressへ直接投稿せず、タイトル、本文、メタディスクリプション、貼り付け用HTMLの元データを保存します。
+`social_posts` は確認済みの公開投稿URLと、title、description、OGP画像URL、canonical URL、公開日候補、AI分類結果を保存します。SNS受信箱用の `review_status` と `is_favorite` も保存します。OGP画像はURLだけを参考表示し、画像ファイルをSupabase Storageへコピーしません。
+
+SNS受信箱を追加した後は、最新の [supabase/schema.sql](</supabase/schema.sql>) をSQL Editorで再実行してください。既存のSNS投稿は削除されず、最初は `未確認` として表示されます。
+
+`blog_posts` はブログ下書きを管理するテーブルです。SEOキーワード、検索意図、見出し、FAQ、WordPress用HTML、元トレンド、使用したAIとモデルも保存します。
+
+以前の`blog_posts`を作成済みの場合は、[supabase/blog-gemini-seo.sql](</supabase/blog-gemini-seo.sql>) をSQL Editorで1回実行してください。最新の [supabase/schema.sql](</supabase/schema.sql>) にも同じ追加定義が含まれています。
+
+SEO・広告管理MVP用の6テーブルだけを追加する場合は、[supabase/seo-ads-mvp.sql](</supabase/seo-ads-mvp.sql>) をSQL Editorで実行してください。最新の [supabase/schema.sql](</supabase/schema.sql>) にも同じ定義が含まれています。
+
+Search Console機能だけを追加する場合は、先にSEO・広告管理テーブルを作成してから [supabase/search-console-mvp.sql](</supabase/search-console-mvp.sql>) をSQL Editorで実行してください。CSV本体はStorageへ保存せず、確認済みの行データだけをテーブルへ保存します。
+
+Search Consoleのサーバー保存には、Supabase管理画面のAPI Keysで確認できるservice roleの秘密鍵を`SUPABASE_SERVICE_ROLE_KEY`として設定します。この値は強い権限を持つため、ブラウザコード、GitHub、`NEXT_PUBLIC_`環境変数へ絶対に入れないでください。未設定時は最大2,000行まで、この端末のlocalStorageで確認できます。
+
+追加テーブルはRLSを有効にし、Supabase Authの`authenticated`ロールだけが読み書きできます。現在の画面はダミーデータとlocalStorageで動くため、Supabase Auth未接続でもMVP画面を確認できます。実データ保存へ切り替える段階で、ログインセッションをSupabaseクライアントへ接続してください。
 
 ### 3. RLSとStorageの考え方
 
@@ -290,15 +357,73 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 
 複数人で本格運用する場合は、Supabase Authを追加して、ユーザー単位のRLSへ変更してください。
 
+## SEO・広告管理MVP
+
+追加画面:
+
+- `/seo`: SEOダッシュボード
+- `/seo/keywords`: SEOキーワード一覧
+- `/seo/pages`: 改善ページ一覧
+- `/seo/reports`: SEO月次レポート
+- `/ads`: 広告管理メモ
+- `/ads/reports`: 広告月次レポート
+
+SEOと広告の数値は、Google Search Console、GA4、Google広告から手作業で確認した内容を整理するためのMVPです。Google API連携、広告自動運用、WordPress自動投稿は実装していません。
+
+AI改善提案はGeminiを利用します。`GEMINI_API_KEY`が未設定、無効、利用制限中の場合も画面を止めずモック文を表示します。
+
+### Search Console CSVを取り込む
+
+1. Google Search Consoleで検索パフォーマンスを開きます。
+2. 対象期間を選び、エクスポートからCSVをダウンロードします。
+3. アプリの`SEO管理 > CSV取込`を開きます。
+4. データ種別、開始日、終了日、集計月を入力します。
+5. `CSVを確認する`を押し、列名、正常行、除外行、先頭10件を確認します。
+6. 問題がなければ`この内容を取り込む`を押します。
+7. `Search Console`画面で集計・期間比較・改善候補を確認します。
+8. `SEO分析する`を押すと、集計済みの上位候補だけをGeminiが分析します。
+
+対応列:
+
+- 対象: `上位のクエリ`、`クエリ`、`Top queries`、`Query`
+- ページ: `上位のページ`、`ページ`、`Top pages`、`Page`
+- 指標: `クリック数` / `Clicks`、`表示回数` / `Impressions`、`CTR`、`掲載順位` / `Position`
+- 補助種別: デバイス、国、日付の日本語・英語列
+
+CTRは内部で小数比率へ統一します。`3.5%`と`3.5`は`0.035`、`0.035`はそのまま`0.035`として保存し、画面では`3.50%`と表示します。
+
+次の行は元値を勝手に直さず除外し、プレビューへ理由を表示します。
+
+- 対象値が空
+- クリック数、表示回数、CTR、掲載順位を数値変換できない
+- ページURLが明らかに不正
+- CSVの列数が一致しない
+
+重複は、内容のSHA-256ハッシュ、期間、種別、正常行数を組み合わせて判定します。同じCSVが登録済みの場合、既存データを削除・上書きせず警告します。
+
+基本集計と候補判定はアプリ側で行います。初期しきい値は [searchConsole.ts](</src/config/searchConsole.ts>) にまとめています。
+
+- 表示100回以上、CTR 2%未満: CTR改善候補
+- 4〜10位: タイトル・説明文改善候補
+- 11〜20位: リライト優先候補
+- 21〜30位: 記事強化候補
+- 表示100回以上、クリック0: 最優先確認
+
+GeminiへCSV全行は送りません。上位キーワード、CTR候補、11〜30位、順位低下、上位ページ、改善ページをそれぞれ最大20件に絞り、店舗設定、既存SEOキーワード、既存ブログ概要と一緒に送ります。
+
+改善候補や新規記事案の`記事を作成`を押すと、前回追加したブログ生成画面へ対策キーワード、検索意図、推奨タイトル、理由、対象ページ、元の取り込みIDを引き継ぎます。`SEOタスクに追加`は同じ取り込み・タイトル・キーワード・ページの重複登録を防ぎます。
+
+取り込み履歴は`/seo/search-console/history`で確認できます。元データを確認なしに削除する機能はありません。
+
 ## AI API設定
 
-OpenAI APIキーまたはGemini APIキーを設定すると、投稿ネタ生成と画像分析が実際のAI生成になります。
+Gemini APIキーを設定すると、ブログ、投稿ネタ、SEO分析、画像分析が実際のAI生成になります。AI処理はGeminiへ統一しており、APIキーはサーバー側のAPI Routeだけで使います。
 
-OpenAI APIとGemini APIは、`.env.local` の `AI_PROVIDER` で切り替えます。
+公式SDKの `@google/genai` を使用し、共通処理は [gemini.ts](</src/lib/ai/gemini.ts>) にまとめています。使用モデル、タイムアウト、再試行、JSON解析、エラー分類、モック切り替えを各画面へ重複実装しません。
 
 ### サロン設定をAIに反映する
 
-AI生成では [dummySettings.ts](</src/data/dummySettings.ts>) のサロン設定を参照します。
+AI生成では [salonProfile.ts](</src/lib/salonProfile.ts>) の共通サロン設定を参照します。
 
 現在は `ef.mayke`s` 向けに、髪質改善、ストレート、くせ毛改善、パサつき改善、艶髪、白髪ぼかしを重視する設定にしています。
 
@@ -310,40 +435,18 @@ AI生成では [dummySettings.ts](</src/data/dummySettings.ts>) のサロン設�
 - トレンド自動生成
 - SNS投稿AI分類
 
-サロン名、得意技術、文章トーン、想定客層、投稿目的を変えたい場合は、[dummySettings.ts](</src/data/dummySettings.ts>) を編集してください。
+店舗名、得意分野、対象客、CTAを変えたい場合は、[salonProfile.ts](</src/lib/salonProfile.ts>) を編集してください。
 
-### Gemini APIを使う場合
+### Gemini APIを使う
 
 Google AI StudioでGemini APIキーを作成し、`.env.local` に以下を設定します。
 
 ```bash
-AI_PROVIDER=gemini
 GEMINI_API_KEY=your-gemini-api-key
 GEMINI_MODEL=gemini-2.5-flash
 ```
 
-Gemini APIには無料枠が用意される場合がありますが、条件や上限はGoogle側の最新設定に従います。無料枠を超えた場合や利用制限に達した場合は、モックレスポンスに切り替わります。
-
-### OpenAI APIを使う場合
-
-`.env.local` に以下を設定します。
-
-```bash
-AI_PROVIDER=openai
-OPENAI_API_KEY=your-openai-api-key
-OPENAI_MODEL=gpt-5.4-mini
-OPENAI_VISION_MODEL=gpt-5.4-mini
-```
-
-`OPENAI_API_KEY` と `GEMINI_API_KEY` はサーバー側のAPI Routeだけで使います。フロント側には出しません。
-
-### AIを使わずモックで動かす場合
-
-```bash
-AI_PROVIDER=mock
-```
-
-APIキーが未設定、または生成に失敗した場合は、画面上ではモックレスポンスを表示します。
+Gemini APIには無料枠が用意される場合がありますが、条件や上限はGoogle側の最新設定に従います。APIキーが未設定、無効、利用制限中、または応答を読み取れない場合はモックレスポンスへ切り替わります。`GEMINI_API_KEY`は`NEXT_PUBLIC_`を付けず、GitHubへ含めないでください。
 
 ## アプリ全体のパスワード保護
 
@@ -509,15 +612,59 @@ RSS確認では、登録URLから一般的な公開RSS URLを確認します。�
 ### SNS情報を取り込む
 
 1. `SNS情報取得` を開きます。
-2. `SNS取得元管理` で、日常的に確認するアカウントと取得方式を登録します。
-3. `URLから取り込む` に戻り、Instagram、Pinterest、TikTok、X、YouTubeなどの公開投稿URLを貼ります。
-4. URLからSNS種別が自動判定されます。
-5. 必要に応じてタイトル、メモ、カテゴリ、タグを入力します。
-6. `URLから取り込む` を押します。
-7. サーバー側でrobots.txtと公開範囲を確認し、必要最小限のメタデータだけを取得します。
-8. AIがトレンド名、カテゴリ、要約、タグ、ef.mayke`sとの関連度、投稿案、ブログ案、カウンセリング活用例を生成します。
-9. 同じcanonical URLは保存せず、似たタイトルは重複候補として表示します。
-10. 保存後は `トレンド化`、`ブログ化`、`投稿案作成` を利用できます。
+2. `SNS取得元管理` で、初期候補のアカウント名、ハンドル、カテゴリ、メモを確認します。
+3. 必要なアカウントだけ `有効にする` を押し、使わないアカウントは `無効にする` を押します。
+4. 新しい取得元を追加する場合は、同じハンドルやプロフィールURLが登録済みでないことを確認します。
+5. `URLから取り込む` に戻り、Instagram、Pinterest、TikTok、X、YouTubeなどの公開投稿URLを貼ります。
+6. URLからSNS種別が自動判定されます。
+7. TikTok投稿URLの場合は、公式oEmbedで取得できるタイトル、投稿者名、サムネイルURLだけを確認します。
+8. 必要に応じてタイトル、メモ、カテゴリ、タグを入力します。
+9. `URLから取り込む` を押します。
+10. TikTok以外は、サーバー側でrobots.txtと公開範囲を確認し、必要最小限のメタデータだけを取得します。
+11. AIがトレンド名、カテゴリ、要約、タグ、ef.mayke`sとの関連度、投稿案、ブログ案、カウンセリング活用例を生成します。
+12. 同じcanonical URLは保存せず、似たタイトルは重複候補として表示します。
+13. 保存後は `SNS受信箱` を開きます。
+14. 内容を確認し、`採用`、`保留`、`不要` のいずれかに整理します。
+15. `採用` にした投稿だけ `トレンド化` できます。
+16. `ブログ化`、`Instagram投稿案`、`お気に入り` は各投稿カードから利用できます。
+
+### Apify/n8nからSNS投稿候補を取り込む
+
+Apifyやn8nで取得したInstagram/TikTok投稿候補は、専用APIからSNS受信箱へ取り込めます。
+
+```txt
+POST /api/automation/import-social
+Authorization: Bearer AUTOMATION_WEBHOOK_SECRET
+```
+
+必要な環境変数:
+
+```bash
+AUTOMATION_WEBHOOK_SECRET=your-random-webhook-secret
+```
+
+取り込み先は `social_posts` です。保存後は `SNS受信箱` に `未確認` として表示されます。詳しい送信形式とn8n設定例は [docs/apify-social-import.md](<docs/apify-social-import.md>) を確認してください。
+
+### X公式APIで巡回する
+
+1. X Developer Portalでアプリを作成し、Bearer Tokenを取得します。
+2. `.env.local` またはVercel環境変数に `X_BEARER_TOKEN` を設定します。
+3. `SNS情報取得` を開きます。
+4. `X公式API巡回` タブを開きます。
+5. `X巡回する` を押します。
+6. 登録済みキーワードと初期キーワードをもとに、公式X APIのRecent Searchで公開投稿を確認します。
+7. AIが美容師向けにカテゴリ、要約、タグ、関連度、投稿案、ブログ案、カウンセリング活用例を作ります。
+8. 重複URLや近いタイトルを除外し、新規候補だけ `SNS受信箱` に `未確認` として保存します。
+
+安全方針:
+
+- X公式APIだけを使います。
+- Xの画面を自動操作したり、ログイン状態を使ったスクレイピングは行いません。
+- 1回に検索するキーワードは最大5個です。
+- 1キーワードあたり最大5件まで取得します。
+- 1回の巡回で扱う投稿候補は最大20件までです。
+- 本文や画像の転載を目的にせず、短い要約と元投稿URLを保存します。
+- `X_BEARER_TOKEN` はサーバー側だけで使い、フロント側には出しません。
 
 メタデータを取得できない場合:
 
@@ -531,6 +678,9 @@ SNS利用時の注意:
 - 公式APIは、サービスが許可する範囲で構造化データを取得する方法です。利用できる場合は公式APIを優先します。
 - URL取り込みは、公開ページのtitle、description、OGP、canonical URL、公開日候補だけを確認する補助機能です。
 - Instagram、TikTok、Xなどの非公式な大量スクレイピングは行いません。
+- TikTok投稿URLは公式oEmbedで許可された公開メタデータだけを確認します。
+- Instagram初期候補は確認先の一覧です。アカウントを有効にしても投稿の自動巡回や非公式スクレイピングは始まりません。
+- Instagram投稿は、利用者が確認した公開URLを手動登録し、取得が許可される場合だけ必要最小限のメタデータを確認します。
 - ログイン回避、CAPTCHA回避、Cookie使い回し、IPローテーションは行いません。
 - 非公開投稿、ログインが必要な投稿、取得を拒否するページは取り込みません。
 - 1回に確認できるURLは最大10件です。画面では誤操作を防ぐため1件ずつ取り込みます。
@@ -545,12 +695,12 @@ SNS利用時の注意:
 
 ### ブログ記事を作成する
 
-1. `ブログ管理` を開きます。
-2. `AIブログ生成` タブでメインキーワード、ターゲット、悩み、記事タイプ、文字数目安を選びます。
+1. `ブログ管理` を開きます。SEOキーワード一覧の`ブログ作成`、またはトレンド一覧の`SEOブログを作成`から開くこともできます。
+2. `AIブログ生成` タブで対策キーワード、補助キーワード、検索意図、想定読者、悩み、記事タイプ、文字数目安を確認します。
 3. 必要に応じて、参考にしたいトレンドやSNS投稿を選びます。
-4. `ブログ下書きを生成` を押します。
+4. `記事全体を生成` を押します。
 5. 生成結果を確認し、`下書きとして編集する` を押します。
-6. `ブログ編集` でタイトル、スラッグ、本文、タグ、ステータスを調整します。
+6. `ブログ編集` でタイトル、メタ情報、h2/h3、本文、FAQ、CTA、WordPress用HTMLを調整します。
 7. `下書きを保存` を押します。
 8. `WordPressプレビュー` でタイトル、スラッグ、メタディスクリプション、本文HTMLをコピーします。
 
@@ -585,7 +735,7 @@ SNS利用時の注意:
 - `ready`: 確認済み
 - `published`: 公開済み
 
-WordPress貼り付け用プレビューでは、本文を `h2`、`h3`、`p` タグを使ったHTMLに整形します。CTAには以下を使います。
+WordPress貼り付け用プレビューでは、保存前に危険なタグやイベント属性を除去し、`h2`、`h3`、`h4`、`p`、リスト、リンクなどの許可済みHTMLを表示・コピーできます。CTAには以下を使います。
 
 ```txt
 本気で髪を綺麗にしたい方は、まずはLINEからご相談ください。
@@ -617,21 +767,14 @@ Vercelの `Project Settings > Environment Variables` に以下を設定してく
 
 ```bash
 CRON_SECRET=自分だけが知っている長いランダム文字列
-OPENAI_API_KEY=your-openai-api-key
+GEMINI_API_KEY=your-gemini-api-key
+GEMINI_MODEL=gemini-2.5-flash
 NEXT_PUBLIC_SUPABASE_URL=your-supabase-project-url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
 YOUTUBE_API_KEY=your-youtube-api-key
 YOUTUBE_DAILY_VIDEO_LIMIT=30
 YOUTUBE_KEYWORD_LIMIT=6
 YOUTUBE_RUN_VIDEO_LIMIT=30
-```
-
-Geminiを使う場合は、`OPENAI_API_KEY` の代わりに以下でも動きます。
-
-```bash
-AI_PROVIDER=gemini
-GEMINI_API_KEY=your-gemini-api-key
-GEMINI_MODEL=gemini-2.5-flash
 ```
 
 `CRON_SECRET` はAPI Routeの不正アクセス防止に使います。Cron実行時は `Authorization: Bearer CRON_SECRET` を確認します。
@@ -752,16 +895,17 @@ VercelのImport画面、またはデプロイ後の `Project Settings > Environm
 ```bash
 NEXT_PUBLIC_SUPABASE_URL=your-supabase-project-url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
-AI_PROVIDER=gemini
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 GEMINI_API_KEY=your-gemini-api-key
 GEMINI_MODEL=gemini-2.5-flash
-OPENAI_API_KEY=your-openai-api-key
-OPENAI_MODEL=gpt-5.4-mini
-OPENAI_VISION_MODEL=gpt-5.4-mini
 YOUTUBE_API_KEY=your-youtube-api-key
 YOUTUBE_DAILY_VIDEO_LIMIT=30
 YOUTUBE_KEYWORD_LIMIT=6
 YOUTUBE_RUN_VIDEO_LIMIT=30
+X_BEARER_TOKEN=your-x-bearer-token
+X_KEYWORD_LIMIT=5
+X_RUN_POST_LIMIT=20
+AUTOMATION_WEBHOOK_SECRET=your-random-webhook-secret
 CRON_SECRET=your-random-cron-secret
 APP_USER=salon
 APP_PASSWORD=your-private-app-password
@@ -829,10 +973,13 @@ npm.cmd run build
 - 403、429、robots.txt禁止、非公開投稿、ログイン必須ページは取得を停止します。
 - ログイン回避、CAPTCHA回避、Cookie使い回し、IPローテーションは実装しません。
 - YouTube周回は公式YouTube Data APIだけを使います。
+- X巡回は公式X APIだけを使います。
 - Instagram、Pinterestなどを自動連携する場合は、各サービスの公式APIだけを使ってください。
 - 外部サイトの情報は、手動登録、公式API、RSS、利用許可のある公開情報だけを扱います。
 - `.env.local` はGitHubへ上げないでください。
-- `OPENAI_API_KEY`、`GEMINI_API_KEY`、`YOUTUBE_API_KEY` はサーバー側のAPI Routeだけで使います。
+- `SUPABASE_SERVICE_ROLE_KEY`、`GEMINI_API_KEY`、`YOUTUBE_API_KEY` はサーバー側のAPI Routeだけで使います。
+- Search Console CSVの本文やGemini APIキーをログへ出力しません。
+- CSVセルは文字列として扱い、HTMLや数式を実行しません。将来CSVへ再出力するときは`= + - @`で始まるセルをエスケープしてください。
 - `APP_PASSWORD` を設定すると、画面、API Route、静的JS/CSSがBasic認証で保護されます。
 - `NEXT_PUBLIC_SUPABASE_URL` と `NEXT_PUBLIC_SUPABASE_ANON_KEY` はブラウザ側に出る値です。
 - 現在のSupabase RLSは個人利用・サロン内利用向けです。
@@ -881,11 +1028,10 @@ Supabaseを使っている場合は、Supabase側のバックアップも確認�
 
 ### AI生成がモックになる
 
-- `AI_PROVIDER` が `openai`、`gemini`、`mock` のどれかになっているか確認します。
-- `AI_PROVIDER=gemini` の場合は `GEMINI_API_KEY` が設定されているか確認します。
-- `AI_PROVIDER=openai` の場合は `OPENAI_API_KEY` が設定されているか確認します。
+- `GEMINI_API_KEY` が設定されているか確認します。
 - APIキーの前後に余計な空白がないか確認します。
-- 各AIサービスの無料枠、課金設定、利用上限を確認します。
+- Google AI Studio側の無料枠、課金設定、利用上限を確認します。
+- `GEMINI_MODEL`が利用できるモデル名か確認します。未設定ならアプリの既定モデルを使います。
 - Vercelでは環境変数を設定後に再デプロイしてください。
 
 ### Vercelでパスワード入力が出ない
@@ -943,4 +1089,29 @@ supabase/
 
 このアプリは、個人利用・サロン内利用で毎日使いやすい形を目指した完成版です。
 
-まずはダミーデータで触り、必要に応じてSupabase、Gemini APIまたはOpenAI API、Vercel公開を追加してください。
+まずはダミーデータで触り、必要に応じてSupabase、Gemini API、Vercel公開を追加してください。
+## Phase 6 既存ブログ管理・リライト
+
+公開済みブログをアプリに登録し、Search Consoleのページ指標とGeminiの提案を見ながらリライト候補を整理できます。
+
+使い方:
+
+1. Supabase SQL Editorで [supabase/blog-rewrite-mvp.sql](</supabase/blog-rewrite-mvp.sql>) を実行します。
+2. アプリを再起動します。
+3. `ブログ管理 > 既存ブログ管理へ`、または `/blog/articles` を開きます。
+4. `既存ブログを登録` から、記事タイトル、URL、対策キーワード、公開日、更新日、メモを入力します。
+5. Search Consoleに同じページURLのデータがある場合は、クリック、CTR、平均掲載順位が表示されます。
+6. `リライト提案` を押すと、Geminiがタイトル、メタディスクリプション、見出し、FAQ、CTAの改善案を作ります。
+7. `ブログ下書きへ` を押すと、既存記事の内容をもとにブログ生成画面へ移動できます。
+
+保存されるテーブル:
+
+- `published_blog_articles`: 公開済みブログの記事情報
+- `blog_rewrite_histories`: Geminiまたはモックで作ったリライト提案履歴
+
+注意点:
+
+- WordPressへの自動更新や自動投稿は行いません。
+- リライト提案は必ず人が確認してからWordPressへ反映してください。
+- `GEMINI_API_KEY` が未設定の場合はモック提案で動きます。
+- 実データ保存には `SUPABASE_SERVICE_ROLE_KEY` が必要です。この値はGitHubやブラウザ側へ出さないでください。
