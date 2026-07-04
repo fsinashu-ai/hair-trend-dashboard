@@ -50,10 +50,10 @@ export function BlogList({
   onStatusChange,
 }: BlogListProps) {
   return (
-    <section className="grid gap-5">
-      <div className="rounded-lg border border-stone-200 bg-white p-4 shadow-sm sm:p-5">
+    <section className="grid min-w-0 gap-5 overflow-hidden">
+      <div className="min-w-0 rounded-lg border border-stone-200 bg-white p-4 shadow-sm sm:p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
+          <div className="min-w-0">
             <h2 className="text-lg font-semibold text-stone-950">ブログ管理</h2>
             <p className="mt-2 text-sm leading-6 text-stone-600">
               下書き保存、検索、絞り込み、複製、編集ができます。
@@ -68,21 +68,21 @@ export function BlogList({
           </button>
         </div>
 
-        <div className="mt-5 grid gap-4 lg:grid-cols-[minmax(0,1fr)_180px_180px_160px]">
-          <label className="grid gap-2 text-sm font-medium text-stone-700">
+        <div className="mt-5 grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1fr)_180px_180px_160px]">
+          <label className="grid min-w-0 gap-2 text-sm font-medium text-stone-700">
             タイトル検索
             <input
-              className="min-h-11 rounded-md border border-stone-300 px-3 text-sm outline-none focus:border-teal-600"
+              className="min-h-11 w-full min-w-0 rounded-md border border-stone-300 px-3 text-sm outline-none focus:border-teal-600"
               onChange={(event) => onSearchChange(event.target.value)}
               placeholder="例: 髪質改善、松江市、白髪ぼかし"
               type="search"
               value={searchText}
             />
           </label>
-          <label className="grid gap-2 text-sm font-medium text-stone-700">
+          <label className="grid min-w-0 gap-2 text-sm font-medium text-stone-700">
             カテゴリ
             <select
-              className="min-h-11 rounded-md border border-stone-300 bg-white px-3 text-sm outline-none focus:border-teal-600"
+              className="min-h-11 w-full min-w-0 rounded-md border border-stone-300 bg-white px-3 text-sm outline-none focus:border-teal-600"
               onChange={(event) => onCategoryChange(event.target.value)}
               value={selectedCategory}
             >
@@ -92,10 +92,10 @@ export function BlogList({
               ))}
             </select>
           </label>
-          <label className="grid gap-2 text-sm font-medium text-stone-700">
+          <label className="grid min-w-0 gap-2 text-sm font-medium text-stone-700">
             ステータス
             <select
-              className="min-h-11 rounded-md border border-stone-300 bg-white px-3 text-sm outline-none focus:border-teal-600"
+              className="min-h-11 w-full min-w-0 rounded-md border border-stone-300 bg-white px-3 text-sm outline-none focus:border-teal-600"
               onChange={(event) => onStatusChange(event.target.value)}
               value={selectedStatus}
             >
@@ -106,10 +106,10 @@ export function BlogList({
               <option value="published">公開済み</option>
             </select>
           </label>
-          <label className="grid gap-2 text-sm font-medium text-stone-700">
+          <label className="grid min-w-0 gap-2 text-sm font-medium text-stone-700">
             並び替え
             <select
-              className="min-h-11 rounded-md border border-stone-300 bg-white px-3 text-sm outline-none focus:border-teal-600"
+              className="min-h-11 w-full min-w-0 rounded-md border border-stone-300 bg-white px-3 text-sm outline-none focus:border-teal-600"
               onChange={(event) =>
                 onSortChange(event.target.value as "newest" | "oldest")
               }
@@ -127,14 +127,14 @@ export function BlogList({
       </div>
 
       {filteredPosts.length > 0 ? (
-        <div className="grid gap-4 xl:grid-cols-2">
+        <div className="grid min-w-0 gap-4 xl:grid-cols-2">
           {filteredPosts.map((post) => (
             <article
-              className="rounded-lg border border-stone-200 bg-white p-4 shadow-sm transition hover:border-teal-200 hover:shadow-md sm:p-5"
+              className="min-w-0 overflow-hidden rounded-lg border border-stone-200 bg-white p-4 shadow-sm transition hover:border-teal-200 hover:shadow-md sm:p-5"
               key={post.id}
             >
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="flex flex-wrap gap-2">
+              <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div className="flex min-w-0 flex-wrap gap-2">
                   <Badge tone="success">{post.category}</Badge>
                   <Badge tone={statusTone[post.status]}>
                     {blogStatusLabels[post.status]}
@@ -147,23 +147,23 @@ export function BlogList({
                         : "手動"}
                   </Badge>
                 </div>
-                <div className="flex flex-wrap gap-2">
+                <div className="grid w-full grid-cols-3 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:justify-end">
                   <button
-                    className="min-h-9 rounded-md border border-teal-200 px-3 text-xs font-semibold text-teal-700 hover:bg-teal-50"
+                    className="inline-flex min-h-10 items-center justify-center whitespace-nowrap rounded-md border border-teal-200 px-3 text-xs font-semibold text-teal-700 hover:bg-teal-50"
                     onClick={() => onEdit(post)}
                     type="button"
                   >
                     編集
                   </button>
                   <button
-                    className="min-h-9 rounded-md border border-stone-300 px-3 text-xs font-semibold text-stone-700 hover:bg-stone-50"
+                    className="inline-flex min-h-10 items-center justify-center whitespace-nowrap rounded-md border border-stone-300 px-3 text-xs font-semibold text-stone-700 hover:bg-stone-50"
                     onClick={() => onDuplicate(post)}
                     type="button"
                   >
                     複製
                   </button>
                   <button
-                    className="min-h-9 rounded-md border border-stone-300 px-3 text-xs font-semibold text-stone-700 hover:bg-stone-50 disabled:cursor-not-allowed disabled:bg-stone-100 disabled:text-stone-400"
+                    className="inline-flex min-h-10 items-center justify-center whitespace-nowrap rounded-md border border-stone-300 px-3 text-xs font-semibold text-stone-700 hover:bg-stone-50 disabled:cursor-not-allowed disabled:bg-stone-100 disabled:text-stone-400"
                     disabled={deletingId === post.id}
                     onClick={() => onDelete(post.id)}
                     type="button"
@@ -173,28 +173,28 @@ export function BlogList({
                 </div>
               </div>
 
-              <h3 className="mt-4 break-words text-lg font-semibold leading-7 text-stone-950">
+              <h3 className="mt-4 min-w-0 break-words text-lg font-semibold leading-7 text-stone-950 [overflow-wrap:anywhere]">
                 {post.title}
               </h3>
-              <p className="mt-2 text-sm leading-6 text-stone-600">
+              <p className="mt-2 break-words text-sm leading-6 text-stone-600 [overflow-wrap:anywhere]">
                 {post.excerpt || "概要はまだありません。"}
               </p>
-              <p className="mt-2 text-xs text-stone-500">
+              <p className="mt-2 break-words text-xs text-stone-500 [overflow-wrap:anywhere]">
                 生成日時 {new Date(post.createdAt).toLocaleString("ja-JP")} / 最終更新{" "}
                 {new Date(post.updatedAt).toLocaleString("ja-JP")}
                 {post.aiModel ? ` / ${post.aiModel}` : ""}
               </p>
 
-              <div className="mt-4 rounded-md bg-stone-50 p-3">
+              <div className="mt-4 min-w-0 rounded-md bg-stone-50 p-3">
                 <p className="text-xs font-semibold text-stone-500">
                   狙うキーワード
                 </p>
-                <p className="mt-1 text-sm text-stone-800">
+                <p className="mt-1 break-words text-sm text-stone-800 [overflow-wrap:anywhere]">
                   {post.targetKeyword || "未設定"}
                 </p>
               </div>
 
-              <div className="mt-4 flex flex-wrap gap-2">
+              <div className="mt-4 flex min-w-0 flex-wrap gap-2">
                 {post.tags.map((tag) => (
                   <Badge key={tag} tone="neutral">
                     {tag}

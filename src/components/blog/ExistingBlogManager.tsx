@@ -669,19 +669,19 @@ export function ExistingBlogManager() {
                 const metric = getMetricSignal(article.metrics);
                 return (
                   <article
-                    className="rounded-lg border border-stone-200 bg-white p-4 shadow-sm sm:p-5"
+                    className="min-w-0 overflow-hidden rounded-lg border border-stone-200 bg-white p-4 shadow-sm sm:p-5"
                     key={article.id}
                   >
                     <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                      <div>
-                        <div className="flex flex-wrap gap-2">
+                      <div className="min-w-0">
+                        <div className="flex min-w-0 flex-wrap gap-2">
                           <Badge tone="info">{article.category}</Badge>
                           <Badge tone={metric.tone}>{metric.label}</Badge>
                           <Badge tone="neutral">
                             {existingBlogStatusLabels[article.status]}
                           </Badge>
                         </div>
-                        <h3 className="mt-3 text-lg font-semibold text-stone-950">
+                        <h3 className="mt-3 break-words text-lg font-semibold text-stone-950 [overflow-wrap:anywhere]">
                           {article.title}
                         </h3>
                         <a
@@ -692,20 +692,20 @@ export function ExistingBlogManager() {
                         >
                           {article.url}
                         </a>
-                        <p className="mt-2 text-sm leading-6 text-stone-600">
+                        <p className="mt-2 break-words text-sm leading-6 text-stone-600 [overflow-wrap:anywhere]">
                           {article.memo || "メモはまだありません。"}
                         </p>
                       </div>
-                      <div className="flex flex-wrap gap-2 lg:justify-end">
+                      <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap lg:justify-end">
                         <button
-                          className="min-h-10 rounded-md border border-stone-300 px-3 text-sm font-semibold text-stone-700"
+                          className="inline-flex min-h-10 items-center justify-center whitespace-nowrap rounded-md border border-stone-300 px-3 text-sm font-semibold text-stone-700"
                           onClick={() => startEdit(article)}
                           type="button"
                         >
                           編集
                         </button>
                         <button
-                          className="min-h-10 rounded-md border border-rose-200 px-3 text-sm font-semibold text-rose-700"
+                          className="inline-flex min-h-10 items-center justify-center whitespace-nowrap rounded-md border border-rose-200 px-3 text-sm font-semibold text-rose-700"
                           onClick={() => deleteArticle(article.id)}
                           type="button"
                         >
@@ -719,7 +719,7 @@ export function ExistingBlogManager() {
                         <dt className="font-semibold text-stone-700">
                           対策キーワード
                         </dt>
-                        <dd className="mt-1 text-stone-600">
+                        <dd className="mt-1 break-words text-stone-600 [overflow-wrap:anywhere]">
                           {article.targetKeyword || "未設定"}
                         </dd>
                       </div>
