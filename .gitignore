@@ -35,7 +35,7 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 !.env.local.example
-# public配下は公開対象なので、環境変数ファイルを絶対に置かない
+# public files are exposed, so never place environment files there.
 /public/.env*
 
 # vercel
