@@ -79,7 +79,11 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const input = sanitizeArticleInput(await request.json().catch(() => ({})));
+  const body = (await request.json().catch(() => ({}))) as Record<
+    string,
+    unknown
+  >;
+  const input = sanitizeArticleInput(body.article ?? body);
   const validationError = validateInput(input);
 
   if (validationError) {
