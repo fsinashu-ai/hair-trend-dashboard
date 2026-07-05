@@ -9,6 +9,8 @@ const links = [
   { href: "/seo/search-console", label: "Search Console" },
   { href: "/seo/search-console/import", label: "CSV取込" },
   { href: "/seo/search-console/history", label: "取込履歴" },
+  { href: "/seo/ga4", label: "GA4" },
+  { href: "/seo/ga4/import", label: "GA4取込" },
   { href: "/ads", label: "広告メモ" },
   { href: "/ads/reports", label: "広告レポート" },
 ];

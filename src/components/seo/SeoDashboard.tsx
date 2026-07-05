@@ -43,6 +43,16 @@ export function SeoDashboard() {
           <Link className="inline-flex min-h-10 items-center justify-center rounded-md border border-teal-300 bg-white px-3 text-sm font-semibold text-teal-800" href="/seo/search-console/import">CSVを取り込む</Link>
         </div>
       </section>
+      <section className="flex flex-col gap-4 border-y border-sky-200 bg-sky-50 px-4 py-5 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 className="text-lg font-semibold text-sky-950">GA4 CSV分析</h2>
+          <p className="mt-1 text-sm leading-6 text-sky-900">アクセス後の行動、LINEクリック、予約導線、ページ改善候補を確認できます。</p>
+        </div>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <Link className="inline-flex min-h-10 items-center justify-center rounded-md bg-sky-700 px-3 text-sm font-semibold text-white" href="/seo/ga4">GA4分析を見る</Link>
+          <Link className="inline-flex min-h-10 items-center justify-center rounded-md border border-sky-300 bg-white px-3 text-sm font-semibold text-sky-800" href="/seo/ga4/import">GA4 CSVを取り込む</Link>
+        </div>
+      </section>
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {metrics.map((metric) => (
           <article

@@ -76,6 +76,9 @@ SNSスクレイピングは行いません。外部情報は、手動登録、�
   - クリック、表示回数、CTR、掲載順位をアプリ側で集計・期間比較
   - 改善候補からSEOタスク登録と既存ブログ生成へ連携
   - Search Consoleの取り込み・分析履歴を確認
+  - GA4のCSVをプレビューして取り込み
+  - ユーザー、セッション、表示回数、エンゲージメント率、LINEクリック、予約クリックを集計
+  - GA4集計からページ改善、LINE導線、ブログ案をGeminiで提案
 
 - 広告管理
   - 広告媒体、キャンペーン名、目的、対象エリア、予算、LPをメモ
@@ -259,7 +262,7 @@ APP_PASSWORD=
 | --- | --- | --- |
 | `NEXT_PUBLIC_SUPABASE_URL` | 任意 | SupabaseのプロジェクトURL |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | 任意 | Supabaseのanon key |
-| `SUPABASE_SERVICE_ROLE_KEY` | Search ConsoleをSupabase保存する場合は必須 | サーバーAPIだけで使う秘密鍵。`NEXT_PUBLIC_`を付けない |
+| `SUPABASE_SERVICE_ROLE_KEY` | Search ConsoleやGA4をSupabase保存する場合は必須 | サーバーAPIだけで使う秘密鍵。`NEXT_PUBLIC_`を付けない |
 | `GEMINI_API_KEY` | 任意 | ブログ、投稿、SEO分析、画像分析で使うGemini APIキー。未設定時はモック生成 |
 | `GEMINI_MODEL` | 任意 | Geminiで使うモデル名。未設定時は`gemini-2.5-flash` |
 | `YOUTUBE_API_KEY` | YouTube周回利用時は必須 | YouTube Data APIのAPIキー。サーバー側だけで使います |
@@ -343,6 +346,10 @@ Search Console機能だけを追加する場合は、先にSEO・広告管理テ
 
 Search Consoleのサーバー保存には、Supabase管理画面のAPI Keysで確認できるservice roleの秘密鍵を`SUPABASE_SERVICE_ROLE_KEY`として設定します。この値は強い権限を持つため、ブラウザコード、GitHub、`NEXT_PUBLIC_`環境変数へ絶対に入れないでください。未設定時は最大2,000行まで、この端末のlocalStorageで確認できます。
 
+GA4機能だけを追加する場合は、先にSEO・広告管理テーブルを作成してから [supabase/ga4-mvp.sql](</supabase/ga4-mvp.sql>) をSQL Editorで実行してください。GA4 CSV本体はStorageへ保存せず、確認済みの行データとGemini分析結果だけをテーブルへ保存します。
+
+GA4のサーバー保存にも`SUPABASE_SERVICE_ROLE_KEY`を使います。未設定時はこの端末のlocalStorageで確認できます。
+
 追加テーブルはRLSを有効にし、Supabase Authの`authenticated`ロールだけが読み書きできます。現在の画面はダミーデータとlocalStorageで動くため、Supabase Auth未接続でもMVP画面を確認できます。実データ保存へ切り替える段階で、ログインセッションをSupabaseクライアントへ接続してください。
 
 ### 3. RLSとStorageの考え方
@@ -412,6 +419,31 @@ CTRは内部で小数比率へ統一します。`3.5%`と`3.5`は`0.035`、`0.03
 GeminiへCSV全行は送りません。上位キーワード、CTR候補、11〜30位、順位低下、上位ページ、改善ページをそれぞれ最大20件に絞り、店舗設定、既存SEOキーワード、既存ブログ概要と一緒に送ります。
 
 改善候補や新規記事案の`記事を作成`を押すと、前回追加したブログ生成画面へ対策キーワード、検索意図、推奨タイトル、理由、対象ページ、元の取り込みIDを引き継ぎます。`SEOタスクに追加`は同じ取り込み・タイトル・キーワード・ページの重複登録を防ぎます。
+
+### GA4 CSVを取り込む
+
+1. Google Analytics 4でレポートを開きます。
+2. ページ、ランディングページ、流入元、イベントなどのCSVをエクスポートします。
+3. アプリの`SEO管理 > GA4取込`、または `/seo/ga4/import` を開きます。
+4. CSV、集計月、開始日、終了日を入力して`CSVを確認する`を押します。
+5. 認識した列、正常行、除外行、プレビューを確認します。
+6. 問題なければ`この内容を取り込む`を押します。
+7. `/seo/ga4`でユーザー、セッション、表示回数、エンゲージメント率、LINEクリック、予約クリック、キーイベントを確認します。
+8. `GA4分析する`を押すと、集計済みの候補だけをGeminiが分析します。
+
+GA4 CSVは、代表的な日本語・英語列名に対応しています。例:
+
+- ランディング ページ、Landing page
+- ページ タイトル、Page title
+- セッションの参照元 / メディア、Session source / medium
+- ユーザー、Active users
+- セッション、Sessions
+- 表示回数、Views
+- エンゲージメント率、Engagement rate
+- 平均エンゲージメント時間、Average engagement time
+- キーイベント、Conversions
+
+GeminiへCSV全行は送りません。アプリ側で集計した主要指標、上位ページ、LINE導線の改善候補、コンバージョン候補だけを送ります。
 
 取り込み履歴は`/seo/search-console/history`で確認できます。元データを確認なしに削除する機能はありません。
 
