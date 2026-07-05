@@ -50,6 +50,7 @@ export function SeoDashboard() {
         </div>
         <div className="flex flex-col gap-2 sm:flex-row">
           <Link className="inline-flex min-h-10 items-center justify-center rounded-md bg-sky-700 px-3 text-sm font-semibold text-white" href="/seo/ga4">GA4分析を見る</Link>
+          <Link className="inline-flex min-h-10 items-center justify-center rounded-md bg-teal-700 px-3 text-sm font-semibold text-white" href="/seo/conversions">CV分析を見る</Link>
           <Link className="inline-flex min-h-10 items-center justify-center rounded-md border border-sky-300 bg-white px-3 text-sm font-semibold text-sky-800" href="/seo/ga4/import">GA4 CSVを取り込む</Link>
         </div>
       </section>
