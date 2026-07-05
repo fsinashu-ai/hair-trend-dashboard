@@ -395,19 +395,42 @@ function PreviewTable({ preview }: { preview: Ga4CsvPreview }) {
   return (
     <div className="mt-5 overflow-x-auto">
       <table className="min-w-full border-collapse text-left text-sm">
-        <thead><tr className="border-b border-stone-200 text-xs text-stone-500"><th className="px-2 py-2">ページ／流入元</th><th className="px-2 py-2">ユーザー</th><th className="px-2 py-2">セッション</th><th className="px-2 py-2">表示</th><th className="px-2 py-2">CV</th></tr></thead>
+        <thead><tr className="border-b border-stone-200 text-xs text-stone-500"><th className="px-2 py-2">ページ／流入元／イベント</th><th className="px-2 py-2">ユーザー</th><th className="px-2 py-2">セッション</th><th className="px-2 py-2">表示</th><th className="px-2 py-2">CV</th></tr></thead>
         <tbody>
           {preview.previewRows.map((row, index) => (
             <tr className="border-b border-stone-100" key={`${row.landingPage || row.pageTitle || row.sourceMedium || row.eventName}-${index}`}>
-              <td className="max-w-80 break-words px-2 py-3">{row.landingPage || row.pageTitle || row.sourceMedium || row.channelGroup || row.eventName || row.recordDate || row.deviceCategory}</td>
+              <td className="max-w-80 break-words px-2 py-3">{previewRowLabel(row)}</td>
               <td className="px-2 py-3">{row.users}</td>
               <td className="px-2 py-3">{row.sessions}</td>
               <td className="px-2 py-3">{row.views}</td>
-              <td className="px-2 py-3">{row.lineClicks + row.reservationClicks + row.conversions}</td>
+              <td className="px-2 py-3">{previewActionLabel(row)}</td>
             </tr>
           ))}
         </tbody>
       </table>
     </div>
   );
+}
+
+function previewRowLabel(row: Ga4CsvPreview["previewRows"][number]) {
+  const base =
+    row.landingPage ||
+    row.pageTitle ||
+    row.sourceMedium ||
+    row.channelGroup ||
+    row.recordDate ||
+    row.deviceCategory ||
+    "未取得";
+
+  return row.eventName ? `${base} / ${row.eventName}` : base;
+}
+
+function previewActionLabel(row: Ga4CsvPreview["previewRows"][number]) {
+  const total = row.lineClicks + row.reservationClicks + row.conversions;
+
+  if (row.lineClicks || row.reservationClicks) {
+    return `${total}件（LINE ${row.lineClicks} / 予約 ${row.reservationClicks}）`;
+  }
+
+  return total;
 }

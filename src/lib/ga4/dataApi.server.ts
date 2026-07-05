@@ -19,6 +19,12 @@ type Ga4MetricSet = {
   conversionMetricName: "keyEvents" | "conversions";
 };
 
+type Ga4ReportSpec = {
+  dimensions: string[];
+  metrics: string[];
+  orderByMetricName: string;
+};
+
 type Ga4RunReportRow = {
   dimensionValues?: Array<{ value?: string }>;
   metricValues?: Array<{ value?: string }>;
@@ -177,7 +183,7 @@ async function runReport(
   config: Ga4DataApiConfig,
   token: string,
   dateRange: Pick<Ga4DateRange, "endDate" | "startDate">,
-  metrics: Ga4MetricSet,
+  spec: Ga4ReportSpec,
 ) {
   const response = await fetch(
     `https://analyticsdata.googleapis.com/v1beta/properties/${config.propertyId}:runReport`,
@@ -189,24 +195,13 @@ async function runReport(
             startDate: dateRange.startDate,
           },
         ],
-        dimensions: [
-          { name: "landingPagePlusQueryString" },
-          { name: "sessionSourceMedium" },
-          { name: "sessionDefaultChannelGroup" },
-        ],
+        dimensions: spec.dimensions.map((name) => ({ name })),
         limit: String(Math.min(ga4Config.maxImportRows, 20_000)),
-        metrics: [
-          { name: "totalUsers" },
-          { name: "sessions" },
-          { name: "screenPageViews" },
-          { name: "engagementRate" },
-          { name: "averageSessionDuration" },
-          { name: metrics.conversionMetricName },
-        ],
+        metrics: spec.metrics.map((name) => ({ name })),
         orderBys: [
           {
             desc: true,
-            metric: { metricName: "sessions" },
+            metric: { metricName: spec.orderByMetricName },
           },
         ],
       }),
@@ -226,7 +221,39 @@ async function runReport(
   return json;
 }
 
-async function runReportWithFallbackMetrics(
+function trafficReportSpec(conversionMetricName: Ga4MetricSet["conversionMetricName"]) {
+  return {
+    dimensions: [
+      "landingPagePlusQueryString",
+      "sessionSourceMedium",
+      "sessionDefaultChannelGroup",
+    ],
+    metrics: [
+      "totalUsers",
+      "sessions",
+      "screenPageViews",
+      "engagementRate",
+      "averageSessionDuration",
+      conversionMetricName,
+    ],
+    orderByMetricName: "sessions",
+  } satisfies Ga4ReportSpec;
+}
+
+function eventReportSpec(conversionMetricName: Ga4MetricSet["conversionMetricName"]) {
+  return {
+    dimensions: [
+      "eventName",
+      "landingPagePlusQueryString",
+      "sessionSourceMedium",
+      "sessionDefaultChannelGroup",
+    ],
+    metrics: ["eventCount", conversionMetricName],
+    orderByMetricName: "eventCount",
+  } satisfies Ga4ReportSpec;
+}
+
+async function runTrafficReportWithFallbackMetrics(
   config: Ga4DataApiConfig,
   token: string,
   dateRange: Pick<Ga4DateRange, "endDate" | "startDate">,
@@ -234,9 +261,7 @@ async function runReportWithFallbackMetrics(
   try {
     return {
       conversionMetricName: "keyEvents" as const,
-      response: await runReport(config, token, dateRange, {
-        conversionMetricName: "keyEvents",
-      }),
+      response: await runReport(config, token, dateRange, trafficReportSpec("keyEvents")),
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : "";
@@ -247,16 +272,69 @@ async function runReportWithFallbackMetrics(
 
     return {
       conversionMetricName: "conversions" as const,
-      response: await runReport(config, token, dateRange, {
-        conversionMetricName: "conversions",
-      }),
+      response: await runReport(
+        config,
+        token,
+        dateRange,
+        trafficReportSpec("conversions"),
+      ),
     };
   }
 }
 
-function responseToRows(
+async function runEventReportWithFallbackMetrics(
+  config: Ga4DataApiConfig,
+  token: string,
+  dateRange: Pick<Ga4DateRange, "endDate" | "startDate">,
+) {
+  try {
+    return {
+      conversionMetricName: "keyEvents" as const,
+      response: await runReport(config, token, dateRange, eventReportSpec("keyEvents")),
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+
+    if (!message.includes("keyEvents")) {
+      throw error;
+    }
+
+    return {
+      conversionMetricName: "conversions" as const,
+      response: await runReport(
+        config,
+        token,
+        dateRange,
+        eventReportSpec("conversions"),
+      ),
+    };
+  }
+}
+
+function inferEventClicks(eventName: string, keyEventCount: number, eventCount: number) {
+  const normalized = eventName.toLowerCase();
+  const clickCount = Math.round(Math.max(keyEventCount, eventCount));
+
+  return {
+    lineClicks:
+      normalized.includes("line") || normalized.includes("ライン")
+        ? Math.max(clickCount, 1)
+        : 0,
+    reservationClicks:
+      normalized.includes("reserve") ||
+      normalized.includes("reservation") ||
+      normalized.includes("booking") ||
+      normalized.includes("yoyaku") ||
+      normalized.includes("予約")
+        ? Math.max(clickCount, 1)
+        : 0,
+  };
+}
+
+function trafficResponseToRows(
   response: Ga4RunReportResponse,
   conversionMetricName: "keyEvents" | "conversions",
+  includeConversions: boolean,
 ) {
   const dimensionHeaders =
     response.dimensionHeaders?.map((header) => header.name || "") ?? [];
@@ -275,9 +353,9 @@ function responseToRows(
         dimensionHeaders,
         "sessionDefaultChannelGroup",
       ),
-      conversions: Math.round(
-        getMetricValue(row, metricHeaders, conversionMetricName),
-      ),
+      conversions: includeConversions
+        ? Math.round(getMetricValue(row, metricHeaders, conversionMetricName))
+        : 0,
       deviceCategory: "",
       engagementRate: getMetricValue(row, metricHeaders, "engagementRate"),
       eventName: "",
@@ -302,6 +380,61 @@ function responseToRows(
     .filter((row) => {
       const hasDimension = Boolean(row.landingPage || row.sourceMedium || row.channelGroup);
       const hasMetric = row.users + row.sessions + row.views + row.conversions > 0;
+      return hasDimension && hasMetric;
+    });
+}
+
+function eventResponseToRows(
+  response: Ga4RunReportResponse,
+  conversionMetricName: "keyEvents" | "conversions",
+) {
+  const dimensionHeaders =
+    response.dimensionHeaders?.map((header) => header.name || "") ?? [];
+  const metricHeaders =
+    response.metricHeaders?.map((header) => header.name || "") ?? [];
+
+  return (response.rows ?? [])
+    .map<Ga4Row>((row) => {
+      const eventName = getDimensionValue(row, dimensionHeaders, "eventName");
+      const keyEventCount = Math.round(
+        getMetricValue(row, metricHeaders, conversionMetricName),
+      );
+      const eventCount = Math.round(getMetricValue(row, metricHeaders, "eventCount"));
+      const inferredClicks = inferEventClicks(eventName, keyEventCount, eventCount);
+
+      return {
+        averageEngagementSeconds: 0,
+        channelGroup: getDimensionValue(
+          row,
+          dimensionHeaders,
+          "sessionDefaultChannelGroup",
+        ),
+        conversions: keyEventCount,
+        deviceCategory: "",
+        engagementRate: 0,
+        eventName,
+        landingPage: getDimensionValue(
+          row,
+          dimensionHeaders,
+          "landingPagePlusQueryString",
+        ),
+        lineClicks: inferredClicks.lineClicks,
+        pageTitle: "",
+        recordDate: "",
+        reservationClicks: inferredClicks.reservationClicks,
+        sessions: 0,
+        sourceMedium: getDimensionValue(
+          row,
+          dimensionHeaders,
+          "sessionSourceMedium",
+        ),
+        users: 0,
+        views: 0,
+      };
+    })
+    .filter((row) => {
+      const hasDimension = Boolean(row.eventName || row.landingPage || row.sourceMedium);
+      const hasMetric = row.conversions + row.lineClicks + row.reservationClicks > 0;
       return hasDimension && hasMetric;
     });
 }
@@ -371,10 +504,48 @@ export async function fetchGa4DataApiPreview(dateRange: Ga4DateRange) {
   }
 
   const token = await getAccessToken(config);
-  const result = await runReportWithFallbackMetrics(config, token, dateRange);
-  const rows = responseToRows(result.response, result.conversionMetricName);
-  const rowCount = result.response.rowCount ?? rows.length;
+  const trafficResult = await runTrafficReportWithFallbackMetrics(
+    config,
+    token,
+    dateRange,
+  );
+  const eventResult = await runEventReportWithFallbackMetrics(
+    config,
+    token,
+    dateRange,
+  ).catch((error) => ({
+    conversionMetricName: trafficResult.conversionMetricName,
+    errorMessage:
+      error instanceof Error
+        ? error.message
+        : "イベント名別データを取得できませんでした。",
+    response: null,
+  }));
+  const eventRows = eventResult.response
+    ? eventResponseToRows(
+        eventResult.response,
+        eventResult.conversionMetricName,
+      )
+    : [];
+  const trafficRows = trafficResponseToRows(
+    trafficResult.response,
+    trafficResult.conversionMetricName,
+    eventRows.length === 0,
+  );
+  const rows = [...trafficRows, ...eventRows];
+  const rowCount =
+    (trafficResult.response.rowCount ?? trafficRows.length) +
+    (eventResult.response?.rowCount ?? eventRows.length);
   const issues = createIssues(rows, rowCount);
+
+  if ("errorMessage" in eventResult && eventResult.errorMessage) {
+    issues.push({
+      message: `イベント名別データは取得できませんでした。ページ・流入元データだけ保存します。${eventResult.errorMessage}`,
+      rowNumber: trafficRows.length + 1,
+      severity: "warning",
+    });
+  }
+
   const contentHash = createHash("sha256")
     .update(
       JSON.stringify({
@@ -406,7 +577,14 @@ export async function fetchGa4DataApiPreview(dateRange: Ga4DateRange) {
       "screenPageViews → views",
       "engagementRate → engagementRate",
       "averageSessionDuration → averageEngagementSeconds",
-      `${result.conversionMetricName} → conversions`,
+      `${trafficResult.conversionMetricName} → conversions`,
+      ...(eventRows.length > 0
+        ? [
+            "eventName → eventName",
+            "eventCount → lineClicks / reservationClicks",
+            `${eventResult.conversionMetricName} → conversions`,
+          ]
+        : []),
     ],
     rows,
     sourceColumns: [
@@ -418,7 +596,10 @@ export async function fetchGa4DataApiPreview(dateRange: Ga4DateRange) {
       "screenPageViews",
       "engagementRate",
       "averageSessionDuration",
-      result.conversionMetricName,
+      trafficResult.conversionMetricName,
+      ...(eventRows.length > 0
+        ? ["eventName", "eventCount", eventResult.conversionMetricName]
+        : []),
     ],
     totalRowCount: rowCount,
     validRowCount: rows.length,
