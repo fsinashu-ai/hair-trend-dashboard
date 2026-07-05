@@ -7,13 +7,18 @@ const columnAliases = {
   averageEngagementSeconds: [
     "平均エンゲージメント時間",
     "ユーザーあたりの平均エンゲージメント時間",
+    "セッションあたりの平均エンゲージメント時間",
+    "アクティブ ユーザーあたりの平均エンゲージメント時間",
     "average engagement time",
     "average engagement time per session",
   ],
   channelGroup: [
     "セッションのデフォルト チャネル グループ",
+    "セッションのメインのチャネル グループ（デフォルト チャネル グループ）",
+    "ユーザーの最初のメインのチャネル グループ（デフォルト チャネル グループ）",
     "デフォルト チャネル グループ",
     "session default channel group",
+    "first user default channel group",
     "default channel group",
   ],
   conversions: ["キーイベント", "コンバージョン", "key events", "conversions"],
@@ -40,11 +45,28 @@ const columnAliases = {
   sessions: ["セッション", "sessions"],
   sourceMedium: [
     "セッションの参照元 / メディア",
+    "セッションの参照元",
+    "セッションのメディア",
+    "セッションのキャンペーン",
+    "セッションの参照元プラットフォーム",
     "参照元 / メディア",
     "session source / medium",
+    "session source",
+    "session medium",
+    "session campaign",
+    "session source platform",
     "source / medium",
   ],
-  users: ["ユーザー", "アクティブ ユーザー", "users", "active users"],
+  users: [
+    "ユーザー",
+    "アクティブ ユーザー",
+    "総ユーザー数",
+    "新規ユーザー数",
+    "users",
+    "active users",
+    "total users",
+    "new users",
+  ],
   views: ["表示回数", "閲覧数", "views", "screen page views"],
 } as const;
 
@@ -116,6 +138,15 @@ function toSafeFileName(value: string) {
   return leafName.replace(/[\u0000-\u001f<>:"|?*]/g, "_").slice(0, 200);
 }
 
+function stripGa4ExportPreamble(csvText: string) {
+  const lines = csvText.replace(/^\uFEFF/, "").split(/\r?\n/);
+  const headerIndex = lines.findIndex((line) => {
+    const trimmed = line.replace(/^\uFEFF/, "").trim();
+    return trimmed.length > 0 && !trimmed.startsWith("#");
+  });
+  return headerIndex >= 0 ? lines.slice(headerIndex).join("\n") : csvText;
+}
+
 function get(record: Record<string, string>, column: string | undefined) {
   return column ? String(record[column] ?? "").trim() : "";
 }
@@ -147,7 +178,8 @@ export function parseGa4Csv({
   fileName: string;
   includeRows?: boolean;
 }): Ga4CsvPreview {
-  const parsed = Papa.parse<Record<string, string>>(csvText.replace(/^\uFEFF/, ""), {
+  const normalizedCsvText = stripGa4ExportPreamble(csvText);
+  const parsed = Papa.parse<Record<string, string>>(normalizedCsvText, {
     header: true,
     skipEmptyLines: "greedy",
     transformHeader: (header) => header.replace(/^\uFEFF/, "").trim(),
