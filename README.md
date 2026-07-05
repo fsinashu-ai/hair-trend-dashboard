@@ -254,6 +254,9 @@ YOUTUBE_RUN_VIDEO_LIMIT=30
 X_BEARER_TOKEN=
 X_KEYWORD_LIMIT=5
 X_RUN_POST_LIMIT=20
+GA4_PROPERTY_ID=
+GOOGLE_SERVICE_ACCOUNT_EMAIL=
+GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY=
 AUTOMATION_WEBHOOK_SECRET=
 CRON_SECRET=
 APP_USER=salon
@@ -274,6 +277,9 @@ APP_PASSWORD=
 | `X_BEARER_TOKEN` | X巡回利用時は必須 | X公式APIのBearer Token。サーバー側だけで使います |
 | `X_KEYWORD_LIMIT` | 任意 | X巡回で1回に検索するキーワード数の上限。未設定時は5個、最大5個 |
 | `X_RUN_POST_LIMIT` | 任意 | X巡回1回あたりに扱う投稿候補数の上限。未設定時は20件、最大20件 |
+| `GA4_PROPERTY_ID` | GA4 API自動取得時は必須 | GA4のプロパティID。`properties/`は付けず数字だけでOK |
+| `GOOGLE_SERVICE_ACCOUNT_EMAIL` | GA4 API自動取得時は必須 | Google Cloudのサービスアカウントメール |
+| `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY` | GA4 API自動取得時は必須 | サービスアカウントJSON内の`private_key`。サーバー側だけで使います |
 | `AUTOMATION_WEBHOOK_SECRET` | Apify/n8n連携時は必須 | 外部自動化ツールからSNS投稿候補を受け取るAPIを保護する秘密文字列 |
 | `CRON_SECRET` | Vercel Cron利用時は必須 | 毎朝の自動生成APIを保護する秘密文字列 |
 | `APP_USER` | 任意 | アプリ全体のパスワード保護ユーザー名 |
@@ -281,7 +287,7 @@ APP_PASSWORD=
 
 `NEXT_PUBLIC_` で始まる値はブラウザ側にも公開されます。Supabaseのanon keyは、RLS設定やアプリ全体のパスワード保護とセットで使ってください。
 
-`SUPABASE_SERVICE_ROLE_KEY`、`GEMINI_API_KEY`、`YOUTUBE_API_KEY`、`X_BEARER_TOKEN`、`AUTOMATION_WEBHOOK_SECRET`、`APP_PASSWORD` は秘密情報です。GitHubへpushしないでください。
+`SUPABASE_SERVICE_ROLE_KEY`、`GEMINI_API_KEY`、`YOUTUBE_API_KEY`、`X_BEARER_TOKEN`、`GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY`、`AUTOMATION_WEBHOOK_SECRET`、`APP_PASSWORD` は秘密情報です。GitHubへpushしないでください。
 
 ## Supabase設定
 
@@ -447,7 +453,32 @@ GA4 CSVは、代表的な日本語・英語列名に対応しています。例:
 
 GeminiへCSV全行は送りません。アプリ側で集計した主要指標、上位ページ、LINE導線の改善候補、コンバージョン候補だけを送ります。
 
-取り込み履歴は`/seo/search-console/history`で確認できます。元データを確認なしに削除する機能はありません。
+取り込んだGA4データは`/seo/ga4`の対象データ選択で確認できます。元データを確認なしに削除する機能はありません。
+
+### GA4 Data APIで自動取得する
+
+CSVを書き出さずに取得したい場合は、Google公式のGA4 Data APIを使います。最初にGoogle CloudとGA4側の権限設定が必要です。
+
+1. Google Cloudで対象プロジェクトを開き、`Google Analytics Data API`を有効にします。
+2. `IAMと管理 > サービス アカウント`でサービスアカウントを作成します。
+3. サービスアカウントのキーをJSON形式で作成し、`client_email`と`private_key`を控えます。
+4. GA4の`管理 > プロパティのアクセス管理`で、サービスアカウントのメールを`閲覧者`または`アナリスト`として追加します。
+5. `.env.local`またはVercel環境変数へ以下を設定します。
+
+```bash
+GA4_PROPERTY_ID=123456789
+GOOGLE_SERVICE_ACCOUNT_EMAIL=your-service-account@your-project.iam.gserviceaccount.com
+GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY=your-private-key-with-escaped-newlines
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+```
+
+`GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY` はJSON内の秘密鍵を使います。改行は`\n`の形で入れると、Vercelでも扱いやすいです。
+
+手動取得する場合は、`/seo/ga4/import`を開き、対象期間を確認して`GA4 APIで取得する`を押します。取得したデータは既存のGA4 CSV取り込みと同じテーブルへ保存されるため、`/seo/ga4`と`/seo/conversions`でそのまま確認できます。
+
+Vercel Cronでは毎月2日の朝7時ごろに、前月分のGA4データを`/api/seo/ga4/fetch`で自動取得します。Cron実行には`CRON_SECRET`も必要です。
+
+GA4 Data APIで取得する初期データは、ランディングページ、参照元/メディア、チャネル、ユーザー、セッション、表示回数、エンゲージメント率、平均セッション時間、キーイベントです。まずは月次の集客把握に必要な範囲だけを取得します。
 
 ### コンバージョン分析を見る
 
@@ -804,12 +835,18 @@ Vercel Cron Jobsを使うと、毎朝自動で `/api/trends/auto-generate` を�
     {
       "path": "/api/trends/auto-generate",
       "schedule": "0 22 * * *"
+    },
+    {
+      "path": "/api/seo/ga4/fetch",
+      "schedule": "0 22 1 * *"
     }
   ]
 }
 ```
 
 Vercel CronはUTC時間で指定します。日本時間の朝7時は、UTCの前日22時なので `0 22 * * *` です。
+
+`/api/seo/ga4/fetch` は毎月1日22:00 UTC、つまり日本時間の毎月2日朝7時ごろに実行され、前月分のGA4データを取得します。
 
 Vercelの `Project Settings > Environment Variables` に以下を設定してください。
 
@@ -823,6 +860,9 @@ YOUTUBE_API_KEY=your-youtube-api-key
 YOUTUBE_DAILY_VIDEO_LIMIT=30
 YOUTUBE_KEYWORD_LIMIT=6
 YOUTUBE_RUN_VIDEO_LIMIT=30
+GA4_PROPERTY_ID=your-ga4-property-id
+GOOGLE_SERVICE_ACCOUNT_EMAIL=your-service-account-email
+GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY=your-service-account-private-key
 ```
 
 `CRON_SECRET` はAPI Routeの不正アクセス防止に使います。Cron実行時は `Authorization: Bearer CRON_SECRET` を確認します。
@@ -953,6 +993,9 @@ YOUTUBE_RUN_VIDEO_LIMIT=30
 X_BEARER_TOKEN=your-x-bearer-token
 X_KEYWORD_LIMIT=5
 X_RUN_POST_LIMIT=20
+GA4_PROPERTY_ID=your-ga4-property-id
+GOOGLE_SERVICE_ACCOUNT_EMAIL=your-service-account-email
+GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY=your-service-account-private-key
 AUTOMATION_WEBHOOK_SECRET=your-random-webhook-secret
 CRON_SECRET=your-random-cron-secret
 APP_USER=salon

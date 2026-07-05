@@ -50,6 +50,18 @@ const envItems = [
     description: "YouTube周回1回あたりに扱う候補数の上限です。未設定時は30件です。",
   },
   {
+    name: "GA4_PROPERTY_ID",
+    description: "GA4 Data APIで取得するプロパティIDです。数字だけを入れます。",
+  },
+  {
+    name: "GOOGLE_SERVICE_ACCOUNT_EMAIL",
+    description: "Google Cloudで作成したサービスアカウントのメールアドレスです。",
+  },
+  {
+    name: "GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY",
+    description: "サービスアカウントJSON内のprivate_keyです。サーバー側だけで使い、Gitへ含めません。",
+  },
+  {
     name: "X_BEARER_TOKEN",
     description:
       "X公式APIのBearer Token。X巡回を使う場合だけ設定します。Bearerという文字は付けません。",
@@ -100,6 +112,11 @@ export default function SettingsPage() {
       process.env.SUPABASE_SERVICE_ROLE_KEY,
   );
   const isYoutubeReady = Boolean(process.env.YOUTUBE_API_KEY);
+  const isGa4ApiReady = Boolean(
+    process.env.GA4_PROPERTY_ID &&
+      process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL &&
+      process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY,
+  );
   const isXReady = Boolean(process.env.X_BEARER_TOKEN);
   const isCronReady = Boolean(process.env.CRON_SECRET);
   const isAutomationReady = Boolean(process.env.AUTOMATION_WEBHOOK_SECRET);
@@ -132,6 +149,13 @@ export default function SettingsPage() {
       note: isYoutubeReady
         ? "YouTube周回で公式APIの検索結果を候補化できます。"
         : "未設定時はYouTube周回がモック候補になります。",
+    },
+    {
+      label: "GA4公式API",
+      isReady: isGa4ApiReady,
+      note: isGa4ApiReady
+        ? "GA4 CSVを書き出さずに、サーバー経由で集客データを取得できます。"
+        : "GA4 API自動取得を使う場合はGA4_PROPERTY_IDとGoogleサービスアカウントを設定してください。",
     },
     {
       label: "X公式API",
@@ -201,6 +225,9 @@ export default function SettingsPage() {
               </Badge>
               <Badge tone={isYoutubeReady ? "success" : "warning"}>
                 YouTube: {isYoutubeReady ? "設定済み" : "未設定"}
+              </Badge>
+              <Badge tone={isGa4ApiReady ? "success" : "warning"}>
+                GA4 API: {isGa4ApiReady ? "設定済み" : "未設定"}
               </Badge>
               <Badge tone={isXReady ? "success" : "warning"}>
                 X: {isXReady ? "設定済み" : "未設定"}

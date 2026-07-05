@@ -3,6 +3,10 @@
     {
       "path": "/api/trends/auto-generate",
       "schedule": "0 22 * * *"
+    },
+    {
+      "path": "/api/seo/ga4/fetch",
+      "schedule": "0 22 1 * *"
     }
   ]
 }

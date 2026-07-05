@@ -74,7 +74,8 @@ function isAuthorizedCronRequest(request: NextRequest) {
 
   return (
     request.method === "GET" &&
-    request.nextUrl.pathname === "/api/trends/auto-generate" &&
+    (request.nextUrl.pathname === "/api/trends/auto-generate" ||
+      request.nextUrl.pathname === "/api/seo/ga4/fetch") &&
     request.headers.get("authorization") === `Bearer ${cronSecret}`
   );
 }

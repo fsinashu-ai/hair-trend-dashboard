@@ -7,6 +7,15 @@ import { StatusMessage } from "@/components/ui/StatusMessage";
 import type { Ga4CsvPreview, Ga4Import } from "@/types/ga4";
 
 type StatusTone = "info" | "success" | "warning" | "error";
+type PreviewMode = "csv" | "api";
+
+type Ga4FetchResponse = {
+  duplicate?: Ga4Import;
+  error?: string;
+  item?: Ga4Import | null;
+  preview?: Ga4CsvPreview;
+  storageMode?: "supabase" | "local";
+};
 
 const today = new Date();
 const defaultMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`;
@@ -20,7 +29,9 @@ export function Ga4ImportManager() {
   const [comparisonLabel, setComparisonLabel] = useState("前月");
   const [memo, setMemo] = useState("");
   const [preview, setPreview] = useState<Ga4CsvPreview | null>(null);
+  const [previewMode, setPreviewMode] = useState<PreviewMode>("csv");
   const [isLoading, setIsLoading] = useState(false);
+  const [isApiLoading, setIsApiLoading] = useState(false);
   const [tone, setTone] = useState<StatusTone>("info");
   const [message, setMessage] = useState("GA4 CSVを選択し、対象期間を入力してください。");
 
@@ -67,6 +78,7 @@ export function Ga4ImportManager() {
       }
       if (!data.preview) throw new Error("CSVの確認結果を取得できませんでした。");
       setPreview(data.preview);
+      setPreviewMode("csv");
 
       if (action === "preview") {
         setTone(data.preview.errorCount > 0 ? "warning" : "success");
@@ -126,6 +138,100 @@ export function Ga4ImportManager() {
     }
   }
 
+  function savePreviewToLocal(previewToSave: Ga4CsvPreview) {
+    const local = readLocalGa4Dataset();
+    const duplicate = local.imports.find(
+      (item) =>
+        item.contentHash === previewToSave.contentHash &&
+        item.periodStart === periodStart &&
+        item.periodEnd === periodEnd &&
+        item.rowCount === previewToSave.validRowCount,
+    );
+
+    if (duplicate) {
+      return false;
+    }
+
+    const now = new Date().toISOString();
+    const item: Ga4Import = {
+      comparisonLabel,
+      contentHash: previewToSave.contentHash,
+      createdAt: now,
+      errorMessage: "",
+      excludedRowCount: previewToSave.excludedRowCount,
+      fileName: previewToSave.fileName,
+      id: crypto.randomUUID(),
+      memo: memo || "GA4 Data APIから取得しました。",
+      metrics: previewToSave.metrics,
+      periodEnd,
+      periodStart,
+      propertyName,
+      reportMonth: `${reportMonth}-01`,
+      rowCount: previewToSave.validRowCount,
+      status: "imported",
+      updatedAt: now,
+      warningCount: previewToSave.warningCount,
+    };
+    addLocalGa4Import(item, previewToSave.rows ?? []);
+    return true;
+  }
+
+  async function fetchFromGa4Api() {
+    setIsApiLoading(true);
+    setTone("info");
+    setMessage("GA4 Data APIからデータを取得しています。");
+
+    try {
+      const response = await fetch("/api/seo/ga4/fetch", {
+        body: JSON.stringify({
+          comparisonLabel,
+          endDate: periodEnd,
+          memo,
+          propertyName,
+          reportMonth,
+          startDate: periodStart,
+        }),
+        headers: { "Content-Type": "application/json" },
+        method: "POST",
+      });
+      const data = (await response.json()) as Ga4FetchResponse;
+
+      if (!response.ok) {
+        if (data.preview) {
+          setPreview(data.preview);
+          setPreviewMode("api");
+        }
+        throw new Error(data.error || "GA4 Data APIから取得できませんでした。");
+      }
+      if (!data.preview) throw new Error("GA4 Data APIの取得結果を確認できませんでした。");
+
+      setPreview(data.preview);
+      setPreviewMode("api");
+
+      if (data.storageMode === "local") {
+        const saved = savePreviewToLocal(data.preview);
+        setTone(saved ? "success" : "warning");
+        setMessage(
+          saved
+            ? `${data.preview.validRowCount}件をこの端末へ取り込みました。`
+            : "同じ内容・期間のGA4 APIデータが、この端末に登録済みです。既存データは変更していません。",
+        );
+      } else {
+        setTone("success");
+        setMessage(
+          `${data.preview.validRowCount}件をGA4 Data APIから取得し、Supabaseへ保存しました。`,
+        );
+      }
+
+      window.dispatchEvent(new Event("ga4-updated"));
+    } catch (error) {
+      setTone("error");
+      setMessage(error instanceof Error ? error.message : "GA4 Data APIから取得できませんでした。");
+    } finally {
+      setIsApiLoading(false);
+    }
+  }
+
   function handlePreview(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     void send("preview");
@@ -133,6 +239,66 @@ export function Ga4ImportManager() {
 
   return (
     <div className="space-y-5 pb-10">
+      <section className="rounded-lg border border-teal-200 bg-teal-50 p-4 shadow-sm sm:p-5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <p className="text-xs font-semibold text-teal-700">公式GA4 Data API</p>
+            <h2 className="mt-1 text-lg font-semibold text-teal-950">GA4 API自動取得</h2>
+            <p className="mt-2 text-sm leading-6 text-teal-900">
+              サービスアカウントを設定すると、CSVを書き出さずにランディングページと流入元の数値を取得できます。
+            </p>
+          </div>
+          <button
+            className="min-h-11 rounded-md bg-teal-700 px-4 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-60"
+            disabled={isApiLoading}
+            onClick={() => void fetchFromGa4Api()}
+            type="button"
+          >
+            {isApiLoading ? "取得中" : "GA4 APIで取得する"}
+          </button>
+        </div>
+        <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+          <label className="grid gap-2 text-sm font-medium text-teal-950 lg:col-span-2">
+            プロパティ名
+            <input
+              className="min-h-11 rounded-md border border-teal-200 bg-white px-3"
+              onChange={(event) => setPropertyName(event.target.value)}
+              value={propertyName}
+            />
+          </label>
+          <label className="grid gap-2 text-sm font-medium text-teal-950">
+            集計月
+            <input
+              className="min-h-11 rounded-md border border-teal-200 bg-white px-3"
+              onChange={(event) => setReportMonth(event.target.value)}
+              type="month"
+              value={reportMonth}
+            />
+          </label>
+          <label className="grid gap-2 text-sm font-medium text-teal-950">
+            開始日
+            <input
+              className="min-h-11 rounded-md border border-teal-200 bg-white px-3"
+              onChange={(event) => setPeriodStart(event.target.value)}
+              type="date"
+              value={periodStart}
+            />
+          </label>
+          <label className="grid gap-2 text-sm font-medium text-teal-950">
+            終了日
+            <input
+              className="min-h-11 rounded-md border border-teal-200 bg-white px-3"
+              onChange={(event) => setPeriodEnd(event.target.value)}
+              type="date"
+              value={periodEnd}
+            />
+          </label>
+        </div>
+        <p className="mt-3 text-xs leading-5 text-teal-800">
+          必要な環境変数: GA4_PROPERTY_ID、GOOGLE_SERVICE_ACCOUNT_EMAIL、GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY。Vercel Cronでは毎月2日朝7時ごろに前月分を自動取得します。
+        </p>
+      </section>
+
       <form className="rounded-lg border border-stone-200 bg-white p-4 shadow-sm sm:p-5" onSubmit={handlePreview}>
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="grid gap-2 text-sm font-medium text-stone-700 sm:col-span-2">
@@ -181,7 +347,7 @@ export function Ga4ImportManager() {
         </button>
       </form>
 
-      <StatusMessage isLoading={isLoading} tone={tone}>{message}</StatusMessage>
+      <StatusMessage isLoading={isLoading || isApiLoading} tone={tone}>{message}</StatusMessage>
 
       {preview ? (
         <section className="rounded-lg border border-teal-200 bg-white p-4 shadow-sm sm:p-5">
@@ -206,9 +372,15 @@ export function Ga4ImportManager() {
               </ul>
             </div>
           ) : null}
-          <button className="mt-5 min-h-11 w-full rounded-md bg-teal-700 px-4 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-60 sm:w-auto" disabled={isLoading || preview.validRowCount === 0} onClick={() => void send("import")} type="button">
-            {isLoading ? "取り込み中" : "この内容を取り込む"}
-          </button>
+          {previewMode === "csv" ? (
+            <button className="mt-5 min-h-11 w-full rounded-md bg-teal-700 px-4 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-60 sm:w-auto" disabled={isLoading || preview.validRowCount === 0} onClick={() => void send("import")} type="button">
+              {isLoading ? "取り込み中" : "この内容を取り込む"}
+            </button>
+          ) : (
+            <p className="mt-5 rounded-md bg-teal-50 p-3 text-sm leading-6 text-teal-800">
+              GA4 API取得データは取得時に保存済みです。GA4分析画面で集計を確認できます。
+            </p>
+          )}
         </section>
       ) : null}
     </div>
