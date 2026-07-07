@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { FinalMarketingDashboard } from "@/components/home/FinalMarketingDashboard";
 import { useMemo, useState, useSyncExternalStore } from "react";
 import { GeneratedPostCard } from "@/components/post-generator/GeneratedPostCard";
 import { PageHeader } from "@/components/sections/PageHeader";
@@ -293,6 +294,8 @@ export function HomeDashboard() {
         title="朝すぐ使えるサロンホーム"
         description="今日見る情報と、すぐ作る文章だけを前に出しました。スマホでも片手で押しやすい毎日用のホームです。"
       />
+
+      <FinalMarketingDashboard />
 
       <section className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
         <article className="rounded-lg border border-teal-200 bg-white p-4 shadow-sm sm:p-5">

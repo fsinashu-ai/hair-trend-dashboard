@@ -9,6 +9,8 @@ SNSスクレイピングは行いません。外部情報は、手動登録、�
 ## このアプリでできること
 
 - ホーム
+  - 今月のSEO状況、広告状況、ブログ状況、LINE導線をまとめて確認
+  - 未完了タスク、Geminiの総評、今日やること、今月やることを確認
   - 今日のおすすめトレンドを確認
   - 最近見たトレンドを確認
   - よく使うキーワードへすぐ移動
@@ -89,7 +91,18 @@ SNSスクレイピングは行いません。外部情報は、手動登録、�
   - CTRとCPAを自動計算
   - Google広告、Instagram広告、Meta広告の月次レポートを確認
   - Geminiで改善提案を作成し、未設定時はモック提案を表示
+  - GeminiでGoogle広告、Instagram広告、Facebook広告向けの広告案を生成
+  - 広告文、CTA、LP改善案、除外キーワード、A/Bテスト案を保存
+  - 保存した広告案を一覧表示、複製、ステータス変更、コピー
+  - Google広告APIから結果を読み取り専用で取得し、広告CSV集計と同じ形式で保存
   - 分析と提案だけを行い、広告の自動出稿や予算変更は実行しない
+
+- AI品質チェック
+  - AIが作ったブログ、広告文、レポートを公開前に確認
+  - 実在しないメニュー、価格、口コミ、過剰な効果表現を検出
+  - 医療っぽい表現、「必ず改善」「絶対綺麗」などの断定表現を検出
+  - 他記事との内容混在、店舗情報とのズレを確認
+  - Gemini設定済みなら文脈も含めて確認し、未設定でもルールベースで動作
 
 - 投稿ネタ生成
   - Instagram投稿文案
@@ -355,6 +368,8 @@ SEO・広告管理MVP用の6テーブルだけを追加する場合は、[supaba
 
 すでにSEO・広告管理MVPを作成済みで、フェーズ9の広告管理項目だけを追加する場合は、[supabase/ads-phase9-mvp.sql](</supabase/ads-phase9-mvp.sql>) をSQL Editorで実行してください。既存データは削除せず、広告グループ、想定ターゲット、月予算、表示回数、問い合わせ数、予約数などのカラムを追加します。
 
+Gemini広告案生成機能を追加する場合は、[supabase/ads-creatives-phase10.sql](</supabase/ads-creatives-phase10.sql>) をSQL Editorで実行してください。`ad_creatives` テーブルを追加し、生成した広告文、CTA、LP改善案、除外キーワード、A/Bテスト案を保存します。広告APIとの連携や予算変更は行いません。
+
 Search Console機能だけを追加する場合は、先にSEO・広告管理テーブルを作成してから [supabase/search-console-mvp.sql](</supabase/search-console-mvp.sql>) をSQL Editorで実行してください。CSV本体はStorageへ保存せず、確認済みの行データだけをテーブルへ保存します。
 
 Search Consoleのサーバー保存には、Supabase管理画面のAPI Keysで確認できるservice roleの秘密鍵を`SUPABASE_SERVICE_ROLE_KEY`として設定します。この値は強い権限を持つため、ブラウザコード、GitHub、`NEXT_PUBLIC_`環境変数へ絶対に入れないでください。未設定時は最大2,000行まで、この端末のlocalStorageで確認できます。
@@ -387,6 +402,7 @@ GA4のサーバー保存にも`SUPABASE_SERVICE_ROLE_KEY`を使います。未�
 - `/seo/reports`: SEO月次レポート
 - `/ads`: 広告管理メモ
 - `/ads/reports`: 広告月次レポート
+- `/ads/creatives`: Gemini広告案生成
 
 SEOと広告の数値は、Google Search Console、GA4、Google広告から手作業で確認した内容を整理するためのMVPです。Google API連携、広告自動運用、WordPress自動投稿は実装していません。
 
@@ -402,6 +418,19 @@ AI改善提案はGeminiを利用します。`GEMINI_API_KEY`が未設定、無�
 6. `AIで改善提案`を押すと、入力済みデータをもとにGeminiが次の確認ポイントを整理します。
 
 この機能は広告結果の整理と改善案作成だけを行います。広告の自動出稿、停止、予算変更、入札調整は行いません。
+
+### Geminiで広告案を作る
+
+1. `/ads/creatives`を開きます。
+2. 広告媒体、キャンペーン名、広告目的、対象エリア、想定ターゲット、訴求テーマ、対策キーワード、LP URL、現在の課題、希望CTAを入力します。
+3. 既に`/ads`へ広告メモを登録している場合は、広告メモから条件を読み込めます。
+4. `広告案を生成`を押すと、Geminiが広告案を作ります。
+5. `GEMINI_API_KEY`が未設定、無効、利用制限中の場合は、モック広告案で画面を確認できます。
+6. 生成結果から、Google広告見出し、説明文、Instagram本文、Facebook本文、CTA、除外キーワード、LP改善案をコピーできます。
+7. `保存`を押すと、Supabase設定済みの場合は`ad_creatives`へ保存します。未設定時や保存失敗時は、この端末のlocalStorageへ保存します。
+8. 保存した広告案は一覧から詳細表示、複製、編集、ステータス変更ができます。
+
+広告案生成機能も、広告の自動出稿、停止、予算変更、入札調整は行いません。実際に広告管理画面へ入れる前に、人が表現、LP、予算、配信設定を確認してください。
 
 ### Search Console CSVを取り込む
 
@@ -1222,3 +1251,150 @@ supabase/
 - リライト提案は必ず人が確認してからWordPressへ反映してください。
 - `GEMINI_API_KEY` が未設定の場合はモック提案で動きます。
 - 実データ保存には `SUPABASE_SERVICE_ROLE_KEY` が必要です。この値はGitHubやブラウザ側へ出さないでください。
+## Phase 11 広告CSV取り込み
+
+Google広告、Meta広告、Instagram広告などからダウンロードしたCSVを、手動で取り込めます。広告API連携、広告の自動出稿、予算変更は行いません。
+
+使い方:
+
+1. Supabase SQL Editorで [supabase/ads-csv-phase11.sql](</supabase/ads-csv-phase11.sql>) を実行します。
+2. アプリを再起動します。
+3. `/ads/import` を開きます。
+4. 広告媒体、データ種別、開始日、終了日、集計月を入力します。
+5. CSVを選び、「CSVを確認する」を押します。
+6. 先頭10件、合計広告費、表示回数、クリック数、CTR、CV、CPAを確認します。
+7. 問題なければ「この内容を取り込む」を押します。
+8. `/ads/imports` で履歴、集計、改善候補を確認します。
+
+対応CSV:
+
+- UTF-8
+- UTF-8 BOM付きCSV
+- Shift_JIS CSV
+- 最大5MB
+- 最大20,000行
+
+対応している主な列:
+
+- キャンペーン、Campaign、Campaign name
+- 広告グループ、Ad group、Ad set name
+- 広告名、Ad name
+- キーワード、Keyword
+- 検索語句、Search term
+- 表示回数、Impressions
+- クリック数、Clicks
+- CTR、クリック率
+- 費用、Cost、Amount spent、消化金額
+- コンバージョン、Conversions、CV、Results、リード
+- CPA、Cost / conv.、結果の単価
+- CPC、Avg. CPC
+- CPM
+- LP URL、Final URL、最終ページURL
+
+数値変換:
+
+- CTRは `3.5%`、`3.5`、`0.035` を内部では `0.035` として扱います。
+- 費用は `¥1,234`、`￥1,234`、`1234円`、`JPY 1,234` に対応します。
+- 数値として読めない行は、勝手に0へ変換せず警告・除外として扱います。
+
+改善候補:
+
+- 低CTR広告
+- CPAが高いキャンペーン
+- クリックはあるがCVがない広告
+- 表示回数は多いがクリックが少ない広告
+- CPCが高いキーワード
+- 除外確認候補の検索語句
+- LP改善が必要そうな広告
+- 日別で費用が急増した日
+
+注意:
+
+- 同じCSVを再取り込みしようとすると、ファイル名、期間、媒体、種別、行数、SHA-256ハッシュで重複警告を出します。
+- 既存データは自動削除・自動上書きしません。
+- CSVの内容は画面表示用に扱い、数式として実行しません。
+- Supabase未設定時は、この端末のlocalStorageに保存して動作確認できます。
+
+## Google広告API連携
+
+Google広告を出稿中の場合、Google広告APIから結果を読み取り専用で取得できます。取得したデータは `ad_csv_imports` と `ad_csv_rows` に保存され、`/ads/imports` の広告CSV集計画面で確認できます。
+
+この機能で行うこと:
+
+- Google広告APIからキャンペーン、広告グループ、広告、キーワード、検索語句、日別の実績を取得
+- 広告費、表示回数、クリック数、CTR、CV、CPC、CPAを集計
+- 既存の広告CSV集計画面へ保存
+- 重複する期間・種別・内容は保存前に警告
+
+この機能で行わないこと:
+
+- 広告の自動出稿
+- 広告の停止・開始
+- 予算変更
+- 入札単価変更
+- 除外キーワードの自動登録
+
+必要な環境変数:
+
+```env
+GOOGLE_ADS_DEVELOPER_TOKEN=
+GOOGLE_ADS_CLIENT_ID=
+GOOGLE_ADS_CLIENT_SECRET=
+GOOGLE_ADS_REFRESH_TOKEN=
+GOOGLE_ADS_CUSTOMER_ID=
+GOOGLE_ADS_LOGIN_CUSTOMER_ID=
+GOOGLE_ADS_API_VERSION=v24
+```
+
+補足:
+
+- `GOOGLE_ADS_CUSTOMER_ID` は取得したい広告アカウントのIDです。ハイフンありでも、アプリ側で数字だけに整えます。
+- `GOOGLE_ADS_LOGIN_CUSTOMER_ID` はMCC配下のアカウントを扱う場合に入れます。不要な場合は空欄で構いません。
+- `GOOGLE_ADS_API_VERSION` は省略すると `v24` を使います。
+- APIキー類は `.env.local` とVercelのEnvironment Variablesだけに設定し、GitHubへ入れないでください。
+
+使い方:
+
+1. Google CloudでOAuthクライアントを用意します。
+2. Google広告APIのDeveloper Token、OAuthのClient ID、Client Secret、Refresh Token、Customer IDを取得します。
+3. `.env.local` またはVercelのEnvironment Variablesへ上記の値を設定します。
+4. ローカルの場合は開発サーバーを再起動します。
+5. `/ads/google` を開きます。
+6. 取得種別、開始日、終了日、集計月を選びます。
+7. `Google広告APIから取得` を押します。
+8. `/ads/imports` で保存結果と集計を確認します。
+
+参考:
+
+- Google広告APIはOAuth 2.0認証とDeveloper Tokenが必要です。
+- APIの取得には `googleAds:searchStream` を使い、読み取り専用の集計データだけを保存します。
+
+## AI品質チェック
+
+AI生成文を公開・投稿・広告利用する前に、`/quality-check` で確認できます。
+
+チェックする主な項目:
+
+- 実在しないメニュー
+- 実在しない価格
+- 実在しない口コミ、施術事例
+- 過剰な効果表現
+- 医療行為のような表現
+- `必ず改善`、`絶対綺麗`、`100％効果` などの断定表現
+- 他記事、他業種、他地域との内容混在
+- `1日3組限定の完全予約制`、髪質改善・縮毛矯正特化など、店舗情報とのズレ
+
+使い方:
+
+1. `/quality-check` を開きます。
+2. 種類を `ブログ`、`広告文`、`レポート`、`その他` から選びます。
+3. AIが作った文章を貼り付けます。
+4. `公開前チェック` を押します。
+5. `修正が必要`、`確認が必要`、`大きな注意点なし` の結果を見ます。
+6. 指摘された該当箇所、理由、修正案を確認して、人が直してから公開します。
+
+補足:
+
+- `GEMINI_API_KEY` が設定済みの場合は、Geminiが文脈も含めて確認します。
+- Gemini未設定、無効、利用制限中でも、ルールベースの検出で動作します。
+- この機能は公開前チェック用です。WordPress投稿、SNS投稿、広告出稿は自動実行しません。

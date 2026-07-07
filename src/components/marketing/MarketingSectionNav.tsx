@@ -7,13 +7,18 @@ const links = [
   { href: "/seo/reports", label: "SEOレポート" },
   { href: "/seo/tasks", label: "SEOタスク" },
   { href: "/seo/search-console", label: "Search Console" },
-  { href: "/seo/search-console/import", label: "CSV取込" },
-  { href: "/seo/search-console/history", label: "取込履歴" },
+  { href: "/seo/search-console/import", label: "SC CSV取込" },
+  { href: "/seo/search-console/history", label: "SC履歴" },
   { href: "/seo/ga4", label: "GA4" },
   { href: "/seo/ga4/import", label: "GA4取込" },
   { href: "/seo/conversions", label: "CV分析" },
   { href: "/ads", label: "広告メモ" },
   { href: "/ads/reports", label: "広告レポート" },
+  { href: "/ads/creatives", label: "広告案生成" },
+  { href: "/ads/google", label: "Google広告API" },
+  { href: "/ads/import", label: "広告CSV取込" },
+  { href: "/ads/imports", label: "広告CSV集計" },
+  { href: "/quality-check", label: "AI品質チェック" },
 ];
 
 export function MarketingSectionNav({ activeHref }: { activeHref: string }) {

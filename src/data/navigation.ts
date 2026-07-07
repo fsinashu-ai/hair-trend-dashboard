@@ -13,5 +13,6 @@ export const navigationItems: NavigationItem[] = [
   { label: "キーワード管理", shortLabel: "キーワード", href: "/keywords" },
   { label: "投稿ネタ生成", shortLabel: "投稿生成", href: "/post-generator" },
   { label: "画像分析", shortLabel: "画像", href: "/image-analysis" },
+  { label: "AI品質チェック", shortLabel: "AI確認", href: "/quality-check" },
   { label: "設定", shortLabel: "設定", href: "/settings" },
 ];
