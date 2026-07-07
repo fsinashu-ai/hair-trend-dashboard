@@ -48,9 +48,15 @@ export type SeoReport = {
 
 export type AdCampaignNote = {
   id: string;
+  adGroupName: string;
+  creativeMemo: string;
+  dailyBudget: number;
+  monthlyBudget: number;
   campaignName: string;
   platform: string;
   purpose: string;
+  status: string;
+  targetAudience: string;
   targetArea: string;
   budgetMemo: string;
   offer: string;
@@ -63,10 +69,20 @@ export type AdReport = {
   reportMonth: string;
   platform: string;
   campaignName: string;
+  adGroupName: string;
   cost: number;
+  impressions: number;
   clicks: number;
+  ctr: number;
+  inquiries: number;
+  reservations: number;
   conversions: number;
   cpa: number;
+  targetArea: string;
+  targetAudience: string;
+  landingPageUrl: string;
+  offer: string;
+  status: string;
   aiAnalysis: string;
   nextActions: string[];
 };

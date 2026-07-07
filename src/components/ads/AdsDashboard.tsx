@@ -14,13 +14,19 @@ const storageEventName = "hair-trend-ad-campaign-notes-change";
 const defaultCampaignSnapshot = JSON.stringify(dummyAdCampaignNotes);
 
 const emptyCampaign: Omit<AdCampaignNote, "id"> = {
+  adGroupName: "",
   budgetMemo: "",
   campaignName: "",
+  creativeMemo: "",
+  dailyBudget: 0,
   landingPageUrl: "",
   memo: "",
+  monthlyBudget: 0,
   offer: "",
   platform: "Google広告",
   purpose: "",
+  status: "検討中",
+  targetAudience: "",
   targetArea: "松江市と周辺地域",
 };
 
@@ -45,6 +51,18 @@ function subscribeToCampaigns(onStoreChange: () => void) {
     window.removeEventListener("storage", onStoreChange);
     window.removeEventListener(storageEventName, onStoreChange);
   };
+}
+
+function formatCurrency(value: number) {
+  return new Intl.NumberFormat("ja-JP", {
+    currency: "JPY",
+    maximumFractionDigits: 0,
+    style: "currency",
+  }).format(value);
+}
+
+function toNumber(value: string) {
+  return Number.isFinite(Number(value)) ? Number(value) : 0;
 }
 
 export function AdsDashboard() {
@@ -117,6 +135,7 @@ export function AdsDashboard() {
             >
               <option>Google広告</option>
               <option>Instagram広告</option>
+              <option>Meta広告</option>
               <option>その他</option>
             </select>
           </label>
@@ -135,6 +154,20 @@ export function AdsDashboard() {
             />
           </label>
           <label className="grid gap-2 text-sm font-semibold text-stone-700">
+            広告グループ
+            <input
+              className="min-h-11 rounded-md border border-stone-300 px-3 font-normal"
+              onChange={(event) =>
+                setDraft((current) => ({
+                  ...current,
+                  adGroupName: event.target.value,
+                }))
+              }
+              placeholder="例：髪質改善・縮毛矯正"
+              value={draft.adGroupName}
+            />
+          </label>
+          <label className="grid gap-2 text-sm font-semibold text-stone-700">
             目的
             <input
               className="min-h-11 rounded-md border border-stone-300 px-3 font-normal"
@@ -146,6 +179,21 @@ export function AdsDashboard() {
             />
           </label>
           <label className="grid gap-2 text-sm font-semibold text-stone-700">
+            ステータス
+            <select
+              className="min-h-11 rounded-md border border-stone-300 bg-white px-3 font-normal"
+              onChange={(event) =>
+                setDraft((current) => ({ ...current, status: event.target.value }))
+              }
+              value={draft.status}
+            >
+              <option>検討中</option>
+              <option>配信中</option>
+              <option>停止中</option>
+              <option>終了</option>
+            </select>
+          </label>
+          <label className="grid gap-2 text-sm font-semibold text-stone-700">
             対象エリア
             <input
               className="min-h-11 rounded-md border border-stone-300 px-3 font-normal"
@@ -153,6 +201,52 @@ export function AdsDashboard() {
                 setDraft((current) => ({ ...current, targetArea: event.target.value }))
               }
               value={draft.targetArea}
+            />
+          </label>
+          <label className="grid gap-2 text-sm font-semibold text-stone-700">
+            想定ターゲット
+            <input
+              className="min-h-11 rounded-md border border-stone-300 px-3 font-normal"
+              onChange={(event) =>
+                setDraft((current) => ({
+                  ...current,
+                  targetAudience: event.target.value,
+                }))
+              }
+              placeholder="例：40代以降のくせ毛・広がりに悩む女性"
+              value={draft.targetAudience}
+            />
+          </label>
+          <label className="grid gap-2 text-sm font-semibold text-stone-700">
+            月予算
+            <input
+              className="min-h-11 rounded-md border border-stone-300 px-3 font-normal"
+              min="0"
+              onChange={(event) =>
+                setDraft((current) => ({
+                  ...current,
+                  monthlyBudget: toNumber(event.target.value),
+                }))
+              }
+              placeholder="30000"
+              type="number"
+              value={draft.monthlyBudget || ""}
+            />
+          </label>
+          <label className="grid gap-2 text-sm font-semibold text-stone-700">
+            日予算
+            <input
+              className="min-h-11 rounded-md border border-stone-300 px-3 font-normal"
+              min="0"
+              onChange={(event) =>
+                setDraft((current) => ({
+                  ...current,
+                  dailyBudget: toNumber(event.target.value),
+                }))
+              }
+              placeholder="1000"
+              type="number"
+              value={draft.dailyBudget || ""}
             />
           </label>
           <label className="grid gap-2 text-sm font-semibold text-stone-700">
@@ -193,6 +287,20 @@ export function AdsDashboard() {
             />
           </label>
           <label className="grid gap-2 text-sm font-semibold text-stone-700 sm:col-span-2">
+            訴求・クリエイティブメモ
+            <input
+              className="min-h-11 rounded-md border border-stone-300 px-3 font-normal"
+              onChange={(event) =>
+                setDraft((current) => ({
+                  ...current,
+                  creativeMemo: event.target.value,
+                }))
+              }
+              placeholder="例：Before/Afterは許可済み素材のみ。断定表現を避ける"
+              value={draft.creativeMemo}
+            />
+          </label>
+          <label className="grid gap-2 text-sm font-semibold text-stone-700 sm:col-span-2">
             メモ
             <textarea
               className="min-h-24 rounded-md border border-stone-300 p-3 font-normal"
@@ -224,49 +332,80 @@ export function AdsDashboard() {
         ) : (
           <div className="grid gap-4 xl:grid-cols-2">
             {campaigns.map((campaign) => (
-            <article
-              className="rounded-lg border border-stone-200 bg-white p-5 shadow-sm"
-              key={campaign.id}
-            >
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <Badge tone="info">{campaign.platform}</Badge>
-                  <h3 className="mt-3 text-lg font-semibold text-stone-950">
-                    {campaign.campaignName}
-                  </h3>
+              <article
+                className="rounded-lg border border-stone-200 bg-white p-5 shadow-sm"
+                key={campaign.id}
+              >
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <div className="flex flex-wrap gap-2">
+                      <Badge tone="info">{campaign.platform}</Badge>
+                      <Badge tone="neutral">{campaign.status || "検討中"}</Badge>
+                    </div>
+                    <h3 className="mt-3 text-lg font-semibold text-stone-950">
+                      {campaign.campaignName}
+                    </h3>
+                    {campaign.adGroupName ? (
+                      <p className="mt-1 text-sm text-stone-500">
+                        {campaign.adGroupName}
+                      </p>
+                    ) : null}
+                  </div>
+                  <button
+                    className="min-h-10 rounded-md border border-rose-200 px-3 text-sm font-semibold text-rose-700"
+                    onClick={() => handleDelete(campaign.id)}
+                    type="button"
+                  >
+                    削除
+                  </button>
                 </div>
-                <button
-                  className="min-h-10 px-2 text-sm font-semibold text-rose-700"
-                  onClick={() => handleDelete(campaign.id)}
-                  type="button"
-                >
-                  削除
-                </button>
-              </div>
-              <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
-                <div>
-                  <dt className="font-semibold text-stone-700">目的</dt>
-                  <dd className="mt-1 text-stone-600">{campaign.purpose}</dd>
+                <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
+                  <div>
+                    <dt className="font-semibold text-stone-700">目的</dt>
+                    <dd className="mt-1 text-stone-600">{campaign.purpose}</dd>
+                  </div>
+                  <div>
+                    <dt className="font-semibold text-stone-700">対象エリア</dt>
+                    <dd className="mt-1 text-stone-600">{campaign.targetArea}</dd>
+                  </div>
+                  <div>
+                    <dt className="font-semibold text-stone-700">想定ターゲット</dt>
+                    <dd className="mt-1 text-stone-600">
+                      {campaign.targetAudience || "未入力"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="font-semibold text-stone-700">予算</dt>
+                    <dd className="mt-1 text-stone-600">
+                      月 {formatCurrency(campaign.monthlyBudget || 0)} / 日{" "}
+                      {formatCurrency(campaign.dailyBudget || 0)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="font-semibold text-stone-700">予算メモ</dt>
+                    <dd className="mt-1 text-stone-600">
+                      {campaign.budgetMemo || "未入力"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="font-semibold text-stone-700">LP URL</dt>
+                    <dd className="mt-1 break-all text-stone-600">
+                      {campaign.landingPageUrl || "未入力"}
+                    </dd>
+                  </div>
+                </dl>
+                <div className="mt-4 space-y-2 border-t border-stone-100 pt-4 text-sm leading-6 text-stone-600">
+                  <p>
+                    <span className="font-semibold text-stone-700">提案内容: </span>
+                    {campaign.offer || "未入力"}
+                  </p>
+                  <p>
+                    <span className="font-semibold text-stone-700">訴求メモ: </span>
+                    {campaign.creativeMemo || "未入力"}
+                  </p>
+                  <p>{campaign.memo || "メモはまだありません。"}</p>
                 </div>
-                <div>
-                  <dt className="font-semibold text-stone-700">対象エリア</dt>
-                  <dd className="mt-1 text-stone-600">{campaign.targetArea}</dd>
-                </div>
-                <div>
-                  <dt className="font-semibold text-stone-700">予算メモ</dt>
-                  <dd className="mt-1 text-stone-600">{campaign.budgetMemo || "未入力"}</dd>
-                </div>
-                <div>
-                  <dt className="font-semibold text-stone-700">LP URL</dt>
-                  <dd className="mt-1 break-all text-stone-600">
-                    {campaign.landingPageUrl || "未入力"}
-                  </dd>
-                </div>
-              </dl>
-              <p className="mt-4 border-t border-stone-100 pt-4 text-sm leading-6 text-stone-600">
-                {campaign.memo || campaign.offer || "メモはまだありません。"}
-              </p>
-            </article>
+              </article>
             ))}
           </div>
         )}

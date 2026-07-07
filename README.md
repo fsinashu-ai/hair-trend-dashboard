@@ -83,9 +83,12 @@ SNSスクレイピングは行いません。外部情報は、手動登録、�
   - 成果が多いページ・流入元、アクセスはあるのに成果が少ない改善候補を確認
 
 - 広告管理
-  - 広告媒体、キャンペーン名、目的、対象エリア、予算、LPをメモ
+  - 広告媒体、キャンペーン名、広告グループ、目的、対象エリア、想定ターゲット、予算、LPをメモ
   - 広告メモをブラウザのlocalStorageへ保存
-  - 広告レポートをダミーデータで確認
+  - 広告費、表示回数、クリック数、問い合わせ数、予約数を手入力
+  - CTRとCPAを自動計算
+  - Google広告、Instagram広告、Meta広告の月次レポートを確認
+  - Geminiで改善提案を作成し、未設定時はモック提案を表示
   - 分析と提案だけを行い、広告の自動出稿や予算変更は実行しない
 
 - 投稿ネタ生成
@@ -350,6 +353,8 @@ SNS受信箱を追加した後は、最新の [supabase/schema.sql](</supabase/s
 
 SEO・広告管理MVP用の6テーブルだけを追加する場合は、[supabase/seo-ads-mvp.sql](</supabase/seo-ads-mvp.sql>) をSQL Editorで実行してください。最新の [supabase/schema.sql](</supabase/schema.sql>) にも同じ定義が含まれています。
 
+すでにSEO・広告管理MVPを作成済みで、フェーズ9の広告管理項目だけを追加する場合は、[supabase/ads-phase9-mvp.sql](</supabase/ads-phase9-mvp.sql>) をSQL Editorで実行してください。既存データは削除せず、広告グループ、想定ターゲット、月予算、表示回数、問い合わせ数、予約数などのカラムを追加します。
+
 Search Console機能だけを追加する場合は、先にSEO・広告管理テーブルを作成してから [supabase/search-console-mvp.sql](</supabase/search-console-mvp.sql>) をSQL Editorで実行してください。CSV本体はStorageへ保存せず、確認済みの行データだけをテーブルへ保存します。
 
 Search Consoleのサーバー保存には、Supabase管理画面のAPI Keysで確認できるservice roleの秘密鍵を`SUPABASE_SERVICE_ROLE_KEY`として設定します。この値は強い権限を持つため、ブラウザコード、GitHub、`NEXT_PUBLIC_`環境変数へ絶対に入れないでください。未設定時は最大2,000行まで、この端末のlocalStorageで確認できます。
@@ -386,6 +391,17 @@ GA4のサーバー保存にも`SUPABASE_SERVICE_ROLE_KEY`を使います。未�
 SEOと広告の数値は、Google Search Console、GA4、Google広告から手作業で確認した内容を整理するためのMVPです。Google API連携、広告自動運用、WordPress自動投稿は実装していません。
 
 AI改善提案はGeminiを利用します。`GEMINI_API_KEY`が未設定、無効、利用制限中の場合も画面を止めずモック文を表示します。
+
+### 広告管理MVPを使う
+
+1. `/ads`を開き、検討中の広告キャンペーンを登録します。
+2. 広告媒体、キャンペーン名、広告グループ、目的、対象エリア、想定ターゲット、月予算、日予算、LP URL、訴求内容を入力します。
+3. `/ads/reports`を開き、Google広告やMeta広告の管理画面で確認した月次数字を手入力します。
+4. 入力する数字は、広告費、表示回数、クリック数、問い合わせ数、予約数です。
+5. CTRとCPAはアプリ側で自動計算されます。
+6. `AIで改善提案`を押すと、入力済みデータをもとにGeminiが次の確認ポイントを整理します。
+
+この機能は広告結果の整理と改善案作成だけを行います。広告の自動出稿、停止、予算変更、入札調整は行いません。
 
 ### Search Console CSVを取り込む
 

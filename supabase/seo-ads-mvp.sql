@@ -76,15 +76,24 @@ create table if not exists public.seo_tasks (
 create table if not exists public.ad_campaign_notes (
   id uuid primary key default gen_random_uuid(),
   campaign_name text not null,
+  ad_group_name text not null default '',
   platform text not null,
   purpose text not null default '',
+  status text not null default 'planning',
   target_area text not null default '',
+  target_audience text not null default '',
+  monthly_budget numeric(12, 2) not null default 0,
+  daily_budget numeric(12, 2) not null default 0,
   budget_memo text not null default '',
   offer text not null default '',
+  creative_memo text not null default '',
   landing_page_url text not null default '',
   memo text not null default '',
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+  updated_at timestamptz not null default now(),
+  constraint ad_campaign_notes_budget_check check (
+    monthly_budget >= 0 and daily_budget >= 0
+  )
 );
 
 create table if not exists public.ad_reports (
@@ -92,16 +101,33 @@ create table if not exists public.ad_reports (
   report_month date not null,
   platform text not null,
   campaign_name text not null,
+  ad_group_name text not null default '',
   cost numeric(12, 2) not null default 0,
+  impressions bigint not null default 0,
   clicks bigint not null default 0,
+  ctr numeric(7, 4) not null default 0,
+  inquiries bigint not null default 0,
+  reservations bigint not null default 0,
   conversions bigint not null default 0,
   cpa numeric(12, 2) not null default 0,
+  target_area text not null default '',
+  target_audience text not null default '',
+  landing_page_url text not null default '',
+  offer text not null default '',
+  status text not null default 'reviewing',
   ai_analysis text not null default '',
   next_actions text[] not null default '{}',
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   constraint ad_reports_metrics_check check (
-    cost >= 0 and clicks >= 0 and conversions >= 0 and cpa >= 0
+    cost >= 0
+    and impressions >= 0
+    and clicks >= 0
+    and ctr >= 0
+    and inquiries >= 0
+    and reservations >= 0
+    and conversions >= 0
+    and cpa >= 0
   )
 );
 
@@ -117,8 +143,12 @@ create index if not exists seo_tasks_status_due_date_idx
 on public.seo_tasks (status, due_date);
 create index if not exists ad_campaign_notes_platform_idx
 on public.ad_campaign_notes (platform);
+create index if not exists ad_campaign_notes_status_idx
+on public.ad_campaign_notes (status);
 create index if not exists ad_reports_month_platform_idx
 on public.ad_reports (report_month desc, platform);
+create index if not exists ad_reports_status_idx
+on public.ad_reports (status);
 
 drop trigger if exists set_seo_keywords_updated_at on public.seo_keywords;
 create trigger set_seo_keywords_updated_at
