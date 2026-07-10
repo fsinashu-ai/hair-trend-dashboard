@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { DataScopePanel } from "@/components/marketing/DataScopePanel";
 import { Badge } from "@/components/ui/Badge";
 import { StatusMessage } from "@/components/ui/StatusMessage";
 import {
@@ -20,6 +21,25 @@ import type { AdCampaignNote } from "@/types/seoAds";
 const emptyDataset: AdCsvDataset = { imports: [], rowsByImport: {} };
 const campaignStorageKey = "hair-trend-ad-campaign-notes";
 const creativeStorageKey = "hair-trend-ad-creatives";
+
+const importTypeLabels: Record<AdCsvDataset["imports"][number]["importType"], string> = {
+  ad: "広告",
+  ad_group: "広告グループ",
+  campaign: "キャンペーン",
+  daily: "日別",
+  keyword: "キーワード",
+  search_term: "検索語句",
+  unknown: "媒体不明",
+};
+
+const platformLabels = {
+  facebook: "Facebook広告",
+  google: "Google広告",
+  instagram: "Instagram広告",
+  line: "LINE広告",
+  meta: "Meta広告",
+  other: "その他",
+} as const;
 
 function getStorageSnapshot(key: string) {
   if (typeof window === "undefined") return "[]";
@@ -159,6 +179,19 @@ export function AdCsvDashboard() {
     );
   }
 
+  const isGoogleAdsApiImport = selectedImport.fileName.startsWith("google-ads-api-");
+  const sourceKind =
+    isGoogleAdsApiImport
+      ? "api"
+      : storageMode === "local"
+        ? "local"
+        : storageMode === "supabase"
+          ? "csv"
+          : "sample";
+  const sourceLabel = isGoogleAdsApiImport
+    ? "Google Ads API（読み取り専用）"
+    : `${platformLabels[selectedImport.platform]} CSV / ${selectedImport.fileName}`;
+
   return (
     <div className="space-y-6 pb-10">
       <div className="flex flex-col gap-3 rounded-lg border border-stone-200 bg-white p-4 shadow-sm sm:flex-row sm:items-end sm:justify-between">
@@ -183,6 +216,24 @@ export function AdCsvDashboard() {
           CSVを取り込む
         </Link>
       </div>
+
+      <DataScopePanel
+        collected={[
+          `${importTypeLabels[selectedImport.importType]}別の広告費・表示回数・クリック数・CTR・コンバージョン・CPC・CPA`,
+          "前回取り込み期間との比較と、しきい値に基づく改善候補",
+          "キャンペーン名の完全一致による広告メモ・広告案との関連候補",
+        ]}
+        description="この集計は、選択した広告データだけを対象にしています。複数の媒体や期間の数値を合算した画面ではありません。"
+        limitations={[
+          "Google広告APIは読み取り専用です。配信開始・停止・予算変更・除外キーワード登録は行いません。",
+          "Meta・Instagram広告は現時点ではCSV取り込みが必要です。公式APIからの自動取得は行いません。",
+          "LP URL・デバイス・地域などは、CSVに含まれるか、Google広告APIで取得できる項目だけが表示されます。",
+        ]}
+        period={`${selectedImport.periodStart}〜${selectedImport.periodEnd}`}
+        sourceKind={sourceKind}
+        sourceLabel={sourceLabel}
+        updatedAt={selectedImport.updatedAt}
+      />
 
       <StatusMessage isLoading={isLoading} tone={storageMode === "supabase" ? "info" : "warning"}>{message}</StatusMessage>
 

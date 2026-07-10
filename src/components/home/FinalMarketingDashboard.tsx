@@ -27,6 +27,16 @@ function formatCpa(value: number) {
   return value > 0 ? formatYen(value) : "算出不可";
 }
 
+function formatDateTime(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "未取得";
+
+  return new Intl.DateTimeFormat("ja-JP", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date);
+}
+
 function sourceModeLabel(
   sourceMode: FinalMarketingDashboardSummary["sourceMode"],
 ) {
@@ -69,21 +79,26 @@ function MetricCard({
   helper,
   href,
   label,
+  sourceLabel,
   value,
 }: {
   helper: string;
   href: string;
   label: string;
+  sourceLabel: string;
   value: string;
 }) {
   return (
     <Link
-      className="rounded-lg border border-stone-200 bg-white p-4 shadow-sm transition hover:border-teal-200 hover:bg-teal-50"
+      className="min-w-0 rounded-lg border border-stone-200 bg-white p-4 shadow-sm transition hover:border-teal-200 hover:bg-teal-50"
       href={href}
     >
-      <p className="text-sm font-semibold text-stone-600">{label}</p>
+      <p className="break-words text-sm font-semibold text-stone-600">{label}</p>
       <p className="mt-2 text-2xl font-semibold text-stone-950">{value}</p>
       <p className="mt-2 text-xs leading-5 text-stone-500">{helper}</p>
+      <p className="mt-2 break-words border-t border-stone-100 pt-2 text-xs leading-5 text-stone-500">
+        データ元: {sourceLabel}
+      </p>
     </Link>
   );
 }
@@ -128,8 +143,8 @@ function SkeletonDashboard() {
   return (
     <section className="rounded-lg border border-stone-200 bg-white p-4 shadow-sm sm:p-5">
       <div className="h-5 w-48 animate-pulse rounded bg-stone-100" />
-      <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {Array.from({ length: 4 }).map((_, index) => (
+      <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        {Array.from({ length: 5 }).map((_, index) => (
           <div
             className="h-28 animate-pulse rounded-lg bg-stone-100"
             key={index}
@@ -193,25 +208,36 @@ export function FinalMarketingDashboard() {
         helper: `${summary.seo.impressions.toLocaleString("ja-JP")}表示 / CTR ${formatPercent(summary.seo.ctr)} / 平均順位 ${summary.seo.averagePosition.toFixed(1)}`,
         href: "/seo/search-console",
         label: "今月のSEO状況",
+        sourceLabel: summary.seo.sourceLabel,
         value: `${formatNumber(summary.seo.clicks)}クリック`,
       },
       {
         helper: `${formatNumber(summary.ad.clicks)}クリック / CTR ${formatPercent(summary.ad.ctr)} / CPA ${formatCpa(summary.ad.cpa)}`,
         href: "/ads/imports",
         label: "広告状況",
+        sourceLabel: summary.ad.sourceLabel,
         value: formatYen(summary.ad.cost),
       },
       {
         helper: `下書き ${summary.blog.draftCount} / 公開 ${summary.blog.publishedCount}`,
         href: "/blog",
         label: "ブログ状況",
+        sourceLabel: summary.sourceMode === "sample" ? "サンプルブログ" : "保存済みブログ記事",
         value: `${formatNumber(summary.blog.totalCount)}記事`,
       },
       {
         helper: `予約クリック ${formatNumber(summary.line.reservationClicks)} / キーイベント ${formatNumber(summary.line.conversions)}`,
         href: "/seo/ga4",
         label: "LINE導線",
+        sourceLabel: summary.line.sourceLabel,
         value: `${formatNumber(summary.line.lineClicks)} LINEクリック`,
+      },
+      {
+        helper: `高優先 ${summary.pageIntegration.highPriorityPages}件 / 3媒体一致 ${summary.pageIntegration.pagesWithAllSources}件`,
+        href: "/seo/integrated",
+        label: "ページ統合分析",
+        sourceLabel: summary.pageIntegration.sourceLabel,
+        value: `${formatNumber(summary.pageIntegration.pageCount)}ページ`,
       },
     ];
   }, [summary]);
@@ -240,13 +266,14 @@ export function FinalMarketingDashboard() {
 
       {summary ? (
         <>
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
             {metrics.map((metric) => (
               <MetricCard
                 helper={metric.helper}
                 href={metric.href}
                 key={metric.label}
                 label={metric.label}
+                sourceLabel={metric.sourceLabel}
                 value={metric.value}
               />
             ))}
@@ -262,13 +289,17 @@ export function FinalMarketingDashboard() {
                 {summary.geminiReview}
               </p>
               <div className="mt-4 grid gap-2 text-xs text-stone-500 sm:grid-cols-2">
-                <p>SEO: {summary.seo.sourceLabel}</p>
-                <p>広告: {summary.ad.sourceLabel}</p>
-                <p>LINE: {summary.line.sourceLabel}</p>
-                <p>
+                <p className="break-words">SEO: {summary.seo.sourceLabel}</p>
+                <p className="break-words">広告: {summary.ad.sourceLabel}</p>
+                <p className="break-words">LINE: {summary.line.sourceLabel}</p>
+                <p className="break-words">統合: {summary.pageIntegration.sourceLabel}</p>
+                <p className="break-words">
                   最新ブログ: {summary.blog.latestTitle || "未登録"}
                 </p>
               </div>
+              <p className="mt-3 text-xs text-stone-500">
+                画面を集計した時刻: {formatDateTime(summary.generatedAt)}
+              </p>
             </section>
 
             <section className="rounded-lg border border-stone-200 bg-white p-4">
@@ -286,6 +317,32 @@ export function FinalMarketingDashboard() {
               </div>
             </section>
           </div>
+
+          <section className="rounded-lg border border-stone-200 bg-white p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h3 className="font-semibold text-stone-950">ページ統合分析</h3>
+                <p className="mt-1 text-sm leading-6 text-stone-600">
+                  検索流入、サイト内行動、広告結果をページ単位で照合し、改善の優先順位を確認します。
+                </p>
+              </div>
+              <Badge
+                tone={summary.pageIntegration.highPriorityPages ? "danger" : "info"}
+              >
+                高優先 {summary.pageIntegration.highPriorityPages}件
+              </Badge>
+            </div>
+            <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-sm text-stone-600">
+              <span>対象 {formatNumber(summary.pageIntegration.pageCount)}ページ</span>
+              <span>3媒体のデータが揃うページ {formatNumber(summary.pageIntegration.pagesWithAllSources)}件</span>
+            </div>
+            <Link
+              className="mt-4 inline-flex min-h-11 items-center rounded-md border border-teal-200 px-4 py-2 text-sm font-semibold text-teal-800 hover:bg-teal-50"
+              href="/seo/integrated"
+            >
+              ページ別に確認
+            </Link>
+          </section>
 
           <div className="grid gap-5 xl:grid-cols-2">
             <section className="rounded-lg border border-stone-200 bg-white p-4">
@@ -309,7 +366,7 @@ export function FinalMarketingDashboard() {
             </section>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <Link
               className="min-h-11 rounded-md bg-teal-700 px-4 py-3 text-center text-sm font-semibold text-white hover:bg-teal-800"
               href="/seo/search-console"
@@ -321,6 +378,12 @@ export function FinalMarketingDashboard() {
               href="/ads/imports"
             >
               広告集計を見る
+            </Link>
+            <Link
+              className="min-h-11 rounded-md border border-teal-200 bg-white px-4 py-3 text-center text-sm font-semibold text-teal-800 hover:bg-teal-50"
+              href="/seo/integrated"
+            >
+              ページ統合分析
             </Link>
             <Link
               className="min-h-11 rounded-md border border-stone-300 bg-white px-4 py-3 text-center text-sm font-semibold text-stone-800 hover:bg-stone-50"

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { DataScopePanel } from "@/components/marketing/DataScopePanel";
 import { Badge } from "@/components/ui/Badge";
 import { StatusMessage } from "@/components/ui/StatusMessage";
 import {
@@ -162,6 +163,20 @@ export function SearchConsoleDashboard({ initialImportId }: SearchConsoleDashboa
     return <StatusMessage tone="warning">CSV取り込み画面からSearch Consoleデータを登録してください。</StatusMessage>;
   }
 
+  const importTypeLabel = {
+    query: "検索クエリ",
+    page: "ページ",
+    device: "デバイス",
+    country: "国",
+    date: "日別",
+  }[selectedImport.importType];
+  const sourceKind =
+    storageMode === "supabase"
+      ? "csv"
+      : storageMode === "local"
+        ? "local"
+        : "sample";
+
   const candidateRows = [
     ...basic.zeroClickHighImpressions,
     ...basic.highImpressionsLowCtr,
@@ -190,6 +205,24 @@ export function SearchConsoleDashboard({ initialImportId }: SearchConsoleDashboa
           CSVを取り込む
         </Link>
       </div>
+
+      <DataScopePanel
+        collected={[
+          `取り込んだ${importTypeLabel}ごとのクリック数・表示回数・CTR・平均掲載順位`,
+          "期間比較と、しきい値に基づく改善候補",
+          "Gemini分析を実行した場合は、集計値と改善候補のみ",
+        ]}
+        description="この分析は、選択したSearch Console CSVだけを対象にしています。データの期間と種類を確認してから、数値を判断してください。"
+        limitations={[
+          "Search Console APIとの直接連携はこの画面では行いません。CSVで取り込んだデータだけを使います。",
+          "取り込んでいない検索クエリ・ページ・デバイス・国の情報は、この結果には含まれません。",
+          "GeminiへCSVの全行は送信しません。アプリで集計した値と候補だけを送ります。",
+        ]}
+        period={`${selectedImport.periodStart}〜${selectedImport.periodEnd}`}
+        sourceKind={sourceKind}
+        sourceLabel={`${importTypeLabel} CSV / ${selectedImport.fileName}`}
+        updatedAt={selectedImport.updatedAt}
+      />
 
       <StatusMessage isLoading={isLoading} tone={storageMode === "demo" ? "warning" : "info"}>{message}</StatusMessage>
 

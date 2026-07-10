@@ -1,5 +1,6 @@
 import { fetchAdCsvImports } from "@/lib/supabase/adCsv.server";
 import { fetchAdCreatives } from "@/lib/supabase/adCreatives.server";
+import { createPageIntegrationSummary } from "@/lib/dashboard/pageIntegration.server";
 import { fetchGa4Analyses, fetchGa4Imports } from "@/lib/supabase/ga4.server";
 import {
   fetchSearchConsoleAnalyses,
@@ -23,6 +24,7 @@ import type {
   DashboardTaskItem,
   FinalMarketingDashboardSummary,
 } from "@/types/marketingDashboard";
+import type { PageIntegrationSummary } from "@/types/pageIntegration";
 import type { SeoPriority, SeoTask } from "@/types/seoAds";
 
 type BlogStatusCounts = {
@@ -143,14 +145,21 @@ async function safe<T>(fallback: T, callback: () => Promise<T>) {
 
 export async function createFinalMarketingDashboardSummary(): Promise<FinalMarketingDashboardSummary> {
   const usesSupabase = isServerSupabaseConfigured();
-  const [searchConsoleImports, ga4Imports, adImports, seoTasks, blogCounts] =
-    await Promise.all([
-      safe(null, () => fetchSearchConsoleImports(2)),
-      safe(null, () => fetchGa4Imports(2)),
-      safe(null, () => fetchAdCsvImports(2)),
-      safe(null, () => fetchSeoTasks()),
-      safe(null, () => fetchBlogStatusCounts()),
-    ]);
+  const [
+    searchConsoleImports,
+    ga4Imports,
+    adImports,
+    seoTasks,
+    blogCounts,
+    pageIntegration,
+  ] = await Promise.all([
+    safe(null, () => fetchSearchConsoleImports(2)),
+    safe(null, () => fetchGa4Imports(2)),
+    safe(null, () => fetchAdCsvImports(2)),
+    safe(null, () => fetchSeoTasks()),
+    safe(null, () => fetchBlogStatusCounts()),
+    safe<PageIntegrationSummary | null>(null, () => createPageIntegrationSummary()),
+  ]);
 
   const latestSearchConsole = searchConsoleImports?.[0];
   const latestGa4 = ga4Imports?.[0];
@@ -228,7 +237,41 @@ export async function createFinalMarketingDashboardSummary(): Promise<FinalMarke
             source: "広告案",
           },
         ];
-  const unfinishedTasks = uniqueTasks([...taskItems, ...analysisTasks, ...adAction]);
+  const pageIntegrationCard = {
+    highPriorityPages:
+      pageIntegration?.rows.filter((row) => row.priority === "high").length ?? 0,
+    pageCount: pageIntegration?.rows.length ?? 0,
+    pagesWithAllSources:
+      pageIntegration?.rows.filter(
+        (row) => Boolean(row.searchConsole && row.ga4 && row.ads),
+      ).length ?? 0,
+    sourceLabel:
+      [
+        pageIntegration?.sources.searchConsole,
+        pageIntegration?.sources.ga4,
+        pageIntegration?.sources.ads,
+      ]
+        .filter((source): source is NonNullable<typeof source> => Boolean(source))
+        .map((source) => `${source.label} / ${source.period}`)
+        .join(" / ") || "未取り込み・データ待ち",
+  };
+  const pageIntegrationActions: DashboardTaskItem[] =
+    pageIntegrationCard.highPriorityPages > 0
+      ? [
+          {
+            href: "/seo/integrated",
+            label: `高優先のページ統合候補を確認する（${pageIntegrationCard.highPriorityPages}件）`,
+            priority: "high",
+            source: "ページ統合",
+          },
+        ]
+      : [];
+  const unfinishedTasks = uniqueTasks([
+    ...taskItems,
+    ...analysisTasks,
+    ...adAction,
+    ...pageIntegrationActions,
+  ]);
   const todayActions = uniqueTasks([
     ...unfinishedTasks.filter((task) => task.priority === "high"),
     {
@@ -243,6 +286,16 @@ export async function createFinalMarketingDashboardSummary(): Promise<FinalMarke
       priority: "medium",
       source: "LINE導線",
     },
+    ...(pageIntegrationCard.pageCount > 0
+      ? [
+          {
+            href: "/seo/integrated",
+            label: "検索・閲覧・広告を同じページで確認する",
+            priority: "medium" as const,
+            source: "ページ統合",
+          },
+        ]
+      : []),
   ]).slice(0, 5);
   const monthlyActions = uniqueTasks([
     ...analysisTasks,
@@ -258,6 +311,15 @@ export async function createFinalMarketingDashboardSummary(): Promise<FinalMarke
       label: "広告費・CV・CPAを月次で確認する",
       priority: "medium",
       source: "広告",
+    },
+    {
+      href: "/seo/integrated",
+      label:
+        pageIntegrationCard.pageCount > 0
+          ? "ページ単位で検索・閲覧・広告を照合する"
+          : "Search Console・GA4・広告を取り込んでページ統合分析を確認する",
+      priority: "medium",
+      source: "ページ統合",
     },
   ]).slice(0, 7);
   const geminiReview =
@@ -295,6 +357,7 @@ export async function createFinalMarketingDashboardSummary(): Promise<FinalMarke
         ? `${latestGa4.periodStart}〜${latestGa4.periodEnd}`
         : "サンプルGA4",
     },
+    pageIntegration: pageIntegrationCard,
     monthlyActions,
     seo: {
       averagePosition:

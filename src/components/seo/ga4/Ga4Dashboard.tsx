@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { DataScopePanel } from "@/components/marketing/DataScopePanel";
 import { Badge } from "@/components/ui/Badge";
 import { StatusMessage } from "@/components/ui/StatusMessage";
 import {
@@ -117,6 +118,19 @@ export function Ga4Dashboard({ initialImportId }: Ga4DashboardProps) {
     return <StatusMessage tone="warning">CSV取り込み画面からGA4データを登録してください。</StatusMessage>;
   }
 
+  const isGa4DataApiImport = selectedImport.fileName.startsWith("ga4-data-api-");
+  const sourceKind =
+    storageMode === "demo"
+      ? "sample"
+      : isGa4DataApiImport
+        ? "api"
+        : storageMode === "local"
+          ? "local"
+          : "csv";
+  const sourceLabel = isGa4DataApiImport
+    ? "Google Analytics Data API"
+    : `GA4 CSV / ${selectedImport.fileName}`;
+
   const candidateRows = [
     ...basic.highUsersNoConversion,
     ...basic.lineOpportunityPages,
@@ -145,6 +159,24 @@ export function Ga4Dashboard({ initialImportId }: Ga4DashboardProps) {
           GA4 CSVを取り込む
         </Link>
       </div>
+
+      <DataScopePanel
+        collected={[
+          "ランディングページ、流入元・メディア、チャネル、ユーザー、セッション、表示回数",
+          "エンゲージメント率・平均エンゲージメント時間・キーイベント（コンバージョン）",
+          "LINE・予約と判断できるイベント名がある場合のクリック数",
+        ]}
+        description="この分析は、選択したGA4データだけを対象にしています。GA4 Data APIで取得したものか、手動CSVかを確認してから判断してください。"
+        limitations={[
+          "LINE・予約クリックは、GA4で該当イベントが正しく計測されている場合だけ表示できます。",
+          "電話・Instagram・Googleマップなど、取り込んでいないイベントはこの画面の数値に含まれません。",
+          "Gemini分析を実行しても、GA4の全行は送らず、アプリで集計した値と改善候補だけを送ります。",
+        ]}
+        period={`${selectedImport.periodStart}〜${selectedImport.periodEnd}`}
+        sourceKind={sourceKind}
+        sourceLabel={sourceLabel}
+        updatedAt={selectedImport.updatedAt}
+      />
 
       <StatusMessage isLoading={isLoading} tone={storageMode === "demo" ? "warning" : "info"}>{message}</StatusMessage>
 

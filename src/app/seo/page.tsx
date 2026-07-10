@@ -2,13 +2,15 @@ import { MarketingSectionNav } from "@/components/marketing/MarketingSectionNav"
 import { PageHeader } from "@/components/sections/PageHeader";
 import { SeoDashboard } from "@/components/seo/SeoDashboard";
 
+export const dynamic = "force-dynamic";
+
 export default function SeoPage() {
   return (
     <main className="py-6">
       <PageHeader
-        description="検索データを手入力し、優先キーワード、改善ページ、今月の作業を整理します。Google APIにはまだ接続しません。"
+        description="キーワード、改善ページ、SEOタスクを整理する計画画面です。実際の検索実績はSearch Console分析、サイト内行動はGA4分析で確認します。"
         eyebrow="SEO Assistant"
-        title="SEO管理"
+        title="SEO計画・管理"
       />
       <MarketingSectionNav activeHref="/seo" />
       <SeoDashboard />

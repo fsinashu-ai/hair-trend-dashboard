@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { AiRoleNotice } from "@/components/marketing/AiRoleNotice";
 import { StatusMessage } from "@/components/ui/StatusMessage";
 
 type AiAnalysisResponse = {
@@ -12,20 +13,28 @@ type AiAnalysisResponse = {
 type AiAnalysisPanelProps = {
   context: unknown;
   fallbackText: string;
-  scope: "seo" | "ads";
+  isUsingRealData?: boolean;
+  scope: "seo" | "ads" | "integrated";
   title?: string;
 };
 
 export function AiAnalysisPanel({
   context,
   fallbackText,
+  isUsingRealData = false,
   scope,
   title = "AI改善提案",
 }: AiAnalysisPanelProps) {
   const [analysis, setAnalysis] = useState(fallbackText);
-  const [providerLabel, setProviderLabel] = useState("サンプル提案");
+  const [providerLabel, setProviderLabel] = useState(
+    isUsingRealData ? "Gemini未実行" : "サンプル提案",
+  );
   const [isLoading, setIsLoading] = useState(false);
-  const [message, setMessage] = useState("現在のダミーデータをもとに表示しています。");
+  const [message, setMessage] = useState(
+    isUsingRealData
+      ? "AI分析を押すと、取り込み済みの集計データを分析します。"
+      : "現在の参考データをもとに表示しています。",
+  );
   const [tone, setTone] = useState<"info" | "success" | "warning">("info");
 
   async function handleAnalyze() {
@@ -83,6 +92,10 @@ export function AiAnalysisPanel({
       <p className="mt-4 whitespace-pre-wrap text-sm leading-7 text-stone-700">
         {analysis}
       </p>
+
+      <div className="mt-5">
+        <AiRoleNotice scope={scope} />
+      </div>
 
       <div className="mt-4">
         <StatusMessage isLoading={isLoading} tone={tone}>

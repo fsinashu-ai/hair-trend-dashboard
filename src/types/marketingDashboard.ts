@@ -39,6 +39,12 @@ export type FinalMarketingDashboardSummary = {
     reservationClicks: number;
     sourceLabel: string;
   };
+  pageIntegration: {
+    highPriorityPages: number;
+    pageCount: number;
+    pagesWithAllSources: number;
+    sourceLabel: string;
+  };
   monthlyActions: DashboardTaskItem[];
   seo: {
     averagePosition: number;
