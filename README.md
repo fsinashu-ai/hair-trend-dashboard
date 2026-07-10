@@ -1,5 +1,26 @@
 # hair-trend-dashboard
 
+## 自動生成の取得上限
+
+トレンド自動生成は、Vercelの実行時間を超えないように、1回につき有効なRSS取得元を最大8件、1取得元あたり最大4候補URL、RSS通信の待機時間を4秒に制限しています。取得できないサイトは警告として表示し、他の取得元の処理は続行します。
+
+Geminiの自動分類も1回15秒まで、再試行なしで実行します。GeminiやRSSが一時的に失敗した場合は、画面を止めずにモックまたはフォールバック結果を表示します。
+
+## Supabaseデータを直接公開しない設定
+
+このアプリの個人利用・サロン内利用用データは、ブラウザからSupabaseへ直接つなげず、アプリ内のパスワード保護された中継APIを通して保存・読込します。
+
+既にSupabaseを使っている場合は、次の順番で切り替えてください。
+
+1. Vercelの環境変数に `SUPABASE_SERVICE_ROLE_KEY`、`APP_USER`、`APP_PASSWORD` が入っていることを確認します。
+2. この更新をGitHubへ反映し、Vercelのデプロイが `Ready` になったことを確認します。
+3. Supabaseの `SQL Editor` で [supabase/server-only-data-access.sql](</supabase/server-only-data-access.sql>) を実行します。
+4. 公開版へログインし、トレンドまたはブログを1件保存して確認します。
+
+このSQLは、`keywords`、`trend_links`、`blog_posts`、SNS関連テーブル、`hair-images` を匿名キーから直接読めないようにします。`SUPABASE_SERVICE_ROLE_KEY` はサーバー側だけに置き、GitHub、ブラウザ、`NEXT_PUBLIC_`付きの環境変数へ入れてはいけません。
+
+`NEXT_PUBLIC_SUPABASE_ANON_KEY` は以前の設定との互換用に残しても構いませんが、この更新後のダッシュボードはブラウザからそのキーを使いません。不要ならVercelと`.env.local`から削除できます。
+
 美容師向けの「ヘアスタイル・美容業界トレンド収集アプリ」です。
 
 個人利用、またはサロン内の少人数利用を想定しています。手動で登録したトレンドURL、キーワード、メモ、AI生成結果を整理し、毎日の投稿ネタ作りや接客提案に使えます。

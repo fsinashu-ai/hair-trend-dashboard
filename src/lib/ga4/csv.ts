@@ -25,6 +25,7 @@ const columnAliases = {
   date: ["日付", "date"],
   deviceCategory: ["デバイス カテゴリ", "device category"],
   engagementRate: ["エンゲージメント率", "engagement rate"],
+  eventCount: ["イベント数", "event count"],
   eventName: ["イベント名", "event name"],
   landingPage: [
     "ランディング ページ + クエリ文字列",
@@ -151,18 +152,24 @@ function get(record: Record<string, string>, column: string | undefined) {
   return column ? String(record[column] ?? "").trim() : "";
 }
 
-function inferEventClicks(eventName: string, conversions: number) {
+function inferEventClicks(
+  eventName: string,
+  conversions: number,
+  eventCount: number,
+) {
   const normalized = eventName.toLowerCase();
+  const clickCount = Math.round(Math.max(conversions, eventCount));
+
   return {
     lineClicks:
       normalized.includes("line") || normalized.includes("ライン")
-        ? Math.max(conversions, 1)
+        ? clickCount
         : 0,
     reservationClicks:
       normalized.includes("reserve") ||
       normalized.includes("reservation") ||
       normalized.includes("予約")
-        ? Math.max(conversions, 1)
+        ? clickCount
         : 0,
   };
 }
@@ -206,6 +213,7 @@ export function parseGa4Csv({
       columns.sessions ||
       columns.views ||
       columns.engagementRate ||
+      columns.eventCount ||
       columns.conversions,
   );
 
@@ -223,7 +231,10 @@ export function parseGa4Csv({
 
     const eventName = get(record, columns.eventName);
     const conversions = Math.round(parseNonNegativeNumber(get(record, columns.conversions)));
-    const inferredClicks = inferEventClicks(eventName, conversions);
+    const eventCount = Math.round(
+      parseNonNegativeNumber(get(record, columns.eventCount)),
+    );
+    const inferredClicks = inferEventClicks(eventName, conversions, eventCount);
     const row: Ga4Row = {
       averageEngagementSeconds: parseDurationSeconds(
         get(record, columns.averageEngagementSeconds),

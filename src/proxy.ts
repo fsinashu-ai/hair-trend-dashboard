@@ -1,4 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
+import {
+  APP_ACCESS_COOKIE,
+  getAppAccessCookieValue,
+  isAppRequestAuthorized,
+} from "@/lib/security/appAccess.server";
 
 const authRealm = "Hair Trend Dashboard";
 
@@ -9,60 +14,8 @@ const securityHeaders = {
   "X-Frame-Options": "DENY",
 };
 
-function safeCompare(value: string, expectedValue: string) {
-  const maxLength = Math.max(value.length, expectedValue.length);
-  let mismatch = value.length === expectedValue.length ? 0 : 1;
-
-  for (let index = 0; index < maxLength; index += 1) {
-    mismatch |=
-      (value.charCodeAt(index) || 0) ^ (expectedValue.charCodeAt(index) || 0);
-  }
-
-  return mismatch === 0;
-}
-
-function getBasicAuthCredentials(request: NextRequest) {
-  const authorization = request.headers.get("authorization");
-
-  if (!authorization?.startsWith("Basic ")) {
-    return null;
-  }
-
-  try {
-    const decodedValue = atob(authorization.slice("Basic ".length));
-    const separatorIndex = decodedValue.indexOf(":");
-
-    if (separatorIndex === -1) {
-      return null;
-    }
-
-    return {
-      password: decodedValue.slice(separatorIndex + 1),
-      user: decodedValue.slice(0, separatorIndex),
-    };
-  } catch {
-    return null;
-  }
-}
-
 function isAuthenticated(request: NextRequest) {
-  const appPassword = process.env.APP_PASSWORD;
-
-  if (!appPassword) {
-    return true;
-  }
-
-  const credentials = getBasicAuthCredentials(request);
-  const appUser = process.env.APP_USER || "salon";
-
-  if (!credentials) {
-    return false;
-  }
-
-  return (
-    safeCompare(credentials.user, appUser) &&
-    safeCompare(credentials.password, appPassword)
-  );
+  return isAppRequestAuthorized(request);
 }
 
 function isAuthorizedCronRequest(request: NextRequest) {
@@ -139,7 +92,22 @@ export function proxy(request: NextRequest) {
     return createUnauthorizedResponse(request);
   }
 
-  return withSecurityHeaders(NextResponse.next());
+  const response = NextResponse.next();
+  const accessCookie = getAppAccessCookieValue();
+
+  if (accessCookie && !request.cookies.get(APP_ACCESS_COOKIE)) {
+    response.cookies.set({
+      httpOnly: true,
+      maxAge: 60 * 60 * 12,
+      name: APP_ACCESS_COOKIE,
+      path: "/",
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      value: accessCookie,
+    });
+  }
+
+  return withSecurityHeaders(response);
 }
 
 export const config = {

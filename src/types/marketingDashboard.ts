@@ -1,4 +1,4 @@
-export type DashboardSourceMode = "supabase" | "sample";
+export type DashboardSourceMode = "supabase" | "mixed" | "sample";
 
 export type DashboardMetricItem = {
   label: string;

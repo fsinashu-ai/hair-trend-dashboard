@@ -23,6 +23,36 @@ function formatYen(value: number) {
   return `¥${Math.round(value).toLocaleString("ja-JP")}`;
 }
 
+function formatCpa(value: number) {
+  return value > 0 ? formatYen(value) : "算出不可";
+}
+
+function sourceModeLabel(
+  sourceMode: FinalMarketingDashboardSummary["sourceMode"],
+) {
+  if (sourceMode === "supabase") return "実データ";
+  if (sourceMode === "mixed") return "一部サンプル";
+  return "サンプル含む";
+}
+
+function sourceModeTone(
+  sourceMode: FinalMarketingDashboardSummary["sourceMode"],
+) {
+  return sourceMode === "supabase" ? "success" : "warning";
+}
+
+function sourceModeMessage(
+  sourceMode: FinalMarketingDashboardSummary["sourceMode"],
+) {
+  if (sourceMode === "supabase") {
+    return "Supabaseに保存された最新データを集約しています。";
+  }
+  if (sourceMode === "mixed") {
+    return "未取り込みの指標はサンプルで補っています。各カードのデータ元を確認してください。";
+  }
+  return "データ不足のため、サンプルを含めて表示しています。";
+}
+
 function priorityLabel(priority: DashboardTaskItem["priority"]) {
   if (priority === "high") return "優先";
   if (priority === "medium") return "確認";
@@ -134,12 +164,8 @@ export function FinalMarketingDashboard() {
         }
         if (!isMounted) return;
         setSummary(data.summary);
-        setTone(data.summary.sourceMode === "supabase" ? "success" : "warning");
-        setMessage(
-          data.summary.sourceMode === "supabase"
-            ? "Supabaseに保存された最新データを集約しています。"
-            : "データ不足のため、サンプルを含めて表示しています。",
-        );
+        setTone(sourceModeTone(data.summary.sourceMode));
+        setMessage(sourceModeMessage(data.summary.sourceMode));
       } catch (error) {
         if (!isMounted) return;
         setTone("error");
@@ -170,7 +196,7 @@ export function FinalMarketingDashboard() {
         value: `${formatNumber(summary.seo.clicks)}クリック`,
       },
       {
-        helper: `${formatNumber(summary.ad.clicks)}クリック / CTR ${formatPercent(summary.ad.ctr)} / CPA ${formatYen(summary.ad.cpa)}`,
+        helper: `${formatNumber(summary.ad.clicks)}クリック / CTR ${formatPercent(summary.ad.ctr)} / CPA ${formatCpa(summary.ad.cpa)}`,
         href: "/ads/imports",
         label: "広告状況",
         value: formatYen(summary.ad.cost),
@@ -182,10 +208,10 @@ export function FinalMarketingDashboard() {
         value: `${formatNumber(summary.blog.totalCount)}記事`,
       },
       {
-        helper: `予約クリック ${formatNumber(summary.line.reservationClicks)} / CV ${formatNumber(summary.line.conversions)}`,
+        helper: `予約クリック ${formatNumber(summary.line.reservationClicks)} / キーイベント ${formatNumber(summary.line.conversions)}`,
         href: "/seo/ga4",
         label: "LINE導線",
-        value: `${formatNumber(summary.line.lineClicks)}クリック`,
+        value: `${formatNumber(summary.line.lineClicks)} LINEクリック`,
       },
     ];
   }, [summary]);
@@ -204,8 +230,8 @@ export function FinalMarketingDashboard() {
           </h2>
         </div>
         {summary ? (
-          <Badge tone={summary.sourceMode === "supabase" ? "success" : "warning"}>
-            {summary.sourceMode === "supabase" ? "実データ" : "サンプル含む"}
+          <Badge tone={sourceModeTone(summary.sourceMode)}>
+            {sourceModeLabel(summary.sourceMode)}
           </Badge>
         ) : null}
       </div>

@@ -42,6 +42,8 @@ const completedStatuses = new Set([
   "公開済み",
 ]);
 
+const actionableCreativeStatuses = new Set(["draft", "reviewing", "approved"]);
+
 function yen(value: number) {
   return Number.isFinite(value) ? Math.round(value) : 0;
 }
@@ -207,7 +209,9 @@ export async function createFinalMarketingDashboardSummary(): Promise<FinalMarke
     source: "Gemini提案",
   }));
   const adAction =
-    (adCreatives ?? []).filter((creative) => creative.status !== "used").length > 0
+    (adCreatives ?? []).some((creative) =>
+      actionableCreativeStatuses.has(creative.status),
+    )
       ? [
           {
             href: "/ads/creatives",
@@ -261,6 +265,12 @@ export async function createFinalMarketingDashboardSummary(): Promise<FinalMarke
     latestGa4Analysis?.summary ||
     seoReport.aiAnalysis ||
     seoMockAnalysis;
+  const hasRealDashboardData = Boolean(
+    latestSearchConsole || latestGa4 || latestAdImport || blogCounts,
+  );
+  const includesSampleData = Boolean(
+    !latestSearchConsole || !latestGa4 || !latestAdImport || !blogCounts,
+  );
 
   return {
     ad: {
@@ -297,11 +307,11 @@ export async function createFinalMarketingDashboardSummary(): Promise<FinalMarke
         ? `${latestSearchConsole.periodStart}〜${latestSearchConsole.periodEnd}`
         : "サンプルSEOレポート",
     },
-    sourceMode:
-      usesSupabase &&
-      Boolean(latestSearchConsole || latestGa4 || latestAdImport || blogCounts)
-        ? "supabase"
-        : "sample",
+    sourceMode: !usesSupabase || !hasRealDashboardData
+      ? "sample"
+      : includesSampleData
+        ? "mixed"
+        : "supabase",
     todayActions,
     unfinishedTasks: unfinishedTasks.slice(0, 6),
   };

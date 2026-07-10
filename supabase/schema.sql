@@ -1323,8 +1323,22 @@ alter table public.social_sources enable row level security;
 alter table public.social_posts enable row level security;
 alter table public.blog_posts enable row level security;
 
--- Explicit Data API grants for Supabase projects created after May 30, 2026.
-grant usage on schema public to anon, authenticated, service_role;
+-- Personal-use server-only access.
+-- Browser requests go through the app's password-protected /api/supabase route.
+-- Only the server-side service role can access these tables directly. Do not grant
+-- anon or authenticated roles access unless this is replaced with user-specific RLS.
+grant usage on schema public to service_role;
+
+revoke all on table
+  public.keywords,
+  public.trend_links,
+  public.ai_outputs,
+  public.trend_sources,
+  public.sns_posts,
+  public.social_sources,
+  public.social_posts,
+  public.blog_posts
+from anon, authenticated;
 
 grant select, insert, update, delete
 on table
@@ -1336,80 +1350,26 @@ on table
   public.social_sources,
   public.social_posts,
   public.blog_posts
-to anon, authenticated, service_role;
+to service_role;
 
--- Personal-use policies:
--- The current app uses the public anon key from the browser, so these policies allow
--- anon/authenticated clients to read and write the app tables.
--- For Vercel/public URLs, set APP_PASSWORD so the app, API routes, and static JS are
--- protected before the anon key can be read.
--- For multi-user production, replace these policies with Supabase Auth user-specific rules.
 drop policy if exists "mvp_keywords_all" on public.keywords;
 drop policy if exists "personal_keywords_all" on public.keywords;
-create policy "personal_keywords_all"
-on public.keywords
-for all
-to anon, authenticated
-using (true)
-with check (true);
 
 drop policy if exists "mvp_trend_links_all" on public.trend_links;
 drop policy if exists "personal_trend_links_all" on public.trend_links;
-create policy "personal_trend_links_all"
-on public.trend_links
-for all
-to anon, authenticated
-using (true)
-with check (true);
 
 drop policy if exists "mvp_ai_outputs_all" on public.ai_outputs;
 drop policy if exists "personal_ai_outputs_all" on public.ai_outputs;
-create policy "personal_ai_outputs_all"
-on public.ai_outputs
-for all
-to anon, authenticated
-using (true)
-with check (true);
 
 drop policy if exists "personal_trend_sources_all" on public.trend_sources;
-create policy "personal_trend_sources_all"
-on public.trend_sources
-for all
-to anon, authenticated
-using (true)
-with check (true);
 
 drop policy if exists "personal_sns_posts_all" on public.sns_posts;
-create policy "personal_sns_posts_all"
-on public.sns_posts
-for all
-to anon, authenticated
-using (true)
-with check (true);
 
 drop policy if exists "personal_social_sources_all" on public.social_sources;
-create policy "personal_social_sources_all"
-on public.social_sources
-for all
-to anon, authenticated
-using (true)
-with check (true);
 
 drop policy if exists "personal_social_posts_all" on public.social_posts;
-create policy "personal_social_posts_all"
-on public.social_posts
-for all
-to anon, authenticated
-using (true)
-with check (true);
 
 drop policy if exists "personal_blog_posts_all" on public.blog_posts;
-create policy "personal_blog_posts_all"
-on public.blog_posts
-for all
-to anon, authenticated
-using (true)
-with check (true);
 
 -- Storage bucket for uploaded hair images.
 -- The bucket is private for personal use. The app only needs upload/delete access.
@@ -1435,22 +1395,13 @@ set
 
 drop policy if exists "mvp_hair_images_select" on storage.objects;
 drop policy if exists "personal_hair_images_select" on storage.objects;
-
 drop policy if exists "mvp_hair_images_insert" on storage.objects;
 drop policy if exists "personal_hair_images_insert" on storage.objects;
-create policy "personal_hair_images_insert"
-on storage.objects
-for insert
-to anon, authenticated
-with check (bucket_id = 'hair-images');
-
 drop policy if exists "mvp_hair_images_delete" on storage.objects;
 drop policy if exists "personal_hair_images_delete" on storage.objects;
-create policy "personal_hair_images_delete"
-on storage.objects
-for delete
-to anon, authenticated
-using (bucket_id = 'hair-images');
+
+-- The private bucket is accessed only through the server-side proxy.
+grant select, insert, update, delete on table storage.objects to service_role;
 
 -- SEO and ads assistant MVP tables.
 create table if not exists public.seo_keywords (

@@ -3,8 +3,10 @@ import type { TrendSourceRssStatus } from "@/types/trendSource";
 
 export const MAX_RSS_ARTICLES_PER_SOURCE = 5;
 
-const RSS_TIMEOUT_MS = 7_000;
+const RSS_TIMEOUT_MS = 4_000;
 const MAX_RSS_BYTES = 2_000_000;
+const MAX_RSS_CANDIDATES = 4;
+const MAX_ACTIVE_RSS_SOURCES_PER_RUN = 8;
 const RECENT_DAYS = 30;
 
 export type RssArticle = {
@@ -112,7 +114,7 @@ function buildFeedCandidates(siteUrl: string, explicitRssUrl?: string) {
     return explicitRssUrl ? [explicitRssUrl] : [];
   }
 
-  return Array.from(new Set(candidates)).slice(0, 10);
+  return Array.from(new Set(candidates)).slice(0, MAX_RSS_CANDIDATES);
 }
 
 async function fetchFeed(candidateUrl: string): Promise<FeedResponse | null> {
@@ -275,44 +277,57 @@ function parseFeed(xml: string, source: TrendSource) {
 export async function fetchRssArticles(
   sources: TrendSource[],
 ): Promise<RssFetchResult> {
-  const articles: RssArticle[] = [];
-  const errors: string[] = [];
-  const sourceResults: RssSourceResult[] = [];
+  const enabledSources = sources.filter((source) => source.enabled);
+  const activeSources = enabledSources.slice(
+    0,
+    MAX_ACTIVE_RSS_SOURCES_PER_RUN,
+  );
+  const skippedSourceCount = enabledSources.length - activeSources.length;
+  const results = await Promise.all(
+    activeSources.map(async (source) => {
+      const feed = await discoverRssFeed(source.url, source.rssUrl);
 
-  for (const source of sources) {
-    if (!source.enabled) {
-      continue;
-    }
+      if (!feed) {
+        const error = `${source.name}: 公開RSSを確認できませんでした。今回はスキップします。`;
+        return {
+          articles: [] as RssArticle[],
+          error,
+          sourceResult: {
+            articleCount: 0,
+            consecutiveFailures: (source.failureCount ?? 0) + 1,
+            error,
+            rssUrl: source.rssUrl ?? null,
+            sourceId: source.id,
+            sourceName: source.name,
+            status: source.rssUrl ? "error" : "unavailable",
+          } satisfies RssSourceResult,
+        };
+      }
 
-    const feed = await discoverRssFeed(source.url, source.rssUrl);
-
-    if (!feed) {
-      const error = `${source.name}: 公開RSSを確認できませんでした。手動参照として残します。`;
-      errors.push(error);
-      sourceResults.push({
-        articleCount: 0,
-        consecutiveFailures: (source.failureCount ?? 0) + 1,
-        error,
-        rssUrl: source.rssUrl ?? null,
-        sourceId: source.id,
-        sourceName: source.name,
-        status: source.rssUrl ? "error" : "unavailable",
-      });
-      continue;
-    }
-
-    const sourceArticles = parseFeed(feed.xml, source);
-    articles.push(...sourceArticles);
-    sourceResults.push({
-      articleCount: sourceArticles.length,
-      consecutiveFailures: 0,
-      error: "",
-      rssUrl: feed.url,
-      sourceId: source.id,
-      sourceName: source.name,
-      status: "available",
-    });
+      const sourceArticles = parseFeed(feed.xml, source);
+      return {
+        articles: sourceArticles,
+        error: "",
+        sourceResult: {
+          articleCount: sourceArticles.length,
+          consecutiveFailures: 0,
+          error: "",
+          rssUrl: feed.url,
+          sourceId: source.id,
+          sourceName: source.name,
+          status: "available",
+        } satisfies RssSourceResult,
+      };
+    }),
+  );
+  const errors = results.map((result) => result.error).filter(Boolean);
+  if (skippedSourceCount > 0) {
+    errors.push(
+      `${skippedSourceCount}件の取得元は今回の上限により次回へ繰り越しました。`,
+    );
   }
+  const sourceResults = results.map((result) => result.sourceResult);
+  const articles = results.flatMap((result) => result.articles);
 
   const uniqueArticles = Array.from(
     new Map(

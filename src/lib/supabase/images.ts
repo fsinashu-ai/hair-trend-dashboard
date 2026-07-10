@@ -46,13 +46,11 @@ export async function uploadHairImageToSupabase(
     throw error;
   }
 
-  const { data: publicUrlData } = supabase.storage
-    .from(HAIR_IMAGE_BUCKET)
-    .getPublicUrl(data.path);
-
   return {
     bucket: HAIR_IMAGE_BUCKET,
     path: data.path,
-    publicUrl: publicUrlData.publicUrl,
+    // The bucket is private. The in-browser preview uses the local File URL,
+    // so returning a public Storage URL here would be misleading.
+    publicUrl: "",
   };
 }

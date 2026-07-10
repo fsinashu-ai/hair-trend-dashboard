@@ -2,8 +2,10 @@ import { GoogleGenAI } from "@google/genai";
 
 export const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash";
 
-const geminiTimeoutMs = 30_000;
-const geminiRetryAttempts = 2;
+// Keep AI requests short enough for Vercel Cron and manual generation routes.
+// A failed request is handled by each feature's mock/fallback response.
+const geminiTimeoutMs = 15_000;
+const geminiRetryAttempts = 1;
 const maxPromptCharacters = 24_000;
 
 type GeminiPart =
