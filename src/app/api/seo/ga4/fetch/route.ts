@@ -6,6 +6,7 @@ import {
 } from "@/lib/ga4/dataApi.server";
 import { saveGa4Import } from "@/lib/supabase/ga4.server";
 import { isServerSupabaseConfigured } from "@/lib/supabase/serverClient";
+import { isAppRequestAuthorized } from "@/lib/security/appAccess.server";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -19,27 +20,6 @@ type FetchBody = {
   startDate?: string;
 };
 
-function basicAuthMatches(request: Request) {
-  const appPassword = process.env.APP_PASSWORD;
-
-  if (!appPassword) return true;
-
-  const authorization = request.headers.get("authorization");
-  if (!authorization?.startsWith("Basic ")) return false;
-
-  try {
-    const decoded = atob(authorization.slice("Basic ".length));
-    const separatorIndex = decoded.indexOf(":");
-    const user = separatorIndex >= 0 ? decoded.slice(0, separatorIndex) : "";
-    const password = separatorIndex >= 0 ? decoded.slice(separatorIndex + 1) : "";
-    const expectedUser = process.env.APP_USER || "salon";
-
-    return user === expectedUser && password === appPassword;
-  } catch {
-    return false;
-  }
-}
-
 function cronSecretMatches(request: Request) {
   const secret = process.env.CRON_SECRET;
   return Boolean(secret && request.headers.get("authorization") === `Bearer ${secret}`);
@@ -50,7 +30,7 @@ function isCronRequestAuthorized(request: Request) {
 }
 
 function isManualRequestAuthorized(request: Request) {
-  return cronSecretMatches(request) || basicAuthMatches(request);
+  return cronSecretMatches(request) || isAppRequestAuthorized(request);
 }
 
 function trimText(value: unknown, maxLength: number) {

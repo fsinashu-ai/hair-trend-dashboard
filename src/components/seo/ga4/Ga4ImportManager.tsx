@@ -191,6 +191,7 @@ export function Ga4ImportManager() {
           reportMonth,
           startDate: periodStart,
         }),
+        credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
         method: "POST",
       });
