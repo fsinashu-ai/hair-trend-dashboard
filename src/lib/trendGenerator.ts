@@ -1,5 +1,4 @@
 import { dummyKeywords } from "@/data/dummyKeywords";
-import { dummyTrends } from "@/data/dummyTrends";
 import { generateAiText } from "@/lib/ai/server";
 import { normalizeArticleUrl } from "@/lib/rss";
 import { getSalonPromptContext } from "@/lib/salonProfile";
@@ -172,19 +171,7 @@ function createMockTrends(existingUrls: Set<string>, sources: TrendSource[]): Au
       title: `${source.name} 参考URL`,
       url: source.url,
     }));
-  const dummyBased = dummyTrends.slice(0, 3).map((trend) => ({
-    category: trend.category,
-    memo: trend.memo || trend.summary,
-    registered_at: today(),
-    salon_relevance: inferSalonRelevance(
-      `${trend.title} ${trend.memo || trend.summary} ${trend.tags.join(" ")}`,
-    ),
-    tags: trend.tags.map((tag) => tag.replace(/^#/, "")).slice(0, 6),
-    title: trend.title,
-    url: trend.url,
-  }));
-
-  return [...manualSources, ...dummyBased]
+  return manualSources
     .filter((trend) => !existingUrls.has(trend.url))
     .slice(0, 5);
 }
@@ -209,7 +196,7 @@ export async function generateTrendCandidates({
     .filter(
       (article) => !normalizedExistingUrls.has(normalizeArticleUrl(article.url)),
     )
-    .slice(0, 20);
+    .slice(0, 12);
 
   if (candidateArticles.length === 0) {
     return {
@@ -221,7 +208,7 @@ export async function generateTrendCandidates({
   try {
     const salonContext = getSalonPromptContext();
     const result = await generateAiText({
-      maxOutputTokens: 2400,
+        maxOutputTokens: 1600,
       systemInstruction:
         [
           "あなたは美容師向けのトレンド収集アシスタントです。SNSスクレイピングは禁止です。入力されたRSS記事情報と登録済みキーワードだけをもとに、サロンワークや投稿ネタに使いやすいトレンド候補を日本語で分類してください。",

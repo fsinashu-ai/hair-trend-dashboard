@@ -9,7 +9,7 @@ type AppShellProps = {
 
 export function AppShell({ children }: AppShellProps) {
   return (
-    <div className="min-h-screen pb-20 lg:pb-0">
+    <div className="min-h-screen pb-[calc(5rem+env(safe-area-inset-bottom))] lg:pb-0">
       <AppHeader />
       <div className="mx-auto grid w-full max-w-7xl gap-6 px-5 sm:px-8 lg:grid-cols-[220px_1fr] lg:px-10">
         <AppSidebar />

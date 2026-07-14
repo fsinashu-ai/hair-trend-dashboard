@@ -129,17 +129,21 @@ export function KeywordManager() {
           return;
         }
 
-        setKeywords(supabaseKeywords ?? dummyKeywords);
-        setStatusTone("success");
-        setMessage("Supabaseに保存されているキーワードを表示しています。");
+        setKeywords(supabaseKeywords ?? []);
+        setStatusTone(supabaseKeywords?.length ? "success" : "warning");
+        setMessage(
+          supabaseKeywords?.length
+            ? "Supabaseに保存されているキーワードを表示しています。"
+            : "データ待ちです。キーワードを追加してください。",
+        );
       } catch {
         if (!isMounted) {
           return;
         }
 
-        setKeywords(dummyKeywords);
-        setStatusTone("warning");
-        setMessage("Supabaseから読み込めなかったため、ダミーデータを表示しています。");
+        setKeywords([]);
+        setStatusTone("error");
+        setMessage("取得に失敗しました。再読み込みしても直らない場合はSupabase設定を確認してください。");
       } finally {
         if (isMounted) {
           setIsLoading(false);

@@ -234,26 +234,26 @@ export function BlogManager() {
           return;
         }
 
-        setPosts(blogPosts && blogPosts.length > 0 ? blogPosts : dummyBlogPosts);
-        setTrends(trendLinks && trendLinks.length > 0 ? trendLinks : dummyTrends);
+        setPosts(blogPosts ?? []);
+        setTrends(trendLinks ?? []);
         setSnsPosts(snsPostData ?? []);
         setStatusTone(blogPosts?.length ? "success" : "warning");
         setMessage(
           blogPosts?.length
             ? "Supabaseに保存されているブログ記事を表示しています。"
-            : "Supabaseにブログ記事がまだないため、サンプル下書きを表示しています。",
+            : "データ待ちです。新規作成またはAIブログ生成から下書きを作成してください。",
         );
       } catch {
         if (!isMounted) {
           return;
         }
 
-        setPosts(dummyBlogPosts);
-        setTrends(dummyTrends);
+        setPosts([]);
+        setTrends([]);
         setSnsPosts([]);
         setStatusTone("warning");
         setMessage(
-          "ブログデータを読み込めませんでした。blog_postsテーブル設定を確認してください。",
+          "取得に失敗しました。再読み込みしても直らない場合はblog_postsテーブル設定を確認してください。",
         );
       } finally {
         if (isMounted) {

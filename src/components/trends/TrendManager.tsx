@@ -319,20 +319,18 @@ export function TrendManager() {
           setStatusTone("success");
           setMessage("Supabaseに保存されているトレンドを表示しています。");
         } else {
-          setTrends(dummyTrends);
+          setTrends([]);
           setStatusTone("warning");
-          setMessage(
-            "Supabaseにトレンドがまだないため、初期データを表示しています。",
-          );
+          setMessage("データ待ちです。トレンドを登録または自動生成してください。");
         }
       } catch {
         if (!isMounted) {
           return;
         }
 
-        setTrends(dummyTrends);
-        setStatusTone("warning");
-        setMessage("Supabaseから読み込めなかったため、ダミーデータを表示しています。");
+        setTrends([]);
+        setStatusTone("error");
+        setMessage("取得に失敗しました。再読み込みしても直らない場合はSupabase設定を確認してください。");
       } finally {
         if (isMounted) {
           setIsLoading(false);

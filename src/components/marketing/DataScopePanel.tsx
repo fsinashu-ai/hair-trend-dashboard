@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Badge } from "@/components/ui/Badge";
 
-type DataSourceKind = "api" | "csv" | "manual" | "local" | "sample";
+type DataSourceKind = "api" | "csv" | "manual" | "local" | "none" | "sample";
 
 type DataScopePanelProps = {
   collected: string[];
@@ -21,6 +21,7 @@ const sourceKindLabels: Record<DataSourceKind, string> = {
   csv: "手動CSV",
   local: "この端末",
   manual: "手入力",
+  none: "未取得",
   sample: "参考データ",
 };
 
@@ -32,6 +33,7 @@ const sourceKindTones: Record<
   csv: "info",
   local: "warning",
   manual: "neutral",
+  none: "neutral",
   sample: "warning",
 };
 

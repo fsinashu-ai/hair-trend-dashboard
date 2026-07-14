@@ -3,14 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { navigationItems } from "@/data/navigation";
-
-function isActivePath(pathname: string, href: string) {
-  if (href === "/") {
-    return pathname === "/";
-  }
-
-  return pathname === href || pathname.startsWith(`${href}/`);
-}
+import { isNavigationPathActive } from "@/lib/navigation";
 
 export function AppSidebar() {
   const pathname = usePathname();
@@ -21,20 +14,24 @@ export function AppSidebar() {
         aria-label="Main navigation"
         className="grid gap-2 rounded-lg border border-stone-200 bg-white p-3 shadow-sm"
       >
-        {navigationItems.map((item) => (
-          <Link
-            aria-current={isActivePath(pathname, item.href) ? "page" : undefined}
-            className={`rounded-md px-3 py-2 text-sm font-medium transition ${
-              isActivePath(pathname, item.href)
-                ? "bg-teal-50 text-teal-800"
-                : "text-stone-600 hover:bg-teal-50 hover:text-teal-800"
-            }`}
-            href={item.href}
-            key={item.href}
-          >
-            {item.label}
-          </Link>
-        ))}
+        {navigationItems.map((item) => {
+          const isActive = isNavigationPathActive(pathname, [item.href]);
+
+          return (
+            <Link
+              aria-current={isActive ? "page" : undefined}
+              className={`border-l-2 px-3 py-2 text-sm font-medium transition ${
+                isActive
+                  ? "border-teal-700 bg-teal-50 text-teal-800"
+                  : "border-transparent text-stone-600 hover:bg-teal-50 hover:text-teal-800"
+              }`}
+              href={item.href}
+              key={item.href}
+            >
+              {item.label}
+            </Link>
+          );
+        })}
       </nav>
     </aside>
   );

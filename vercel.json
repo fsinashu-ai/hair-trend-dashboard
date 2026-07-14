@@ -6,7 +6,7 @@
     },
     {
       "path": "/api/seo/ga4/fetch",
-      "schedule": "0 22 1 * *"
+      "schedule": "0 0 2 * *"
     }
   ]
 }

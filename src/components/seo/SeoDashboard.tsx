@@ -14,6 +14,7 @@ import {
   fetchSearchConsoleImports,
   fetchSeoTasks,
 } from "@/lib/supabase/searchConsole.server";
+import { isServerSupabaseConfigured } from "@/lib/supabase/serverClient";
 import type { Ga4Import } from "@/types/ga4";
 import type { SearchConsoleImport } from "@/types/searchConsole";
 import type { SeoPriority } from "@/types/seoAds";
@@ -50,7 +51,11 @@ async function loadSeoDashboardData(): Promise<SeoDashboardData> {
   return {
     ga4Import: ga4Imports?.[0] ?? null,
     searchConsoleImport: searchConsoleImports?.[0] ?? null,
-    tasks: savedTasks?.length ? savedTasks : dummySeoTasks,
+    tasks: savedTasks?.length
+      ? savedTasks
+      : isServerSupabaseConfigured()
+        ? []
+        : dummySeoTasks,
   };
 }
 
@@ -65,6 +70,7 @@ function formatGa4Source(ga4Import: Ga4Import) {
 }
 
 export async function SeoDashboard() {
+  const usesSupabase = isServerSupabaseConfigured();
   const { ga4Import, searchConsoleImport, tasks } =
     await loadSeoDashboardData();
   const sampleReport = dummySeoReports[0];
@@ -76,25 +82,27 @@ export async function SeoDashboard() {
         ctr: searchConsoleImport.metrics.ctr * 100,
         averagePosition: searchConsoleImport.metrics.averagePosition,
       }
-    : sampleReport;
+    : usesSupabase
+      ? null
+      : sampleReport;
   const hasSearchConsoleData = Boolean(searchConsoleImport);
-  const hasSavedTasks = tasks !== dummySeoTasks;
+  const hasSavedTasks = tasks.length > 0 && tasks !== dummySeoTasks;
   const metrics = [
     {
-      label: hasSearchConsoleData ? "クリック数" : "参考クリック数",
-      value: report.clicks.toLocaleString("ja-JP"),
+      label: "クリック数",
+      value: report ? report.clicks.toLocaleString("ja-JP") : "未取得",
     },
     {
-      label: hasSearchConsoleData ? "表示回数" : "参考表示回数",
-      value: report.impressions.toLocaleString("ja-JP"),
+      label: "表示回数",
+      value: report ? report.impressions.toLocaleString("ja-JP") : "未取得",
     },
     {
-      label: hasSearchConsoleData ? "平均CTR" : "参考CTR",
-      value: `${report.ctr.toFixed(2)}%`,
+      label: "平均CTR",
+      value: report ? `${report.ctr.toFixed(2)}%` : "未取得",
     },
     {
-      label: hasSearchConsoleData ? "平均掲載順位" : "参考掲載順位",
-      value: report.averagePosition.toFixed(1),
+      label: "平均掲載順位",
+      value: report ? report.averagePosition.toFixed(1) : "未取得",
     },
   ];
 
@@ -109,7 +117,9 @@ export async function SeoDashboard() {
         description={
           hasSearchConsoleData
             ? "最新のSearch Console取り込みを優先して表示しています。対象期間とデータ種別を確認してから、数値を判断してください。"
-            : "Search Consoleの取り込みがまだないため、参考値を表示しています。CSVを取り込むと最新の実績に切り替わります。"
+            : usesSupabase
+              ? "Search Consoleの取り込みがまだないため、実績は未取得です。CSVを取り込むと最新の実績を表示します。"
+              : "Supabase未設定のため、確認用サンプルデータを表示しています。"
         }
         href="/seo/search-console"
         limitations={[
@@ -122,11 +132,13 @@ export async function SeoDashboard() {
             ? formatPeriod(searchConsoleImport.periodStart, searchConsoleImport.periodEnd)
             : undefined
         }
-        sourceKind={hasSearchConsoleData ? "csv" : "sample"}
+        sourceKind={hasSearchConsoleData ? "csv" : usesSupabase ? "none" : "sample"}
         sourceLabel={
           searchConsoleImport
             ? `Search Console CSV / ${searchConsoleImport.fileName}`
-            : "Search Console未取り込み・参考データ"
+            : usesSupabase
+              ? "Search Console未取り込み"
+              : "確認用サンプルデータ"
         }
         updatedAt={searchConsoleImport?.updatedAt}
       />
@@ -154,9 +166,11 @@ export async function SeoDashboard() {
             ? ga4Import.fileName.startsWith("ga4-data-api-")
               ? "api"
               : "csv"
-            : "sample"
+            : usesSupabase
+              ? "none"
+              : "sample"
         }
-        sourceLabel={ga4Import ? formatGa4Source(ga4Import) : "GA4未取り込み"}
+        sourceLabel={ga4Import ? formatGa4Source(ga4Import) : usesSupabase ? "GA4未取り込み" : "確認用サンプルデータ"}
         updatedAt={ga4Import?.updatedAt}
         title="サイト内行動データ"
       />
@@ -207,12 +221,14 @@ export async function SeoDashboard() {
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <div className="sm:col-span-2 xl:col-span-4">
           <Badge tone={hasSearchConsoleData ? "success" : "warning"}>
-            {hasSearchConsoleData ? "Search Console実績" : "参考データ"}
+            {hasSearchConsoleData ? "Search Console実績" : usesSupabase ? "未取得" : "確認用サンプルデータ"}
           </Badge>
           <p className="mt-2 text-sm text-stone-600">
             {hasSearchConsoleData
               ? "最新のSearch Console取り込みをもとに表示しています。詳しい候補や期間比較は分析画面で確認してください。"
-              : "Search Consoleの実績を表示するには、CSV取り込みが必要です。現在の数値は参考値です。"}
+              : usesSupabase
+                ? "Search Consoleの実績を表示するには、CSV取り込みが必要です。"
+                : "Supabase未設定のため、表示内容は確認用サンプルです。"}
           </p>
         </div>
         {metrics.map((metric) => (
@@ -235,7 +251,7 @@ export async function SeoDashboard() {
             </Link>
           </div>
           <div className="divide-y divide-stone-100 rounded-lg border border-stone-200 bg-white shadow-sm">
-            {dummySeoKeywords.slice(0, 4).map((item) => (
+            {(usesSupabase ? [] : dummySeoKeywords.slice(0, 4)).map((item) => (
               <article className="p-4" key={item.id}>
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <h3 className="font-semibold text-stone-950">{item.keyword}</h3>
@@ -246,6 +262,7 @@ export async function SeoDashboard() {
                 <p className="mt-2 text-sm leading-6 text-stone-600">{item.intent}</p>
               </article>
             ))}
+            {usesSupabase ? <p className="p-4 text-sm text-stone-500">未取得です。SEOキーワード管理から登録してください。</p> : null}
           </div>
         </div>
 
@@ -257,7 +274,7 @@ export async function SeoDashboard() {
             </Link>
           </div>
           <div className="divide-y divide-stone-100 rounded-lg border border-stone-200 bg-white shadow-sm">
-            {dummySeoPages.map((page) => (
+            {(usesSupabase ? [] : dummySeoPages).map((page) => (
               <article className="p-4" key={page.id}>
                 <h3 className="font-semibold text-stone-950">{page.pageTitle}</h3>
                 <p className="mt-2 text-sm leading-6 text-rose-700">{page.currentIssue}</p>
@@ -266,6 +283,7 @@ export async function SeoDashboard() {
                 </p>
               </article>
             ))}
+            {usesSupabase ? <p className="p-4 text-sm text-stone-500">未取得です。対象ページ管理から登録してください。</p> : null}
           </div>
         </div>
       </section>
@@ -274,7 +292,7 @@ export async function SeoDashboard() {
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <h2 className="text-lg font-semibold text-stone-950">今月やるSEOタスク</h2>
           <Badge tone={hasSavedTasks ? "success" : "warning"}>
-            {hasSavedTasks ? "Supabase保存" : "参考タスク"}
+            {hasSavedTasks ? "Supabase保存" : usesSupabase ? "データ待ち" : "確認用サンプルデータ"}
           </Badge>
         </div>
         <div className="grid gap-3 md:grid-cols-3">
@@ -293,6 +311,7 @@ export async function SeoDashboard() {
               <p className="mt-2 text-sm text-stone-500">期限: {task.dueDate}</p>
             </article>
           ))}
+          {tasks.length === 0 ? <p className="text-sm text-stone-500">未完了のSEOタスクはありません。</p> : null}
         </div>
       </section>
 
@@ -300,7 +319,7 @@ export async function SeoDashboard() {
         context={{
           keywords: dummySeoKeywords,
           pages: dummySeoPages,
-          report,
+          report: report ?? { clicks: 0, impressions: 0, ctr: 0, averagePosition: 0 },
           tasks,
           sources: {
             ga4: ga4Import

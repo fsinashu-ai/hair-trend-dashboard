@@ -5,8 +5,10 @@ export const MAX_RSS_ARTICLES_PER_SOURCE = 5;
 
 const RSS_TIMEOUT_MS = 4_000;
 const MAX_RSS_BYTES = 2_000_000;
-const MAX_RSS_CANDIDATES = 4;
-const MAX_ACTIVE_RSS_SOURCES_PER_RUN = 8;
+// Keep a Cron run well below Vercel's function limit. We only check declared
+// RSS candidates and never fall back to HTML crawling.
+const MAX_RSS_CANDIDATES = 2;
+const MAX_ACTIVE_RSS_SOURCES_PER_RUN = 5;
 const RECENT_DAYS = 30;
 
 export type RssArticle = {

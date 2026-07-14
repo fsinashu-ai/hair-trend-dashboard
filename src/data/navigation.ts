@@ -18,26 +18,36 @@ export const navigationItems: NavigationItem[] = [
 ];
 
 export const mobileNavigationItems: MobileNavigationItem[] = [
-  { label: "ホーム", shortLabel: "ホーム", href: "/", matchPrefixes: ["/"] },
   {
+    icon: "home",
+    label: "ホーム",
+    shortLabel: "ホーム",
+    href: "/",
+    matchPrefixes: ["/"],
+  },
+  {
+    icon: "collect",
     label: "情報収集",
     shortLabel: "情報収集",
     href: "/trends",
     matchPrefixes: ["/trends", "/trend-sources", "/social-sources", "/social-inbox"],
   },
   {
+    icon: "content",
     label: "コンテンツ",
     shortLabel: "コンテンツ",
     href: "/blog",
     matchPrefixes: ["/blog", "/post-generator"],
   },
   {
+    icon: "analysis",
     label: "分析",
     shortLabel: "分析",
     href: "/seo",
     matchPrefixes: ["/seo", "/ads"],
   },
   {
+    icon: "more",
     label: "その他",
     shortLabel: "その他",
     href: "/settings",
