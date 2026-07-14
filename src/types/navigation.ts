@@ -3,3 +3,7 @@ export type NavigationItem = {
   shortLabel: string;
   href: string;
 };
+
+export type MobileNavigationItem = NavigationItem & {
+  matchPrefixes: string[];
+};

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { FinalMarketingDashboard } from "@/components/home/FinalMarketingDashboard";
-import { useMemo, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { GeneratedPostCard } from "@/components/post-generator/GeneratedPostCard";
 import { PageHeader } from "@/components/sections/PageHeader";
 import { Badge } from "@/components/ui/Badge";
@@ -12,6 +12,8 @@ import { StatusMessage } from "@/components/ui/StatusMessage";
 import { dummyGeneratedPosts } from "@/data/dummyGeneratedPosts";
 import { dummyTrends } from "@/data/dummyTrends";
 import { backupStorageKeys } from "@/lib/backup/localStorage";
+import { isSupabaseConfigured } from "@/lib/supabase/client";
+import { fetchTrendLinksFromSupabase } from "@/lib/supabase/trends";
 import type { GeneratedPost } from "@/types/generatedPost";
 import type { Trend, TrendCategory, TrendHeat } from "@/types/trend";
 
@@ -32,6 +34,7 @@ type QuickGenerateType =
   | "morning-brief";
 
 type StatusTone = "neutral" | "info" | "success" | "warning" | "error";
+type HomeTrendSource = "loading" | "supabase" | "sample" | "empty" | "error";
 
 const recentTrendsStorageKey = backupStorageKeys.recentTrends;
 
@@ -90,8 +93,8 @@ function getTodayLabel() {
   }).format(new Date());
 }
 
-function getRecommendedTrend() {
-  return [...dummyTrends].sort((firstTrend, secondTrend) => {
+function getRecommendedTrend(trends: Trend[]) {
+  return [...trends].sort((firstTrend, secondTrend) => {
     const heatDiff = heatScore[secondTrend.heat] - heatScore[firstTrend.heat];
 
     if (heatDiff !== 0) {
@@ -194,7 +197,14 @@ function subscribeToRecentTrends(onStoreChange: () => void) {
 }
 
 export function HomeDashboard() {
-  const recommendedTrend = useMemo(() => getRecommendedTrend(), []);
+  const supabaseEnabled = isSupabaseConfigured();
+  const [trends, setTrends] = useState<Trend[]>(() =>
+    supabaseEnabled ? [] : dummyTrends,
+  );
+  const [trendSource, setTrendSource] = useState<HomeTrendSource>(
+    supabaseEnabled ? "loading" : "sample",
+  );
+  const [trendLoadError, setTrendLoadError] = useState<string | null>(null);
   const recentTrendsSnapshot = useSyncExternalStore(
     subscribeToRecentTrends,
     getRecentTrendsSnapshot,
@@ -205,6 +215,52 @@ export function HomeDashboard() {
   const [statusTone, setStatusTone] = useState<StatusTone>("neutral");
   const [message, setMessage] = useState(
     "朝の投稿、接客説明、朝礼ネタをすぐ作れます。",
+  );
+
+  useEffect(() => {
+    if (!supabaseEnabled) {
+      return;
+    }
+
+    let isMounted = true;
+
+    async function loadTrends() {
+      try {
+        const supabaseTrends = await fetchTrendLinksFromSupabase();
+
+        if (!isMounted) return;
+
+        if (supabaseTrends && supabaseTrends.length > 0) {
+          setTrends(supabaseTrends);
+          setTrendSource("supabase");
+          setTrendLoadError(null);
+        } else {
+          setTrends([]);
+          setTrendSource("empty");
+          setTrendLoadError(null);
+        }
+      } catch {
+        if (!isMounted) return;
+
+        setTrends([]);
+        setTrendSource("error");
+        setTrendLoadError(
+          "トレンドを読み込めませんでした。設定とSupabaseの接続を確認してください。",
+        );
+      }
+    }
+
+    void loadTrends();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [supabaseEnabled]);
+
+  const displayedTrends = trendSource === "sample" ? dummyTrends : trends;
+  const recommendedTrend = useMemo(
+    () => getRecommendedTrend(displayedTrends),
+    [displayedTrends],
   );
 
   const recentTrends = useMemo(
@@ -224,23 +280,34 @@ export function HomeDashboard() {
     [],
   );
   const displayedRecentTrends =
-    recentTrends.length > 0 ? recentTrends.slice(0, 4) : fallbackRecentTrends;
+    recentTrends.length > 0
+      ? recentTrends.slice(0, 4)
+      : trendSource === "sample"
+        ? fallbackRecentTrends
+        : [];
 
-  const todayPostIdea = generatedPost ?? dummyGeneratedPosts[0];
+  const todayPostIdea =
+    generatedPost ?? (trendSource === "sample" ? dummyGeneratedPosts[0] : null);
 
   const popularCategories = useMemo(() => {
     const categoryCounts = new Map<TrendCategory, number>();
 
-    dummyTrends.forEach((trend) => {
+    displayedTrends.forEach((trend) => {
       categoryCounts.set(trend.category, (categoryCounts.get(trend.category) ?? 0) + 1);
     });
 
     return Array.from(categoryCounts.entries())
       .sort((firstCategory, secondCategory) => secondCategory[1] - firstCategory[1])
       .slice(0, 8);
-  }, []);
+  }, [displayedTrends]);
 
   async function handleQuickGenerate(type: QuickGenerateType) {
+    if (!recommendedTrend) {
+      setStatusTone("warning");
+      setMessage("トレンドが登録されていないため、先にトレンドを登録してください。");
+      return;
+    }
+
     setIsGenerating(true);
     setStatusTone("info");
     setMessage("AI生成中です。");
@@ -295,10 +362,30 @@ export function HomeDashboard() {
         description="今日見る情報と、すぐ作る文章だけを前に出しました。スマホでも片手で押しやすい毎日用のホームです。"
       />
 
+      {trendSource === "loading" ? (
+        <StatusMessage isLoading tone="info">
+          Supabaseからホーム用のトレンドを読み込んでいます。
+        </StatusMessage>
+      ) : null}
+
+      {trendSource === "error" ? (
+        <StatusMessage tone="error">
+          {trendLoadError ?? "トレンドを読み込めませんでした。"}
+        </StatusMessage>
+      ) : null}
+
+      {trendSource === "sample" ? (
+        <StatusMessage tone="warning">
+          Supabase未設定のため、ホームでは確認用サンプルを表示しています。
+        </StatusMessage>
+      ) : null}
+
       <FinalMarketingDashboard />
 
       <section className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
         <article className="rounded-lg border border-teal-200 bg-white p-4 shadow-sm sm:p-5">
+          {recommendedTrend ? (
+            <>
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <p className="text-sm font-semibold text-teal-700">
@@ -332,6 +419,21 @@ export function HomeDashboard() {
               細かく生成
             </Button>
           </div>
+            </>
+          ) : (
+            <EmptyState
+              description={
+                trendSource === "empty"
+                  ? "トレンド一覧からURLを登録するか、自動生成を実行すると表示されます。"
+                  : "トレンドを取得できたあと、今日のおすすめがここに表示されます。"
+              }
+              title={
+                trendSource === "empty"
+                  ? "おすすめトレンドはまだありません"
+                  : "おすすめトレンドを確認できません"
+              }
+            />
+          )}
         </article>
 
         <section className="rounded-lg border border-stone-200 bg-white p-4 shadow-sm sm:p-5">
@@ -345,7 +447,7 @@ export function HomeDashboard() {
             {quickGenerateButtons.map((button) => (
               <button
                 className="min-h-14 rounded-md border border-stone-300 bg-white px-3 text-sm font-semibold text-stone-800 hover:bg-stone-50 disabled:cursor-not-allowed disabled:bg-stone-100 disabled:text-stone-400"
-                disabled={isGenerating}
+                disabled={isGenerating || !recommendedTrend}
                 key={button.type}
                 onClick={() => handleQuickGenerate(button.type)}
                 type="button"

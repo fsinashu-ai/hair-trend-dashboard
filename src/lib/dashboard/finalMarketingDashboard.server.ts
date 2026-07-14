@@ -132,6 +132,16 @@ function createDummyBlogStatusCounts(): BlogStatusCounts {
   };
 }
 
+function createEmptyBlogStatusCounts(): BlogStatusCounts {
+  return {
+    draftCount: 0,
+    latestTitle: "",
+    publishedCount: 0,
+    readyCount: 0,
+    totalCount: 0,
+  };
+}
+
 async function safe<T>(fallback: T, callback: () => Promise<T>) {
   try {
     return await callback();
@@ -187,30 +197,60 @@ export async function createFinalMarketingDashboardSummary(): Promise<FinalMarke
     }),
     { clicks: 0, conversions: 0, cost: 0, impressions: 0 },
   );
-  const adMetrics = latestAdImport?.metrics ?? {
-    averageCpa:
-      fallbackAdTotals.conversions > 0
-        ? fallbackAdTotals.cost / fallbackAdTotals.conversions
-        : 0,
-    averageCpc:
-      fallbackAdTotals.clicks > 0
-        ? fallbackAdTotals.cost / fallbackAdTotals.clicks
-        : 0,
-    averageCtr:
-      fallbackAdTotals.impressions > 0
-        ? fallbackAdTotals.clicks / fallbackAdTotals.impressions
-        : 0,
-    totalClicks: fallbackAdTotals.clicks,
-    totalConversions: fallbackAdTotals.conversions,
-    totalCost: fallbackAdTotals.cost,
-    totalImpressions: fallbackAdTotals.impressions,
-  };
+  const adMetrics = latestAdImport?.metrics ??
+    (usesSupabase
+      ? {
+          averageCpa: 0,
+          averageCpc: 0,
+          averageCtr: 0,
+          totalClicks: 0,
+          totalConversions: 0,
+          totalCost: 0,
+          totalImpressions: 0,
+        }
+      : {
+          averageCpa:
+            fallbackAdTotals.conversions > 0
+              ? fallbackAdTotals.cost / fallbackAdTotals.conversions
+              : 0,
+          averageCpc:
+            fallbackAdTotals.clicks > 0
+              ? fallbackAdTotals.cost / fallbackAdTotals.clicks
+              : 0,
+          averageCtr:
+            fallbackAdTotals.impressions > 0
+              ? fallbackAdTotals.clicks / fallbackAdTotals.impressions
+              : 0,
+          totalClicks: fallbackAdTotals.clicks,
+          totalConversions: fallbackAdTotals.conversions,
+          totalCost: fallbackAdTotals.cost,
+          totalImpressions: fallbackAdTotals.impressions,
+        });
   const seoReport = dummySeoReports[0];
-  const ga4Import = latestGa4 ?? dummyGa4Dataset.imports[0];
-  const taskItems = pickActionTasks(seoTasks?.length ? seoTasks : dummySeoTasks);
+  const ga4Metrics = latestGa4?.metrics ??
+    (usesSupabase
+      ? {
+          averageEngagementSeconds: 0,
+          conversions: 0,
+          engagementRate: 0,
+          landingPageCount: 0,
+          lineClicks: 0,
+          reservationClicks: 0,
+          sessions: 0,
+          sourceCount: 0,
+          users: 0,
+          views: 0,
+        }
+      : dummyGa4Dataset.imports[0].metrics);
+  const taskItems = seoTasks
+    ? pickActionTasks(seoTasks)
+    : usesSupabase
+      ? []
+      : pickActionTasks(dummySeoTasks);
   const analysisTasks = [
     ...(latestSeoAnalysis?.monthlyTasks ?? []),
-    ...(latestGa4Analysis?.monthlyTasks ?? ga4MockAnalysis.monthlyTasks),
+    ...(latestGa4Analysis?.monthlyTasks ??
+      (usesSupabase ? [] : ga4MockAnalysis.monthlyTasks)),
   ].map((task) => ({
     href: "/seo/tasks",
     label: task.title,
@@ -229,14 +269,16 @@ export async function createFinalMarketingDashboardSummary(): Promise<FinalMarke
             source: "広告案",
           },
         ]
-      : [
+      : !usesSupabase
+        ? [
           {
             href: "/ads/creatives",
             label: "LINE相談につながる広告案を1つ作る",
             priority: "medium" as const,
             source: "広告案",
           },
-        ];
+          ]
+        : [];
   const pageIntegrationCard = {
     highPriorityPages:
       pageIntegration?.rows.filter((row) => row.priority === "high").length ?? 0,
@@ -325,14 +367,17 @@ export async function createFinalMarketingDashboardSummary(): Promise<FinalMarke
   const geminiReview =
     latestSeoAnalysis?.summary ||
     latestGa4Analysis?.summary ||
-    seoReport.aiAnalysis ||
-    seoMockAnalysis;
-  const hasRealDashboardData = Boolean(
+    (usesSupabase
+      ? "Gemini分析はまだありません。集計データを取り込んで分析を実行してください。"
+      : seoReport.aiAnalysis || seoMockAnalysis);
+  const hasAnyRealData = Boolean(
     latestSearchConsole || latestGa4 || latestAdImport || blogCounts,
   );
-  const includesSampleData = Boolean(
-    !latestSearchConsole || !latestGa4 || !latestAdImport || !blogCounts,
+  const hasAllPrimaryData = Boolean(
+    latestSearchConsole && latestGa4 && latestAdImport && blogCounts,
   );
+  const blogStatus = blogCounts ??
+    (usesSupabase ? createEmptyBlogStatusCounts() : createDummyBlogStatusCounts());
 
   return {
     ad: {
@@ -341,40 +386,63 @@ export async function createFinalMarketingDashboardSummary(): Promise<FinalMarke
       cost: yen(adMetrics.totalCost),
       cpa: yen(adMetrics.averageCpa),
       ctr: adMetrics.averageCtr,
+      hasData: Boolean(latestAdImport) || !usesSupabase,
       impressions: adMetrics.totalImpressions,
       sourceLabel: latestAdImport
         ? `${latestAdImport.platform} / ${latestAdImport.periodStart}〜${latestAdImport.periodEnd}`
-        : "サンプル広告レポート",
+        : usesSupabase
+          ? "未取り込み"
+          : "確認用サンプル広告",
     },
-    blog: blogCounts ?? createDummyBlogStatusCounts(),
+    blog: {
+      ...blogStatus,
+      hasData: Boolean(blogCounts) || !usesSupabase,
+      sourceLabel: blogCounts
+        ? "保存済みブログ記事"
+        : usesSupabase
+          ? "未取り込み"
+          : "確認用サンプルブログ",
+    },
     generatedAt: new Date().toISOString(),
     geminiReview,
     line: {
-      conversions: ga4Import.metrics.conversions,
-      lineClicks: ga4Import.metrics.lineClicks,
-      reservationClicks: ga4Import.metrics.reservationClicks,
+      conversions: ga4Metrics.conversions,
+      hasData: Boolean(latestGa4) || !usesSupabase,
+      lineClicks: ga4Metrics.lineClicks,
+      reservationClicks: ga4Metrics.reservationClicks,
       sourceLabel: latestGa4
         ? `${latestGa4.periodStart}〜${latestGa4.periodEnd}`
-        : "サンプルGA4",
+        : usesSupabase
+          ? "未取り込み"
+          : "確認用サンプルGA4",
     },
     pageIntegration: pageIntegrationCard,
     monthlyActions,
     seo: {
       averagePosition:
-        latestSearchConsole?.metrics.averagePosition ?? seoReport.averagePosition,
-      clicks: latestSearchConsole?.metrics.clicks ?? seoReport.clicks,
-      ctr: latestSearchConsole?.metrics.ctr ?? seoReport.ctr / 100,
+        latestSearchConsole?.metrics.averagePosition ??
+        (usesSupabase ? 0 : seoReport.averagePosition),
+      clicks: latestSearchConsole?.metrics.clicks ??
+        (usesSupabase ? 0 : seoReport.clicks),
+      ctr: latestSearchConsole?.metrics.ctr ??
+        (usesSupabase ? 0 : seoReport.ctr / 100),
+      hasData: Boolean(latestSearchConsole) || !usesSupabase,
       impressions:
-        latestSearchConsole?.metrics.impressions ?? seoReport.impressions,
+        latestSearchConsole?.metrics.impressions ??
+        (usesSupabase ? 0 : seoReport.impressions),
       sourceLabel: latestSearchConsole
         ? `${latestSearchConsole.periodStart}〜${latestSearchConsole.periodEnd}`
-        : "サンプルSEOレポート",
+        : usesSupabase
+          ? "未取り込み"
+          : "確認用サンプルSEOレポート",
     },
-    sourceMode: !usesSupabase || !hasRealDashboardData
+    sourceMode: !usesSupabase
       ? "sample"
-      : includesSampleData
-        ? "mixed"
-        : "supabase",
+      : !hasAnyRealData
+        ? "empty"
+        : hasAllPrimaryData
+          ? "supabase"
+          : "mixed",
     todayActions,
     unfinishedTasks: unfinishedTasks.slice(0, 6),
   };

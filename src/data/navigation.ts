@@ -1,4 +1,4 @@
-import type { NavigationItem } from "@/types/navigation";
+import type { MobileNavigationItem, NavigationItem } from "@/types/navigation";
 
 export const navigationItems: NavigationItem[] = [
   { label: "ホーム", shortLabel: "ホーム", href: "/" },
@@ -15,4 +15,32 @@ export const navigationItems: NavigationItem[] = [
   { label: "画像分析", shortLabel: "画像", href: "/image-analysis" },
   { label: "AI品質チェック", shortLabel: "AI確認", href: "/quality-check" },
   { label: "設定", shortLabel: "設定", href: "/settings" },
+];
+
+export const mobileNavigationItems: MobileNavigationItem[] = [
+  { label: "ホーム", shortLabel: "ホーム", href: "/", matchPrefixes: ["/"] },
+  {
+    label: "情報収集",
+    shortLabel: "情報収集",
+    href: "/trends",
+    matchPrefixes: ["/trends", "/trend-sources", "/social-sources", "/social-inbox"],
+  },
+  {
+    label: "コンテンツ",
+    shortLabel: "コンテンツ",
+    href: "/blog",
+    matchPrefixes: ["/blog", "/post-generator"],
+  },
+  {
+    label: "分析",
+    shortLabel: "分析",
+    href: "/seo",
+    matchPrefixes: ["/seo", "/ads"],
+  },
+  {
+    label: "その他",
+    shortLabel: "その他",
+    href: "/settings",
+    matchPrefixes: ["/settings", "/keywords", "/image-analysis", "/quality-check"],
+  },
 ];

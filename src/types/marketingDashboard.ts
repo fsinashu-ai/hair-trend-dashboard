@@ -1,4 +1,8 @@
-export type DashboardSourceMode = "supabase" | "mixed" | "sample";
+export type DashboardSourceMode =
+  | "supabase"
+  | "mixed"
+  | "sample"
+  | "empty";
 
 export type DashboardMetricItem = {
   label: string;
@@ -21,20 +25,24 @@ export type FinalMarketingDashboardSummary = {
     cost: number;
     cpa: number;
     ctr: number;
+    hasData: boolean;
     impressions: number;
     sourceLabel: string;
   };
   blog: {
     draftCount: number;
+    hasData: boolean;
     latestTitle: string;
     publishedCount: number;
     readyCount: number;
+    sourceLabel: string;
     totalCount: number;
   };
   generatedAt: string;
   geminiReview: string;
   line: {
     conversions: number;
+    hasData: boolean;
     lineClicks: number;
     reservationClicks: number;
     sourceLabel: string;
@@ -50,6 +58,7 @@ export type FinalMarketingDashboardSummary = {
     averagePosition: number;
     clicks: number;
     ctr: number;
+    hasData: boolean;
     impressions: number;
     sourceLabel: string;
   };

@@ -41,14 +41,17 @@ function sourceModeLabel(
   sourceMode: FinalMarketingDashboardSummary["sourceMode"],
 ) {
   if (sourceMode === "supabase") return "実データ";
-  if (sourceMode === "mixed") return "一部サンプル";
-  return "サンプル含む";
+  if (sourceMode === "mixed") return "一部未取り込み";
+  if (sourceMode === "empty") return "データ待ち";
+  return "確認用サンプル";
 }
 
 function sourceModeTone(
   sourceMode: FinalMarketingDashboardSummary["sourceMode"],
 ) {
-  return sourceMode === "supabase" ? "success" : "warning";
+  if (sourceMode === "supabase") return "success";
+  if (sourceMode === "empty") return "info";
+  return "warning";
 }
 
 function sourceModeMessage(
@@ -58,9 +61,12 @@ function sourceModeMessage(
     return "Supabaseに保存された最新データを集約しています。";
   }
   if (sourceMode === "mixed") {
-    return "未取り込みの指標はサンプルで補っています。各カードのデータ元を確認してください。";
+    return "一部の指標が未取り込みです。各カードのデータ元を確認してください。";
   }
-  return "データ不足のため、サンプルを含めて表示しています。";
+  if (sourceMode === "empty") {
+    return "Supabaseに集計データがまだありません。Search Console、GA4、広告CSVの取り込みから始めてください。";
+  }
+  return "Supabase未設定のため、確認用サンプルを表示しています。";
 }
 
 function priorityLabel(priority: DashboardTaskItem["priority"]) {
@@ -205,32 +211,46 @@ export function FinalMarketingDashboard() {
     if (!summary) return [];
     return [
       {
-        helper: `${summary.seo.impressions.toLocaleString("ja-JP")}表示 / CTR ${formatPercent(summary.seo.ctr)} / 平均順位 ${summary.seo.averagePosition.toFixed(1)}`,
+        helper: summary.seo.hasData
+          ? `${summary.seo.impressions.toLocaleString("ja-JP")}表示 / CTR ${formatPercent(summary.seo.ctr)} / 平均順位 ${summary.seo.averagePosition.toFixed(1)}`
+          : "Search Consoleデータがまだありません",
         href: "/seo/search-console",
         label: "今月のSEO状況",
         sourceLabel: summary.seo.sourceLabel,
-        value: `${formatNumber(summary.seo.clicks)}クリック`,
+        value: summary.seo.hasData
+          ? `${formatNumber(summary.seo.clicks)}クリック`
+          : "未取得",
       },
       {
-        helper: `${formatNumber(summary.ad.clicks)}クリック / CTR ${formatPercent(summary.ad.ctr)} / CPA ${formatCpa(summary.ad.cpa)}`,
+        helper: summary.ad.hasData
+          ? `${formatNumber(summary.ad.clicks)}クリック / CTR ${formatPercent(summary.ad.ctr)} / CPA ${formatCpa(summary.ad.cpa)}`
+          : "広告データがまだありません",
         href: "/ads/imports",
         label: "広告状況",
         sourceLabel: summary.ad.sourceLabel,
-        value: formatYen(summary.ad.cost),
+        value: summary.ad.hasData ? formatYen(summary.ad.cost) : "未取得",
       },
       {
-        helper: `下書き ${summary.blog.draftCount} / 公開 ${summary.blog.publishedCount}`,
+        helper: summary.blog.hasData
+          ? `下書き ${summary.blog.draftCount} / 公開 ${summary.blog.publishedCount}`
+          : "ブログデータがまだありません",
         href: "/blog",
         label: "ブログ状況",
-        sourceLabel: summary.sourceMode === "sample" ? "サンプルブログ" : "保存済みブログ記事",
-        value: `${formatNumber(summary.blog.totalCount)}記事`,
+        sourceLabel: summary.blog.sourceLabel,
+        value: summary.blog.hasData
+          ? `${formatNumber(summary.blog.totalCount)}記事`
+          : "未取得",
       },
       {
-        helper: `予約クリック ${formatNumber(summary.line.reservationClicks)} / キーイベント ${formatNumber(summary.line.conversions)}`,
+        helper: summary.line.hasData
+          ? `予約クリック ${formatNumber(summary.line.reservationClicks)} / キーイベント ${formatNumber(summary.line.conversions)}`
+          : "GA4データがまだありません",
         href: "/seo/ga4",
         label: "LINE導線",
         sourceLabel: summary.line.sourceLabel,
-        value: `${formatNumber(summary.line.lineClicks)} LINEクリック`,
+        value: summary.line.hasData
+          ? `${formatNumber(summary.line.lineClicks)} LINEクリック`
+          : "未取得",
       },
       {
         helper: `高優先 ${summary.pageIntegration.highPriorityPages}件 / 3媒体一致 ${summary.pageIntegration.pagesWithAllSources}件`,
