@@ -69,7 +69,7 @@ export function SearchConsoleDashboard({ initialImportId }: SearchConsoleDashboa
   );
 
   const analysis =
-    generatedAnalysis?.importId === selectedImport?.id
+    generatedAnalysis && selectedImport && generatedAnalysis.importId === selectedImport.id
       ? generatedAnalysis.value
       : selectedImport
         ? dataset.analysesByImport[selectedImport.id] ?? null

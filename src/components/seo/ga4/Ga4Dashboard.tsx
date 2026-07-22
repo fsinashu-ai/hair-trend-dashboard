@@ -59,7 +59,7 @@ export function Ga4Dashboard({ initialImportId }: Ga4DashboardProps) {
   const basic = useMemo(() => createGa4BasicAnalysis(rows), [rows]);
 
   const analysis =
-    generatedAnalysis?.importId === selectedImport?.id
+    generatedAnalysis && selectedImport && generatedAnalysis.importId === selectedImport.id
       ? generatedAnalysis.value
       : selectedImport
         ? dataset.analysesByImport[selectedImport.id] ?? null
