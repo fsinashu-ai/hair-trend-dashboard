@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { GeminiServiceError } from "@/lib/ai/server";
 import { ga4MockAnalysis } from "@/data/ga4";
 import { generateGa4Analysis } from "@/lib/ga4/analysis.server";
+import { getEmailMetricsAnalysisContext } from "@/lib/emailMetrics";
 import {
   compareGa4Periods,
   createGa4BasicAnalysis,
@@ -79,6 +80,10 @@ export async function POST(request: Request) {
       currentImport.comparisonLabel || "前回期間",
     );
     const basic = createGa4BasicAnalysis(rows);
+    const supplementalEmailMetrics = getEmailMetricsAnalysisContext(
+      currentImport.periodStart,
+      currentImport.periodEnd,
+    );
     const inputHash = createHash("sha256")
       .update(
         JSON.stringify({
@@ -86,6 +91,7 @@ export async function POST(request: Request) {
           contentHash: currentImport.contentHash,
           metrics,
           previousCount: previousRows.length,
+          supplementalEmailMetrics,
         }),
       )
       .digest("hex");
@@ -110,6 +116,7 @@ export async function POST(request: Request) {
         comparison,
         metrics,
         periodLabel: `${currentImport.periodStart}〜${currentImport.periodEnd}`,
+        supplementalEmailMetrics,
       });
     } catch (error) {
       fallbackCode =

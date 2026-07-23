@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { generateAiText } from "@/lib/ai/server";
 import { getSalonPromptContext } from "@/lib/salonProfile";
 import { seoMockAnalysis } from "@/data/seoAds";
+import { getEmailMetricsAnalysisContext } from "@/lib/emailMetrics";
 
 export const runtime = "nodejs";
 
@@ -22,6 +23,7 @@ export async function POST(request: Request) {
   const body = (await request.json().catch(() => ({}))) as AnalysisRequest;
   const scope = body.scope === "ads" ? "ads" : body.scope === "integrated" ? "integrated" : "seo";
   const scopeLabel = scope === "ads" ? "広告管理データ" : scope === "integrated" ? "ページ統合分析データ" : "SEO管理データ";
+  const supplementalEmailMetrics = getEmailMetricsAnalysisContext();
 
   try {
     const result = await generateAiText({
@@ -35,6 +37,8 @@ export async function POST(request: Request) {
         "Google APIとの接続、広告の自動出稿、予算の自動変更、WordPressへの自動投稿は提案しないでください。",
         "データ:",
         serializeContext(body.context),
+        "メール月次レポートによる補完コンテキスト（GA4・広告等へ加算禁止）:",
+        serializeContext(supplementalEmailMetrics),
       ].join("\n\n"),
       systemInstruction: [
         "あなたは美容室ef.mayke`sのSEO・広告管理を支援する日本語アシスタントです。",

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { DataScopePanel } from "@/components/marketing/DataScopePanel";
+import { EmailMetricsSupplement } from "@/components/seo/ga4/EmailMetricsSupplement";
 import { Badge } from "@/components/ui/Badge";
 import { StatusMessage } from "@/components/ui/StatusMessage";
 import {
@@ -14,12 +15,17 @@ import {
 import { saveLocalGa4Analysis } from "@/lib/ga4/localStorage";
 import { useGa4Dataset } from "@/components/seo/ga4/useGa4Dataset";
 import type { Ga4Analysis, Ga4Candidate } from "@/types/ga4";
+import type { EmailMetricMonthSummary } from "@/types/emailMetrics";
 
 type Ga4DashboardProps = {
+  emailMetricMonths: EmailMetricMonthSummary[];
   initialImportId?: string;
 };
 
-export function Ga4Dashboard({ initialImportId }: Ga4DashboardProps) {
+export function Ga4Dashboard({
+  emailMetricMonths,
+  initialImportId,
+}: Ga4DashboardProps) {
   const { dataset, isLoading, load, message, storageMode } = useGa4Dataset(initialImportId);
   const [selectedImportId, setSelectedImportId] = useState(initialImportId ?? "");
   const [generatedAnalysis, setGeneratedAnalysis] = useState<{
@@ -115,7 +121,20 @@ export function Ga4Dashboard({ initialImportId }: Ga4DashboardProps) {
   }
 
   if (!selectedImport) {
-    return <StatusMessage tone="warning">CSV取り込み画面からGA4データを登録してください。</StatusMessage>;
+    const firstSupplementMonth = emailMetricMonths[0]?.month ?? "2022-12";
+    const lastSupplementMonth = emailMetricMonths.at(-1)?.month ?? "2026-06";
+    return (
+      <div className="space-y-4 pb-10">
+        <StatusMessage tone="warning">
+          GA4は未取得です。CSV取り込みまたはAPI取得後に、同じ期間のメール月次レポートと照合できます。
+        </StatusMessage>
+        <EmailMetricsSupplement
+          months={emailMetricMonths}
+          periodEnd={`${lastSupplementMonth}-31`}
+          periodStart={`${firstSupplementMonth}-01`}
+        />
+      </div>
+    );
   }
 
   const isGa4DataApiImport = selectedImport.fileName.startsWith("ga4-data-api-");
@@ -170,12 +189,19 @@ export function Ga4Dashboard({ initialImportId }: Ga4DashboardProps) {
         limitations={[
           "LINE・予約クリックは、GA4で該当イベントが正しく計測されている場合だけ表示できます。",
           "電話・Instagram・Googleマップなど、取り込んでいないイベントはこの画面の数値に含まれません。",
+          "メール月次レポートは照合用の別集計です。GA4のカードには加算していません。",
           "Gemini分析を実行しても、GA4の全行は送らず、アプリで集計した値と改善候補だけを送ります。",
         ]}
         period={`${selectedImport.periodStart}〜${selectedImport.periodEnd}`}
         sourceKind={sourceKind}
         sourceLabel={sourceLabel}
         updatedAt={selectedImport.updatedAt}
+      />
+
+      <EmailMetricsSupplement
+        months={emailMetricMonths}
+        periodEnd={selectedImport.periodEnd}
+        periodStart={selectedImport.periodStart}
       />
 
       <StatusMessage isLoading={isLoading} tone={storageMode === "demo" ? "warning" : "info"}>{message}</StatusMessage>

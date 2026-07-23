@@ -1,6 +1,7 @@
 import { Ga4Dashboard } from "@/components/seo/ga4/Ga4Dashboard";
 import { MarketingSectionNav } from "@/components/marketing/MarketingSectionNav";
 import { PageHeader } from "@/components/sections/PageHeader";
+import { getEmailMetricMonths } from "@/lib/emailMetrics";
 
 export default async function Ga4Page({
   searchParams,
@@ -16,7 +17,10 @@ export default async function Ga4Page({
         title="GA4分析"
       />
       <MarketingSectionNav activeHref="/seo/ga4" />
-      <Ga4Dashboard initialImportId={params.importId} />
+      <Ga4Dashboard
+        emailMetricMonths={getEmailMetricMonths()}
+        initialImportId={params.importId}
+      />
     </main>
   );
 }

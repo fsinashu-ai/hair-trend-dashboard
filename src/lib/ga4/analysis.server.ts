@@ -5,6 +5,7 @@ import {
 } from "@/lib/ai/server";
 import { getSalonPromptContext } from "@/lib/salonProfile";
 import { ga4MockAnalysis } from "@/data/ga4";
+import type { EmailMetricsAnalysisContext } from "@/types/emailMetrics";
 import type {
   Ga4Analysis,
   Ga4BasicAnalysis,
@@ -17,6 +18,7 @@ type AnalysisContext = {
   metrics: Ga4Metrics;
   comparison: Ga4Comparison;
   basic: Ga4BasicAnalysis;
+  supplementalEmailMetrics: EmailMetricsAnalysisContext;
 };
 
 const responseSchema = {
@@ -185,6 +187,7 @@ export async function generateGa4Analysis(context: AnalysisContext) {
     lineOpportunityPages: context.basic.lineOpportunityPages.map(compactCandidate),
     metrics: context.metrics,
     period: context.periodLabel,
+    supplementalEmailMetrics: context.supplementalEmailMetrics,
     topLandingPages: context.basic.topLandingPages
       .slice(0, 20)
       .map(compactCandidate),
@@ -200,9 +203,10 @@ export async function generateGa4Analysis(context: AnalysisContext) {
       "計算は入力済みの集計値だけを使い、存在しない予約数、口コミ、施術事例を作らないでください。",
       "Google API連携、広告自動出稿、WordPress自動更新は提案しないでください。",
       "SEO記事、LINE相談導線、ページ改善、スマホ閲覧の改善に絞って、人が確認して実行できる提案にしてください。",
+      "メール月次レポートはGA4とは別集計です。GA4へ加算せず、欠測や差異を説明する補完コンテキストとしてだけ使ってください。",
     ].join("\n\n"),
     prompt: [
-      "以下はアプリ側で集計済みのGA4要約です。CSV全行ではありません。",
+      "以下はアプリ側で集計済みのGA4要約と、メール月次レポートの補完要約です。CSVやメールの全件ではありません。",
       "総評、良い点、悪い点、優先ページ、コンバージョン改善、LINE CTA、ブログ案、月次タスク、次の行動をJSONオブジェクトだけで返してください。",
       `JSON構造: ${JSON.stringify(responseSchema)}`,
       JSON.stringify(compactContext),
