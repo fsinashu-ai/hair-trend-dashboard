@@ -99,6 +99,7 @@ export function Ga4Dashboard({
       const data = (await response.json()) as {
         analysis?: Ga4Analysis;
         error?: string;
+        fallbackCode?: string;
         reused?: boolean;
       };
       if (!response.ok || !data.analysis) throw new Error(data.error || "分析できませんでした。");
@@ -108,7 +109,11 @@ export function Ga4Dashboard({
       }
       setActionTone(data.analysis.provider === "mock" ? "warning" : "success");
       setActionMessage(
-        data.reused
+        data.fallbackCode === "timeout"
+          ? "Geminiの応答が時間内に届かなかったため、モック分析を表示しています。時間を置いて再分析してください。"
+          : data.fallbackCode
+            ? "Gemini分析で問題が発生したため、モック分析を表示しています。設定と利用状況を確認してください。"
+            : data.reused
           ? "同じデータの保存済み分析を再利用しました。"
           : `${data.analysis.providerLabel}で分析しました。`,
       );

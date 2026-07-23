@@ -4,7 +4,9 @@ export const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash";
 
 // Keep AI requests short enough for Vercel Cron and manual generation routes.
 // A failed request is handled by each feature's mock/fallback response.
-const geminiTimeoutMs = 15_000;
+// GA4分析のように構造化出力を伴う処理は、Vercelからの初回リクエストで
+// 15秒を超えることがあるため、機能側のmaxDuration内で余裕を持たせる。
+const geminiTimeoutMs = 30_000;
 const geminiRetryAttempts = 1;
 const maxPromptCharacters = 24_000;
 

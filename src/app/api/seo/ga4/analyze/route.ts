@@ -19,6 +19,7 @@ import { isServerSupabaseConfigured } from "@/lib/supabase/serverClient";
 import type { Ga4Analysis, Ga4Import, Ga4Row } from "@/types/ga4";
 
 export const runtime = "nodejs";
+export const maxDuration = 60;
 
 type AnalyzeRequest = {
   importId?: string;
@@ -98,7 +99,8 @@ export async function POST(request: Request) {
 
     if (isServerSupabaseConfigured() && importId) {
       const reusable = await findReusableGa4Analysis(importId, inputHash);
-      if (reusable) {
+      // タイムアウトなどで保存されたモックは、Gemini復旧後に再試行できるよう再利用しない。
+      if (reusable && reusable.provider !== "mock") {
         return NextResponse.json({ analysis: reusable, basic, comparison, metrics, reused: true });
       }
     } else {

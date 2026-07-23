@@ -196,7 +196,7 @@ export async function generateGa4Analysis(context: AnalysisContext) {
 
   const result = await generateAiText({
     feature: "ga4-seo-conversion-analysis",
-    maxOutputTokens: 3600,
+    maxOutputTokens: 2600,
     systemInstruction: [
       "あなたは美容室のGA4データを分析する日本語の集客改善担当者です。",
       getSalonPromptContext(),
