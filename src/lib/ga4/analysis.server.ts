@@ -1,7 +1,6 @@
 import {
-  generateAiText,
+  generateGeminiJson,
   isGeminiConfigured,
-  parseGeminiJson,
 } from "@/lib/ai/server";
 import { getSalonPromptContext } from "@/lib/salonProfile";
 import { ga4MockAnalysis } from "@/data/ga4";
@@ -25,10 +24,19 @@ const responseSchema = {
   type: "object",
   properties: {
     summary: { type: "string" },
-    positivePoints: { type: "array", items: { type: "string" } },
-    negativePoints: { type: "array", items: { type: "string" } },
+    positivePoints: {
+      type: "array",
+      items: { type: "string" },
+      maxItems: 6,
+    },
+    negativePoints: {
+      type: "array",
+      items: { type: "string" },
+      maxItems: 6,
+    },
     priorityPages: {
       type: "array",
+      maxItems: 6,
       items: {
         type: "object",
         properties: {
@@ -40,10 +48,19 @@ const responseSchema = {
         required: ["pageUrl", "reason", "recommendedAction", "priority"],
       },
     },
-    conversionIdeas: { type: "array", items: { type: "string" } },
-    lineCtaSuggestions: { type: "array", items: { type: "string" } },
+    conversionIdeas: {
+      type: "array",
+      items: { type: "string" },
+      maxItems: 6,
+    },
+    lineCtaSuggestions: {
+      type: "array",
+      items: { type: "string" },
+      maxItems: 6,
+    },
     contentIdeas: {
       type: "array",
+      maxItems: 6,
       items: {
         type: "object",
         properties: {
@@ -56,6 +73,7 @@ const responseSchema = {
     },
     monthlyTasks: {
       type: "array",
+      maxItems: 8,
       items: {
         type: "object",
         properties: {
@@ -69,7 +87,11 @@ const responseSchema = {
         required: ["title", "taskType", "priority", "reason"],
       },
     },
-    nextActions: { type: "array", items: { type: "string" } },
+    nextActions: {
+      type: "array",
+      items: { type: "string" },
+      maxItems: 8,
+    },
   },
   required: [
     "summary",
@@ -194,9 +216,10 @@ export async function generateGa4Analysis(context: AnalysisContext) {
     topSources: context.basic.topSources.slice(0, 20).map(compactCandidate),
   };
 
-  const result = await generateAiText({
+  const result = await generateGeminiJson<Record<string, unknown>>({
     feature: "ga4-seo-conversion-analysis",
-    maxOutputTokens: 2600,
+    maxOutputTokens: 4096,
+    responseJsonSchema: responseSchema,
     systemInstruction: [
       "あなたは美容室のGA4データを分析する日本語の集客改善担当者です。",
       getSalonPromptContext(),
@@ -208,13 +231,10 @@ export async function generateGa4Analysis(context: AnalysisContext) {
     prompt: [
       "以下はアプリ側で集計済みのGA4要約と、メール月次レポートの補完要約です。CSVやメールの全件ではありません。",
       "総評、良い点、悪い点、優先ページ、コンバージョン改善、LINE CTA、ブログ案、月次タスク、次の行動をJSONオブジェクトだけで返してください。",
-      `JSON構造: ${JSON.stringify(responseSchema)}`,
+      "各配列は重要度の高いものから最大6件、monthlyTasksとnextActionsは最大8件に絞ってください。",
       JSON.stringify(compactContext),
     ].join("\n\n"),
   });
 
-  return normalizeAnalysis(
-    parseGeminiJson<Record<string, unknown>>(result.text),
-    result.model,
-  );
+  return normalizeAnalysis(result.value, result.model);
 }
