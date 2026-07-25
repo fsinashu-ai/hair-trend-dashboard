@@ -283,7 +283,7 @@ NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
 GEMINI_API_KEY=
-GEMINI_MODEL=gemini-2.5-flash
+GEMINI_MODEL=gemini-3.5-flash-lite
 YOUTUBE_API_KEY=
 YOUTUBE_DAILY_VIDEO_LIMIT=30
 YOUTUBE_KEYWORD_LIMIT=6
@@ -306,7 +306,7 @@ APP_PASSWORD=
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | 任意 | Supabaseのanon key |
 | `SUPABASE_SERVICE_ROLE_KEY` | Search ConsoleやGA4をSupabase保存する場合は必須 | サーバーAPIだけで使う秘密鍵。`NEXT_PUBLIC_`を付けない |
 | `GEMINI_API_KEY` | 任意 | ブログ、投稿、SEO分析、画像分析で使うGemini APIキー。未設定時はモック生成 |
-| `GEMINI_MODEL` | 任意 | Geminiで使うモデル名。未設定時は`gemini-2.5-flash` |
+| `GEMINI_MODEL` | 任意 | Geminiで使うモデル名。未設定時は`gemini-3.5-flash-lite` |
 | `YOUTUBE_API_KEY` | YouTube周回利用時は必須 | YouTube Data APIのAPIキー。サーバー側だけで使います |
 | `YOUTUBE_DAILY_VIDEO_LIMIT` | 任意 | YouTube周回で1日に保存する動画候補数の上限。未設定時は30件、最大30件 |
 | `YOUTUBE_KEYWORD_LIMIT` | 任意 | YouTube周回で1回に検索するキーワード数の上限。未設定時は6個、最大6個 |
@@ -646,7 +646,7 @@ Google AI StudioでGemini APIキーを作成し、`.env.local` に以下を設�
 
 ```bash
 GEMINI_API_KEY=your-gemini-api-key
-GEMINI_MODEL=gemini-2.5-flash
+GEMINI_MODEL=gemini-3.5-flash-lite
 ```
 
 Gemini APIには無料枠が用意される場合がありますが、条件や上限はGoogle側の最新設定に従います。APIキーが未設定、無効、利用制限中、または応答を読み取れない場合はモックレスポンスへ切り替わります。`GEMINI_API_KEY`は`NEXT_PUBLIC_`を付けず、GitHubへ含めないでください。
@@ -977,7 +977,7 @@ Vercelの `Project Settings > Environment Variables` に以下を設定してく
 ```bash
 CRON_SECRET=自分だけが知っている長いランダム文字列
 GEMINI_API_KEY=your-gemini-api-key
-GEMINI_MODEL=gemini-2.5-flash
+GEMINI_MODEL=gemini-3.5-flash-lite
 NEXT_PUBLIC_SUPABASE_URL=your-supabase-project-url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
 YOUTUBE_API_KEY=your-youtube-api-key
@@ -1109,7 +1109,7 @@ NEXT_PUBLIC_SUPABASE_URL=your-supabase-project-url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
 SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 GEMINI_API_KEY=your-gemini-api-key
-GEMINI_MODEL=gemini-2.5-flash
+GEMINI_MODEL=gemini-3.5-flash-lite
 YOUTUBE_API_KEY=your-youtube-api-key
 YOUTUBE_DAILY_VIDEO_LIMIT=30
 YOUTUBE_KEYWORD_LIMIT=6

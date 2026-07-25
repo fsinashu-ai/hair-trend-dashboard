@@ -1,6 +1,6 @@
 import { GoogleGenAI } from "@google/genai";
 
-export const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash";
+export const DEFAULT_GEMINI_MODEL = "gemini-3.5-flash-lite";
 
 // Keep AI requests short enough for Vercel Cron and manual generation routes.
 // A failed request is handled by each feature's mock/fallback response.
@@ -170,6 +170,7 @@ async function generate({
 }): Promise<GeminiGenerationResult> {
   const inputCharacters = assertInputLength(systemInstruction, prompt);
   const model = getGeminiModel();
+  const isGemini3Model = model.startsWith("gemini-3");
   const requestNumber = ++callCount;
 
   console.info("[gemini] request", {
@@ -186,7 +187,7 @@ async function generate({
         responseJsonSchema,
         responseMimeType: responseJsonSchema ? "application/json" : undefined,
         systemInstruction,
-        temperature: 0.55,
+        ...(isGemini3Model ? {} : { temperature: 0.55 }),
         thinkingConfig: model.includes("2.5")
           ? { thinkingBudget: 0 }
           : undefined,
