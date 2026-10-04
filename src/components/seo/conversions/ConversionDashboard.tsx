@@ -144,7 +144,7 @@ export function ConversionDashboard({ initialImportId }: ConversionDashboardProp
         <label className="grid min-w-0 flex-1 gap-2 text-sm font-medium text-stone-700">
           対象GA4データ
           <select
-            className="min-h-11 rounded-md border border-stone-300 bg-white px-3"
+            className="min-h-11 w-full min-w-0 rounded-md border border-stone-300 bg-white px-3"
             onChange={(event) => void handleImportChange(event.target.value)}
             value={selectedImport.id}
           >
