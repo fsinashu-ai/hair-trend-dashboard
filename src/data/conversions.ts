@@ -50,7 +50,7 @@ export const conversionMockAnalysis: ConversionAnalysis = {
   summary:
     "現在のGA4データでは、LINE相談・予約につながる入口を見つけることが優先です。まずは成果が出ている流入元を残しつつ、アクセスがあるのに行動が少ないページのCTAを改善しましょう。",
   trackingSuggestions: [
-    "GA4でline_click、reservation_click、tel_clickをキーイベントに設定すると、分類精度が上がります。",
+    "GA4でTOPのline_click、LPのLINE_click_ad、電話タップを区別して確認します。",
     "イベントCSVを月1回取り込むと、LINE・予約・電話の内訳を見やすくできます。",
   ],
 };

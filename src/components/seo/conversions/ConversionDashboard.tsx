@@ -170,11 +170,12 @@ export function ConversionDashboard({ initialImportId }: ConversionDashboardProp
       </StatusMessage>
 
       <section className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-        <MetricCard label="成果行動" value={`${overview.metrics.totalActions.toLocaleString("ja-JP")}件`} />
-        <MetricCard label="CV率" value={formatConversionRate(overview.metrics.conversionRate)} />
-        <MetricCard label="LINEクリック" value={`${overview.metrics.lineClicks.toLocaleString("ja-JP")}件`} />
+        <MetricCard label="行動クリック合計" value={`${overview.metrics.totalActions.toLocaleString("ja-JP")}件`} />
+        <MetricCard label="クリック数／セッション" value={formatConversionRate(overview.metrics.conversionRate)} />
+        <MetricCard label="サイトLINEクリック" value={`${overview.metrics.lineClicks.toLocaleString("ja-JP")}件`} />
+        <MetricCard label="LP LINEタップ" value={`${overview.metrics.lpLineTaps.toLocaleString("ja-JP")}件`} />
         <MetricCard label="予約クリック" value={`${overview.metrics.reservationClicks.toLocaleString("ja-JP")}件`} />
-        <MetricCard label="電話クリック" value={`${overview.metrics.phoneClicks.toLocaleString("ja-JP")}件`} />
+        <MetricCard label="電話タップ" value={`${overview.metrics.phoneClicks.toLocaleString("ja-JP")}件`} />
         <MetricCard label="Instagram遷移" value={`${overview.metrics.instagramClicks.toLocaleString("ja-JP")}件`} />
         <MetricCard label="地図・マップ" value={`${overview.metrics.mapClicks.toLocaleString("ja-JP")}件`} />
         <MetricCard label="キーイベント" value={`${overview.metrics.keyEvents.toLocaleString("ja-JP")}件`} />
@@ -185,7 +186,7 @@ export function ConversionDashboard({ initialImportId }: ConversionDashboardProp
           <div>
             <h2 className="text-lg font-semibold text-teal-950">成果として見る行動</h2>
             <p className="mt-1 text-sm leading-6 text-teal-900">
-              GA4のイベント名が分かるCSVを追加すると、LINE・予約・電話などの分類精度が上がります。
+              サイトLINEはTOP・記事のline_click、LPはLINE_click_ad、電話はtel_click・TELまたはtel:リンクを集計します。汎用キーイベントは行動クリック合計に加えません。予約確定数ではなく、同じ人の複数クリックも含みます。クリック数／セッションは100％を超えることがあります。
             </p>
           </div>
           <Badge tone="info">{conversionDefinitions.length}種類</Badge>
@@ -282,11 +283,12 @@ function ConversionList({
               <p className="mt-2 text-xs leading-5 text-stone-500">
                 {item.pageTitle || item.sourceMedium || item.channelGroup || item.eventName || "詳細未取得"}
               </p>
-              <dl className="mt-3 grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
+              <dl className="mt-3 grid grid-cols-2 gap-2 text-sm sm:grid-cols-5">
                 <SmallMetric label="セッション" value={item.sessions.toLocaleString("ja-JP")} />
                 <SmallMetric label="ユーザー" value={item.users.toLocaleString("ja-JP")} />
-                <SmallMetric label="CV率" value={formatConversionRate(item.metrics.conversionRate)} />
-                <SmallMetric label="LINE" value={item.metrics.lineClicks.toLocaleString("ja-JP")} />
+                <SmallMetric label="クリック数／セッション" value={formatConversionRate(item.metrics.conversionRate)} />
+                <SmallMetric label="サイトLINE" value={item.metrics.lineClicks.toLocaleString("ja-JP")} />
+                <SmallMetric label="LP LINE" value={item.metrics.lpLineTaps.toLocaleString("ja-JP")} />
               </dl>
             </article>
           ))}

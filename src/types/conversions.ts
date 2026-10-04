@@ -2,6 +2,7 @@ import type { Ga4Row } from "@/types/ga4";
 
 export type ConversionDefinitionId =
   | "line"
+  | "line_lp"
   | "reservation"
   | "phone"
   | "instagram"
@@ -23,6 +24,7 @@ export type ConversionMetrics = {
   views: number;
   totalActions: number;
   lineClicks: number;
+  lpLineTaps: number;
   reservationClicks: number;
   phoneClicks: number;
   instagramClicks: number;

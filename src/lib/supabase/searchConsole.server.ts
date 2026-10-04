@@ -1,7 +1,9 @@
 import { getServerSupabaseClient } from "@/lib/supabase/serverClient";
+import type { SeoTaskStatus } from "@/types/seoAds";
 import type {
   SearchConsoleCsvPreview,
   SearchConsoleImport,
+  SearchConsoleImportSource,
   SearchConsoleMetrics,
   SearchConsoleRow,
   SearchConsoleSeoAnalysis,
@@ -14,6 +16,9 @@ type ImportMetadata = {
   reportMonth: string;
   comparisonLabel: string;
   memo: string;
+  searchType?: string;
+  source?: SearchConsoleImportSource;
+  sourceProperty?: string;
 };
 
 type ImportRow = {
@@ -26,6 +31,9 @@ type ImportRow = {
   comparison_label: string | null;
   memo: string | null;
   row_count: number;
+  search_type: string | null;
+  source: SearchConsoleImportSource | null;
+  source_property: string | null;
   excluded_row_count: number;
   warning_count: number;
   status: SearchConsoleImport["status"];
@@ -77,6 +85,9 @@ function toImport(row: ImportRow): SearchConsoleImport {
     periodStart: row.period_start,
     reportMonth: row.report_month,
     rowCount: row.row_count,
+    searchType: row.search_type ?? "web",
+    source: row.source === "search_console_api" ? "search_console_api" : "csv",
+    sourceProperty: row.source_property ?? "",
     status: row.status,
     updatedAt: row.updated_at,
     warningCount: row.warning_count,
@@ -124,6 +135,7 @@ export async function findDuplicateSearchConsoleImport(
     .eq("period_start", metadata.periodStart)
     .eq("period_end", metadata.periodEnd)
     .eq("row_count", preview.validRowCount)
+    .eq("source", metadata.source ?? "csv")
     .maybeSingle();
 
   if (error) throw error;
@@ -159,6 +171,9 @@ export async function saveSearchConsoleImport(
       period_start: metadata.periodStart,
       report_month: reportMonth,
       row_count: preview.validRowCount,
+      search_type: metadata.searchType ?? "web",
+      source: metadata.source ?? "csv",
+      source_property: metadata.sourceProperty ?? null,
       status: "preview",
       user_id: null,
       warning_count: preview.warningCount,
@@ -384,6 +399,31 @@ export async function createSeoTaskFromSuggestion({
   });
   if (error) throw error;
   return { duplicate: false };
+}
+
+export async function updateSeoTaskStatus({
+  status,
+  taskId,
+}: {
+  status: SeoTaskStatus;
+  taskId: string;
+}) {
+  const supabase = getServerSupabaseClient();
+  if (!supabase) return null;
+
+  const { data, error } = await supabase
+    .from("seo_tasks")
+    .update({ status })
+    .eq("id", taskId)
+    .select("id,status")
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) throw new Error("SEO task was not found.");
+
+  return {
+    id: String(data.id),
+    status: data.status as SeoTaskStatus,
+  };
 }
 
 export async function fetchSeoTasks(importId?: string) {

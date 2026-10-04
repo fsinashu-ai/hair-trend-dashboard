@@ -5,6 +5,8 @@ export const searchConsoleConfig = {
   localStorageRowLimit: 2000,
   maxFileBytes: 5 * 1024 * 1024,
   maxImportRows: 20_000,
+  searchConsoleApiMaxPages: 20,
+  searchConsoleApiRowLimit: 25_000,
   previewRowLimit: 10,
   thresholds: {
     lowCtr: 0.02,
@@ -37,4 +39,3 @@ export const searchConsoleTaskTypes = [
   "faq_update",
   "technical_check",
 ] as const;
-

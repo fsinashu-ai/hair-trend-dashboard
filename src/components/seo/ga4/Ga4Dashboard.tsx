@@ -9,9 +9,11 @@ import { StatusMessage } from "@/components/ui/StatusMessage";
 import {
   compareGa4Periods,
   createGa4BasicAnalysis,
+  findComparablePreviousImport,
   formatDuration,
   summarizeGa4Rows,
 } from "@/lib/ga4/metrics";
+import { countGa4RowActions } from "@/lib/ga4/events";
 import { saveLocalGa4Analysis } from "@/lib/ga4/localStorage";
 import { useGa4Dataset } from "@/components/seo/ga4/useGa4Dataset";
 import type { Ga4Analysis, Ga4Candidate } from "@/types/ga4";
@@ -41,11 +43,7 @@ export function Ga4Dashboard({
   const previousImport = useMemo(
     () =>
       selectedImport
-        ? dataset.imports.find(
-            (item) =>
-              item.id !== selectedImport.id &&
-              item.periodEnd < selectedImport.periodEnd,
-          )
+        ? findComparablePreviousImport(dataset.imports, selectedImport)
         : undefined,
     [dataset.imports, selectedImport],
   );
@@ -59,8 +57,15 @@ export function Ga4Dashboard({
   );
   const metrics = useMemo(() => summarizeGa4Rows(rows), [rows]);
   const comparison = useMemo(
-    () => compareGa4Periods(rows, previousRows, selectedImport?.comparisonLabel || "前回期間"),
-    [previousRows, rows, selectedImport?.comparisonLabel],
+    () =>
+      compareGa4Periods(
+        rows,
+        previousRows,
+        previousImport
+          ? `${previousImport.periodStart}〜${previousImport.periodEnd}`
+          : "同じ日数の直前期間",
+      ),
+    [previousImport, previousRows, rows],
   );
   const basic = useMemo(() => createGa4BasicAnalysis(rows), [rows]);
 
@@ -188,12 +193,13 @@ export function Ga4Dashboard({
         collected={[
           "ランディングページ、流入元・メディア、チャネル、ユーザー、セッション、表示回数",
           "エンゲージメント率・平均エンゲージメント時間・キーイベント（コンバージョン）",
-          "LINE・予約と判断できるイベント名がある場合のクリック数",
+          "サイトLINEのline_click、LPのLINE_click_adを完全一致で分離した件数",
+          "イベント発生日、実際の発生ページ、リンク先、リンク文言、キーイベント状態",
         ]}
         description="この分析は、選択したGA4データだけを対象にしています。GA4 Data APIで取得したものか、手動CSVかを確認してから判断してください。"
         limitations={[
-          "LINE・予約クリックは、GA4で該当イベントが正しく計測されている場合だけ表示できます。",
-          "電話・Instagram・Googleマップなど、取り込んでいないイベントはこの画面の数値に含まれません。",
+          "サイトLINEにはTOPと記事のline_clickが含まれます。LPはLINE_click_adを集計します。ユーザーは行別合計で、GA4の期間内重複除外人数とは異なります。クリックは相談・予約確定数ではありません。月全体同士の比較は日数差を含む合計値です。",
+          "電話タップはtel_click・TELイベント、またはlink_urlがtel:で始まるクリックを集計します。",
           "メール月次レポートは照合用の別集計です。GA4のカードには加算していません。",
           "Gemini分析を実行しても、GA4の全行は送らず、アプリで集計した値と改善候補だけを送ります。",
         ]}
@@ -212,12 +218,14 @@ export function Ga4Dashboard({
       <StatusMessage isLoading={isLoading} tone={storageMode === "demo" ? "warning" : "info"}>{message}</StatusMessage>
 
       <section className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-        <MetricCard label="ユーザー" value={metrics.users.toLocaleString("ja-JP")} />
+        <MetricCard label="ユーザー（行別合計）" value={metrics.users.toLocaleString("ja-JP")} />
         <MetricCard label="セッション" value={metrics.sessions.toLocaleString("ja-JP")} />
         <MetricCard label="表示回数" value={metrics.views.toLocaleString("ja-JP")} />
         <MetricCard label="エンゲージメント率" value={`${(metrics.engagementRate * 100).toFixed(1)}%`} />
         <MetricCard label="平均エンゲージメント時間" value={formatDuration(metrics.averageEngagementSeconds)} />
-        <MetricCard label="LINEクリック" value={metrics.lineClicks.toLocaleString("ja-JP")} />
+        <MetricCard label="サイトLINEクリック" value={metrics.lineClicks.toLocaleString("ja-JP")} />
+        <MetricCard label="LP LINEタップ" value={metrics.lpLineTaps.toLocaleString("ja-JP")} />
+        <MetricCard label="電話タップ" value={metrics.phoneTaps.toLocaleString("ja-JP")} />
         <MetricCard label="予約クリック" value={metrics.reservationClicks.toLocaleString("ja-JP")} />
         <MetricCard label="キーイベント" value={metrics.conversions.toLocaleString("ja-JP")} />
       </section>
@@ -231,7 +239,7 @@ export function Ga4Dashboard({
             <Change label="表示回数" value={formatPercentChange(comparison.views.percentChange)} />
             <Change label="相談・予約行動" value={formatPercentChange(comparison.conversionClicks.percentChange)} />
           </dl>
-        ) : <p className="mt-3 text-sm text-stone-500">比較データなし</p>}
+        ) : <p className="mt-3 text-sm text-stone-500">対象期間と重複しない月全体、または同じ日数の比較データがありません。</p>}
       </section>
 
       <section>
@@ -279,7 +287,7 @@ function CandidateTable({ candidates }: { candidates: Ga4Candidate[] }) {
     <div className="overflow-x-auto rounded-lg border border-stone-200 bg-white shadow-sm">
       <table className="min-w-full text-left text-sm">
         <thead><tr className="border-b border-stone-200 text-xs text-stone-500"><th className="px-4 py-3">ページ／流入元</th><th className="px-4 py-3">ユーザー</th><th className="px-4 py-3">表示</th><th className="px-4 py-3">行動</th><th className="px-4 py-3">理由</th></tr></thead>
-        <tbody>{candidates.map((item) => <tr className="border-b border-stone-100 last:border-0" key={`${item.category}-${item.key}`}><td className="max-w-80 px-4 py-3"><p className="break-words font-semibold text-stone-900">{item.key}</p><p className="mt-1 text-xs leading-5 text-stone-500">{item.pageTitle || item.sourceMedium || item.channelGroup}</p></td><td className="px-4 py-3">{item.users}</td><td className="px-4 py-3">{item.views}</td><td className="px-4 py-3">{item.lineClicks + item.reservationClicks + item.conversions}</td><td className="min-w-60 px-4 py-3 text-xs leading-5 text-stone-600">{item.reason}</td></tr>)}</tbody>
+        <tbody>{candidates.map((item) => <tr className="border-b border-stone-100 last:border-0" key={`${item.category}-${item.key}`}><td className="max-w-80 px-4 py-3"><p className="break-words font-semibold text-stone-900">{item.key}</p><p className="mt-1 text-xs leading-5 text-stone-500">{item.pageTitle || item.sourceMedium || item.channelGroup}</p></td><td className="px-4 py-3">{item.users}</td><td className="px-4 py-3">{item.views}</td><td className="px-4 py-3">{countGa4RowActions(item)}</td><td className="min-w-60 px-4 py-3 text-xs leading-5 text-stone-600">{item.reason}</td></tr>)}</tbody>
       </table>
     </div>
   );

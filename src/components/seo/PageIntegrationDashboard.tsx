@@ -76,7 +76,8 @@ function Ga4Cell({ row }: { row: IntegratedPage }) {
     <div className="space-y-1 text-xs leading-5">
       <p>セッション {row.ga4.sessions.toLocaleString("ja-JP")}</p>
       <p>ユーザー {row.ga4.users.toLocaleString("ja-JP")}</p>
-      <p>LINE {row.ga4.lineClicks} / 予約 {row.ga4.reservationClicks}</p>
+      <p>TOP LINE {row.ga4.lineClicks} / LP LINE {row.ga4.lpLineTaps}</p>
+      <p>電話 {row.ga4.phoneTaps} / 予約 {row.ga4.reservationClicks}</p>
     </div>
   );
 }

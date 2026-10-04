@@ -6,8 +6,67 @@ import type {
   SearchConsoleSeoAnalysis,
   SearchConsoleTaskSuggestion,
 } from "@/types/searchConsole";
+import type { SeoTaskStatus } from "@/types/seoAds";
 
 const storageKey = "hair-trend-search-console-v1";
+const taskStorageKey = `${storageKey}-tasks`;
+
+type LocalSearchConsoleTask = {
+  dueDate: string;
+  id: string;
+  importId: string;
+  status: SeoTaskStatus;
+  suggestion: SearchConsoleTaskSuggestion;
+};
+
+type StoredLocalSearchConsoleTask = Omit<
+  LocalSearchConsoleTask,
+  "id" | "status"
+> & {
+  id?: string;
+  status?: SeoTaskStatus;
+};
+
+function legacyTaskId(item: StoredLocalSearchConsoleTask) {
+  const source = [
+    item.importId,
+    item.suggestion.title,
+    item.suggestion.keyword ?? "",
+    item.suggestion.pageUrl ?? "",
+  ].join("|");
+  let hash = 0;
+  for (let index = 0; index < source.length; index += 1) {
+    hash = (hash * 31 + source.charCodeAt(index)) | 0;
+  }
+  return `local-task-${Math.abs(hash).toString(36)}`;
+}
+
+function createTaskId() {
+  if (typeof window !== "undefined" && typeof window.crypto?.randomUUID === "function") {
+    return `local-task-${window.crypto.randomUUID()}`;
+  }
+  return `local-task-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function readStoredLocalTasks(): LocalSearchConsoleTask[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const parsed = JSON.parse(
+      window.localStorage.getItem(taskStorageKey) ?? "[]",
+    ) as StoredLocalSearchConsoleTask[];
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map((item) => ({
+      ...item,
+      id: item.id || legacyTaskId(item),
+      status:
+        item.status === "doing" || item.status === "done" || item.status === "hold"
+          ? item.status
+          : "todo",
+    }));
+  } catch {
+    return [];
+  }
+}
 
 const emptyDataset: SearchConsoleDataset = {
   analysesByImport: {},
@@ -74,12 +133,7 @@ export function saveLocalSearchConsoleTask(
   dueDate: string,
 ) {
   if (typeof window === "undefined") return { duplicate: false };
-  const taskKey = `${storageKey}-tasks`;
-  const tasks = JSON.parse(window.localStorage.getItem(taskKey) ?? "[]") as Array<{
-    importId: string;
-    suggestion: SearchConsoleTaskSuggestion;
-    dueDate: string;
-  }>;
+  const tasks = readStoredLocalTasks();
   const duplicate = tasks.some(
     (item) =>
       item.importId === importId &&
@@ -89,24 +143,32 @@ export function saveLocalSearchConsoleTask(
   );
   if (!duplicate) {
     window.localStorage.setItem(
-      taskKey,
-      JSON.stringify([{ dueDate, importId, suggestion }, ...tasks].slice(0, 100)),
+      taskStorageKey,
+      JSON.stringify(
+        [
+          { dueDate, id: createTaskId(), importId, status: "todo", suggestion },
+          ...tasks,
+        ].slice(0, 100),
+      ),
     );
   }
   return { duplicate };
 }
 
 export function readLocalSearchConsoleTasks() {
-  if (typeof window === "undefined") return [];
-  try {
-    return JSON.parse(
-      window.localStorage.getItem(`${storageKey}-tasks`) ?? "[]",
-    ) as Array<{
-      importId: string;
-      suggestion: SearchConsoleTaskSuggestion;
-      dueDate: string;
-    }>;
-  } catch {
-    return [];
-  }
+  return readStoredLocalTasks();
+}
+
+export function updateLocalSearchConsoleTaskStatus(
+  taskId: string,
+  status: SeoTaskStatus,
+) {
+  if (typeof window === "undefined") return false;
+  const tasks = readStoredLocalTasks();
+  const nextTasks = tasks.map((task) =>
+    task.id === taskId ? { ...task, status } : task,
+  );
+  if (!tasks.some((task) => task.id === taskId)) return false;
+  window.localStorage.setItem(taskStorageKey, JSON.stringify(nextTasks));
+  return true;
 }

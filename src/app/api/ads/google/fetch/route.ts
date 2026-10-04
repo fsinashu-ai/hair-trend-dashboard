@@ -3,6 +3,7 @@ import {
   fetchGoogleAdsReport,
   getGoogleAdsConfigStatus,
 } from "@/lib/ads/googleAds.server";
+import { GoogleAdsOAuthError } from "@/lib/ads/googleAdsOauth";
 import { isServerSupabaseConfigured } from "@/lib/supabase/serverClient";
 import type { AdCsvImportType } from "@/types/adCsv";
 
@@ -86,13 +87,14 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     console.error("[google-ads] fetch failed", {
+      errorCode: error instanceof GoogleAdsOAuthError ? error.code : undefined,
       errorType: error instanceof Error ? error.name : "unknown",
     });
     return NextResponse.json(
       {
         error: error instanceof Error ? error.message : "Google広告APIの取得に失敗しました。",
       },
-      { status: 400 },
+      { status: error instanceof GoogleAdsOAuthError ? 502 : 400 },
     );
   }
 }

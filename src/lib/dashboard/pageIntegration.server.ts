@@ -26,6 +26,8 @@ type PageAccumulator = {
   ga4: {
     conversions: number;
     lineClicks: number;
+    lpLineTaps: number;
+    phoneTaps: number;
     reservationClicks: number;
     sessions: number;
     users: number;
@@ -84,7 +86,7 @@ function normalizePagePath(value: string) {
 function createAccumulator(pagePath: string): PageAccumulator {
   return {
     ads: { clicks: 0, conversions: 0, cost: 0, impressions: 0 },
-    ga4: { conversions: 0, lineClicks: 0, reservationClicks: 0, sessions: 0, users: 0, views: 0 },
+    ga4: { conversions: 0, lineClicks: 0, lpLineTaps: 0, phoneTaps: 0, reservationClicks: 0, sessions: 0, users: 0, views: 0 },
     pagePath,
     pageTitle: "",
     searchConsole: { clicks: 0, impressions: 0, positionWeightedTotal: 0 },
@@ -113,11 +115,13 @@ function addSearchConsoleRows(pages: Map<string, PageAccumulator>, rows: SearchC
 
 function addGa4Rows(pages: Map<string, PageAccumulator>, rows: Ga4Row[]) {
   rows.forEach((row) => {
-    const page = getAccumulator(pages, row.landingPage);
+    const page = getAccumulator(pages, row.pagePath || row.landingPage);
     if (!page) return;
     page.pageTitle = page.pageTitle || row.pageTitle;
     page.ga4.conversions += row.conversions;
     page.ga4.lineClicks += row.lineClicks;
+    page.ga4.lpLineTaps += row.lpLineTaps ?? 0;
+    page.ga4.phoneTaps += row.phoneTaps ?? 0;
     page.ga4.reservationClicks += row.reservationClicks;
     page.ga4.sessions += row.sessions;
     page.ga4.users += row.users;
@@ -147,7 +151,7 @@ function toSearchConsoleMetrics(value: PageAccumulator["searchConsole"]): Integr
 }
 
 function toGa4Metrics(value: PageAccumulator["ga4"]): IntegratedGa4Metrics | null {
-  const hasData = value.users + value.sessions + value.views + value.conversions + value.lineClicks + value.reservationClicks > 0;
+  const hasData = value.users + value.sessions + value.views + value.conversions + value.lineClicks + value.lpLineTaps + value.phoneTaps + value.reservationClicks > 0;
   return hasData ? value : null;
 }
 
@@ -170,7 +174,7 @@ function priorityForPage(
 ) {
   if (
     (searchConsole && searchConsole.impressions >= 100 && searchConsole.ctr < 0.02) ||
-    (ga4 && ga4.sessions >= 20 && ga4.lineClicks + ga4.reservationClicks + ga4.conversions === 0) ||
+    (ga4 && ga4.sessions >= 20 && ga4.lineClicks + ga4.lpLineTaps + ga4.phoneTaps + ga4.reservationClicks + ga4.conversions === 0) ||
     (ads && ads.clicks >= 20 && ads.conversions === 0)
   ) return "high" as const;
   if (searchConsole || ga4 || ads) return "medium" as const;

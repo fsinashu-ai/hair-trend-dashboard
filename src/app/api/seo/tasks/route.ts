@@ -3,8 +3,10 @@ import { searchConsoleTaskTypes } from "@/config/searchConsole";
 import {
   createSeoTaskFromSuggestion,
   fetchSeoTasks,
+  updateSeoTaskStatus,
 } from "@/lib/supabase/searchConsole.server";
 import { isServerSupabaseConfigured } from "@/lib/supabase/serverClient";
+import type { SeoTaskStatus } from "@/types/seoAds";
 import type { SearchConsoleTaskSuggestion } from "@/types/searchConsole";
 
 export const runtime = "nodejs";
@@ -73,5 +75,45 @@ export async function POST(request: Request) {
       errorType: error instanceof Error ? error.name : "unknown",
     });
     return NextResponse.json({ error: "SEOタスクを保存できませんでした。" }, { status: 500 });
+  }
+}
+
+const allowedStatuses = new Set<SeoTaskStatus>([
+  "todo",
+  "doing",
+  "done",
+  "hold",
+]);
+
+export async function PATCH(request: Request) {
+  const body = (await request.json().catch(() => ({}))) as {
+    status?: string;
+    taskId?: string;
+  };
+  const taskId = typeof body.taskId === "string" ? body.taskId.trim() : "";
+  const status = body.status as SeoTaskStatus;
+
+  if (!taskId || !allowedStatuses.has(status)) {
+    return NextResponse.json(
+      { error: "更新するSEOタスクと状態を確認してください。" },
+      { status: 400 },
+    );
+  }
+
+  if (!isServerSupabaseConfigured()) {
+    return NextResponse.json({ storageMode: "local" });
+  }
+
+  try {
+    const task = await updateSeoTaskStatus({ status, taskId });
+    return NextResponse.json({ storageMode: "supabase", task });
+  } catch (error) {
+    console.error("[seo-task] status update failed", {
+      errorType: error instanceof Error ? error.name : "unknown",
+    });
+    return NextResponse.json(
+      { error: "SEOタスクの状態を更新できませんでした。" },
+      { status: 500 },
+    );
   }
 }

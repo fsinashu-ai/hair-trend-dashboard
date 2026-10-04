@@ -15,6 +15,8 @@ export type IntegratedSearchConsoleMetrics = {
 export type IntegratedGa4Metrics = {
   conversions: number;
   lineClicks: number;
+  lpLineTaps: number;
+  phoneTaps: number;
   reservationClicks: number;
   sessions: number;
   users: number;

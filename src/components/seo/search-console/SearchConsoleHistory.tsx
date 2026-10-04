@@ -25,7 +25,7 @@ export function SearchConsoleHistory() {
           <article className="rounded-lg border border-stone-200 bg-white p-4 shadow-sm sm:p-5" key={item.id}>
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div><p className="text-xs text-stone-500">{new Date(item.createdAt).toLocaleString("ja-JP")}</p><h2 className="mt-1 text-lg font-semibold text-stone-950">{item.periodStart}〜{item.periodEnd}</h2><p className="mt-1 break-words text-sm text-stone-600">{item.fileName}</p></div>
-              <div className="flex gap-2"><Badge tone="info">{typeLabels[item.importType]}</Badge><Badge tone={analysis ? "success" : "neutral"}>{analysis ? analysis.providerLabel : "未分析"}</Badge></div>
+              <div className="flex flex-wrap justify-end gap-2"><Badge tone={item.source === "search_console_api" ? "success" : "info"}>{item.source === "search_console_api" ? "Search Console API" : "CSV"}</Badge><Badge tone="info">{typeLabels[item.importType]}</Badge><Badge tone={analysis ? "success" : "neutral"}>{analysis ? analysis.providerLabel : "未分析"}</Badge></div>
             </div>
             <dl className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-5">
               <Metric label="行数" value={`${item.rowCount}件`} />

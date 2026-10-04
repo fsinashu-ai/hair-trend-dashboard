@@ -2,6 +2,7 @@ import { PageHeader } from "@/components/sections/PageHeader";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { dummySettings } from "@/data/dummySettings";
+import { isSearchConsoleDataApiConfigured } from "@/lib/searchConsole/dataApi.server";
 
 const settingRows = [
   { label: "サロン名", value: dummySettings.salonName },
@@ -62,6 +63,10 @@ const envItems = [
     description: "サービスアカウントJSON内のprivate_keyです。サーバー側だけで使い、Gitへ含めません。",
   },
   {
+    name: "SEARCH_CONSOLE_SITE_URL",
+    description: "Search Consoleに表示されるプロパティ名と完全一致する値です。例: sc-domain:ef-mayke-s.com",
+  },
+  {
     name: "X_BEARER_TOKEN",
     description:
       "X公式APIのBearer Token。X巡回を使う場合だけ設定します。Bearerという文字は付けません。",
@@ -111,6 +116,7 @@ export default function SettingsPage() {
     process.env.NEXT_PUBLIC_SUPABASE_URL &&
       process.env.SUPABASE_SERVICE_ROLE_KEY,
   );
+  const isSearchConsoleApiReady = isSearchConsoleDataApiConfigured();
   const isYoutubeReady = Boolean(process.env.YOUTUBE_API_KEY);
   const isGa4ApiReady = Boolean(
     process.env.GA4_PROPERTY_ID &&
@@ -142,6 +148,13 @@ export default function SettingsPage() {
       note: isSearchConsoleStorageReady
         ? "CSVと分析結果をサーバー経由でSupabaseへ保存できます。"
         : "未設定時は、この端末のlocalStorageで画面を確認できます。",
+    },
+    {
+      label: "Search Console公式API",
+      isReady: isSearchConsoleApiReady,
+      note: isSearchConsoleApiReady
+        ? "Search Console APIから前月のクエリ・ページを取得できます。"
+        : "SEARCH_CONSOLE_SITE_URLとGoogleサービスアカウント、Search Console側の権限を確認してください。",
     },
     {
       label: "YouTube公式API",
@@ -219,6 +232,9 @@ export default function SettingsPage() {
             <div className="mt-4 flex flex-wrap gap-2">
               <Badge tone={isSupabaseReady ? "success" : "warning"}>
                 Supabase: {isSupabaseReady ? "設定済み" : "未設定"}
+              </Badge>
+              <Badge tone={isSearchConsoleApiReady ? "success" : "warning"}>
+                Search Console API: {isSearchConsoleApiReady ? "設定済み" : "未設定"}
               </Badge>
               <Badge tone={isGeminiReady ? "success" : "warning"}>
                 Gemini: {isGeminiReady ? "設定済み" : "未設定"}

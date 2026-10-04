@@ -23,6 +23,9 @@ import {
 import { createBlogPostInSupabase } from "@/lib/supabase/blogPosts";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
 import {
+  fetchSocialImportRunsFromSupabase,
+} from "@/lib/supabase/socialImportRuns";
+import {
   fetchSocialPostsFromSupabase,
   updateSocialPostInSupabase,
   updateSocialPostsInSupabase,
@@ -33,6 +36,10 @@ import type {
   SocialPost,
   SocialReviewStatus,
 } from "@/types/social";
+import type {
+  SocialImportRun,
+  SocialImportRunStatus,
+} from "@/types/socialImport";
 import type { SalonRelevance, TrendCategory } from "@/types/trend";
 
 type StorageMode = "supabase" | "local";
@@ -94,6 +101,22 @@ function getRelevanceTone(relevance: SalonRelevance) {
   return "warning" as const;
 }
 
+function getImportRunTone(status: SocialImportRunStatus) {
+  if (status === "success") {
+    return "success" as const;
+  }
+
+  if (status === "failed") {
+    return "danger" as const;
+  }
+
+  if (status === "partial" || status === "preview" || status === "no_items") {
+    return "warning" as const;
+  }
+
+  return "info" as const;
+}
+
 export function SocialInbox() {
   const [storageMode] = useState<StorageMode>(
     supabaseEnabled ? "supabase" : "local",
@@ -101,6 +124,7 @@ export function SocialInbox() {
   const [posts, setPosts] = useState<SocialPost[]>(() =>
     supabaseEnabled ? [] : readLocalSocialPosts(),
   );
+  const [importRuns, setImportRuns] = useState<SocialImportRun[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [snsFilter, setSnsFilter] = useState<SnsType | "すべて">("すべて");
   const [categoryFilter, setCategoryFilter] = useState<
@@ -109,6 +133,7 @@ export function SocialInbox() {
   const [relevanceFilter, setRelevanceFilter] = useState<
     SalonRelevance | "すべて"
   >("すべて");
+  const [sourceFilter, setSourceFilter] = useState("すべて");
   const [onlyUnchecked, setOnlyUnchecked] = useState(true);
   const [visibleIdeaId, setVisibleIdeaId] = useState<string | null>(null);
   const [workingId, setWorkingId] = useState<string | null>(null);
@@ -153,7 +178,20 @@ export function SocialInbox() {
       }
     }
 
+    async function loadImportRuns() {
+      try {
+        const data = await fetchSocialImportRunsFromSupabase();
+
+        if (isMounted) {
+          setImportRuns(data ?? []);
+        }
+      } catch {
+        // The run ledger is additive; an older schema must not block the inbox.
+      }
+    }
+
     loadPosts();
+    loadImportRuns();
 
     return () => {
       isMounted = false;
@@ -165,6 +203,17 @@ export function SocialInbox() {
       Array.from(new Set(posts.map((post) => post.category))).sort((a, b) =>
         a.localeCompare(b, "ja"),
       ),
+    [posts],
+  );
+  const sources = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          posts
+            .map((post) => post.sourceName)
+            .filter((source): source is string => Boolean(source)),
+        ),
+      ).sort((a, b) => a.localeCompare(b, "ja")),
     [posts],
   );
 
@@ -212,6 +261,10 @@ export function SocialInbox() {
           return false;
         }
 
+        if (sourceFilter !== "すべて" && post.sourceName !== sourceFilter) {
+          return false;
+        }
+
         return true;
       }),
     [
@@ -220,6 +273,7 @@ export function SocialInbox() {
       posts,
       relevanceFilter,
       snsFilter,
+      sourceFilter,
     ],
   );
 
@@ -451,8 +505,44 @@ export function SocialInbox() {
         {message}
       </StatusMessage>
 
+      {importRuns.length > 0 ? (
+        <section className="rounded-lg border border-stone-200 bg-white p-4 shadow-sm">
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between">
+            <h2 className="text-sm font-semibold text-stone-900">
+              Import runs
+            </h2>
+            <p className="text-xs text-stone-500">
+              {importRuns.length} recent runs
+            </p>
+          </div>
+          <div className="mt-3 grid gap-2">
+            {importRuns.map((run) => (
+              <div
+                className="flex flex-col gap-2 rounded-md border border-stone-100 bg-stone-50 p-3 sm:flex-row sm:items-center sm:justify-between"
+                key={run.id}
+              >
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge tone={getImportRunTone(run.status)}>
+                    {run.status}
+                  </Badge>
+                  <span className="text-xs font-medium text-stone-700">
+                    {run.sourceName}
+                  </span>
+                  <span className="text-xs text-stone-500">
+                    {formatDateTime(run.finishedAt ?? run.startedAt)}
+                  </span>
+                </div>
+                <p className="text-xs text-stone-600">
+                  received {run.receivedCount} / saved {run.savedCount} / duplicate {run.duplicateCount} / error {run.errorCount}
+                </p>
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
       <section className="rounded-lg border border-stone-200 bg-white p-4 shadow-sm">
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
           <label className="grid gap-1.5 text-sm font-medium text-stone-700">
             SNS種類
             <select
@@ -465,6 +555,22 @@ export function SocialInbox() {
               {snsTypes.map((snsType) => (
                 <option key={snsType} value={snsType}>
                   {snsType}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="grid gap-1.5 text-sm font-medium text-stone-700">
+            取り込み元
+            <select
+              className="min-h-11 rounded-md border border-stone-300 bg-white px-3 text-sm"
+              onChange={(event) => setSourceFilter(event.target.value)}
+              value={sourceFilter}
+            >
+              <option value="すべて">すべて</option>
+              {sources.map((source) => (
+                <option key={source} value={source}>
+                  {source}
                 </option>
               ))}
             </select>
@@ -617,6 +723,14 @@ export function SocialInbox() {
                         <Badge tone={getRelevanceTone(post.relevance)}>
                           関連度 {post.relevance}
                         </Badge>
+                        {post.classificationStatus ? (
+                          <Badge tone="neutral">
+                            分類: {post.classificationStatus}
+                          </Badge>
+                        ) : null}
+                        {post.sourceName ? (
+                          <Badge tone="neutral">元: {post.sourceName}</Badge>
+                        ) : null}
                         {post.isFavorite ? (
                           <Badge tone="warning">お気に入り</Badge>
                         ) : null}

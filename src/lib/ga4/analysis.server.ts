@@ -4,6 +4,7 @@ import {
 } from "@/lib/ai/server";
 import { getSalonPromptContext } from "@/lib/salonProfile";
 import { ga4MockAnalysis } from "@/data/ga4";
+import { countGa4RowActions } from "@/lib/ga4/events";
 import type { EmailMetricsAnalysisContext } from "@/types/emailMetrics";
 import type {
   Ga4Analysis,
@@ -179,13 +180,15 @@ function compactCandidate(item: {
   engagementRate: number;
   averageEngagementSeconds: number;
   lineClicks: number;
+  lpLineTaps: number;
+  phoneTaps: number;
   reservationClicks: number;
   conversions: number;
   reason: string;
 }) {
   return {
     averageEngagementSeconds: Number(item.averageEngagementSeconds.toFixed(1)),
-    conversionClicks: item.lineClicks + item.reservationClicks + item.conversions,
+    conversionClicks: countGa4RowActions(item),
     engagementRatePercent: Number((item.engagementRate * 100).toFixed(1)),
     key: item.key,
     reason: item.reason,

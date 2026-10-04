@@ -23,6 +23,8 @@ create table if not exists public.seo_ga4_imports (
   average_engagement_rate numeric not null default 0,
   average_engagement_seconds numeric not null default 0,
   total_line_clicks integer not null default 0,
+  total_lp_line_taps integer not null default 0,
+  total_phone_taps integer not null default 0,
   total_reservation_clicks integer not null default 0,
   total_conversions integer not null default 0,
   landing_page_count integer not null default 0,
@@ -43,6 +45,11 @@ create table if not exists public.seo_ga4_rows (
   channel_group text,
   device_category text,
   event_name text,
+  event_count integer not null default 0,
+  page_path text,
+  link_url text,
+  link_text text,
+  is_key_event boolean not null default false,
   record_date date,
   users integer not null default 0,
   sessions integer not null default 0,
@@ -50,6 +57,8 @@ create table if not exists public.seo_ga4_rows (
   engagement_rate numeric not null default 0,
   average_engagement_seconds numeric not null default 0,
   line_clicks integer not null default 0,
+  lp_line_taps integer not null default 0,
+  phone_taps integer not null default 0,
   reservation_clicks integer not null default 0,
   conversions integer not null default 0,
   created_at timestamptz not null default now()
@@ -67,6 +76,8 @@ create table if not exists public.seo_ga4_reports (
   average_engagement_rate numeric not null default 0,
   average_engagement_seconds numeric not null default 0,
   total_line_clicks integer not null default 0,
+  total_lp_line_taps integer not null default 0,
+  total_phone_taps integer not null default 0,
   total_reservation_clicks integer not null default 0,
   total_conversions integer not null default 0,
   ai_analysis text not null default '',
@@ -82,11 +93,30 @@ create table if not exists public.seo_ga4_reports (
   constraint seo_ga4_reports_generated_by_check check (generated_by in ('gemini', 'mock', 'manual'))
 );
 
+alter table public.seo_ga4_imports
+  add column if not exists total_lp_line_taps integer not null default 0,
+  add column if not exists total_phone_taps integer not null default 0;
+
+alter table public.seo_ga4_rows
+  add column if not exists event_count integer not null default 0,
+  add column if not exists page_path text,
+  add column if not exists link_url text,
+  add column if not exists link_text text,
+  add column if not exists is_key_event boolean not null default false,
+  add column if not exists lp_line_taps integer not null default 0,
+  add column if not exists phone_taps integer not null default 0;
+
+alter table public.seo_ga4_reports
+  add column if not exists total_lp_line_taps integer not null default 0,
+  add column if not exists total_phone_taps integer not null default 0;
+
 create index if not exists seo_ga4_imports_user_period_idx on public.seo_ga4_imports (user_id, period_end desc);
 create index if not exists seo_ga4_imports_hash_idx on public.seo_ga4_imports (content_hash, period_start, period_end);
 create index if not exists seo_ga4_rows_import_idx on public.seo_ga4_rows (import_id);
 create index if not exists seo_ga4_rows_landing_page_idx on public.seo_ga4_rows (landing_page) where landing_page is not null;
 create index if not exists seo_ga4_rows_source_idx on public.seo_ga4_rows (source_medium) where source_medium is not null;
+create index if not exists seo_ga4_rows_page_path_idx on public.seo_ga4_rows (page_path) where page_path is not null;
+create index if not exists seo_ga4_rows_event_date_idx on public.seo_ga4_rows (event_name, record_date) where event_name is not null;
 create index if not exists seo_ga4_reports_import_idx on public.seo_ga4_reports (ga4_import_id);
 create index if not exists seo_ga4_reports_hash_idx on public.seo_ga4_reports (input_hash) where input_hash <> '';
 

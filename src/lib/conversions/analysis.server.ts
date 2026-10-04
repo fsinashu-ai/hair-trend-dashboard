@@ -156,6 +156,8 @@ function compactRow(item: ConversionOverview["byPage"][number]) {
     conversionRatePercent: Number((item.metrics.conversionRate * 100).toFixed(1)),
     key: item.key,
     lineClicks: item.metrics.lineClicks,
+    lpLineTaps: item.metrics.lpLineTaps,
+    phoneTaps: item.metrics.phoneClicks,
     reservationClicks: item.metrics.reservationClicks,
     sessions: item.sessions,
     sourceMedium: item.sourceMedium || item.channelGroup,

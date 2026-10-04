@@ -16,6 +16,7 @@ export type DashboardTaskItem = {
   label: string;
   priority: "high" | "medium" | "low";
   source: string;
+  taskId?: string;
 };
 
 export type FinalMarketingDashboardSummary = {
@@ -44,6 +45,8 @@ export type FinalMarketingDashboardSummary = {
     conversions: number;
     hasData: boolean;
     lineClicks: number;
+    lpLineTaps: number;
+    phoneTaps: number;
     reservationClicks: number;
     sourceLabel: string;
   };

@@ -317,6 +317,7 @@ APP_PASSWORD=
 | `GA4_PROPERTY_ID` | GA4 API自動取得時は必須 | GA4のプロパティID。`properties/`は付けず数字だけでOK |
 | `GOOGLE_SERVICE_ACCOUNT_EMAIL` | GA4 API自動取得時は必須 | Google Cloudのサービスアカウントメール |
 | `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY` | GA4 API自動取得時は必須 | サービスアカウントJSON内の`private_key`。サーバー側だけで使います |
+| `SEARCH_CONSOLE_SITE_URL` | Search Console API自動取得時は必須 | Search Consoleに表示されるプロパティ名。例: `sc-domain:ef-mayke-s.com` |
 | `AUTOMATION_WEBHOOK_SECRET` | Apify/n8n連携時は必須 | 外部自動化ツールからSNS投稿候補を受け取るAPIを保護する秘密文字列 |
 | `CRON_SECRET` | Vercel Cron利用時は必須 | 毎朝の自動生成APIを保護する秘密文字列 |
 | `APP_USER` | 任意 | アプリ全体のパスワード保護ユーザー名 |
@@ -337,6 +338,8 @@ Supabaseを設定すると、トレンド、キーワード、AI生成結果、�
 3. [supabase/schema.sql](</supabase/schema.sql>) のSQLを貼り付けて実行します。
 4. `Project Settings > API` でURLとanon keyを確認します。
 5. `.env.local` に以下を設定します。
+
+既存のSupabaseプロジェクトでGA4機能を更新する場合は、`supabase/schema.sql`の再実行、または [supabase/ga4-event-details.sql](</supabase/ga4-event-details.sql>) の実行が必要です。既存行は削除せず、GA4の発生日・実際のページ・リンク情報・キーイベント状態と、LPのLINEタップ／電話タップ用の列を追加します。
 
 ```bash
 NEXT_PUBLIC_SUPABASE_URL=your-project-url
@@ -393,6 +396,8 @@ Gemini広告案生成機能を追加する場合は、[supabase/ads-creatives-ph
 
 Search Console機能だけを追加する場合は、先にSEO・広告管理テーブルを作成してから [supabase/search-console-mvp.sql](</supabase/search-console-mvp.sql>) をSQL Editorで実行してください。CSV本体はStorageへ保存せず、確認済みの行データだけをテーブルへ保存します。
 
+Search Console API取得を有効にする場合は、既存のSearch Consoleテーブルへ [supabase/search-console-api.sql](</supabase/search-console-api.sql>) をSQL Editorで実行してください。既存CSV行は削除せず、取得元を`csv`として扱います。
+
 Search Consoleのサーバー保存には、Supabase管理画面のAPI Keysで確認できるservice roleの秘密鍵を`SUPABASE_SERVICE_ROLE_KEY`として設定します。この値は強い権限を持つため、ブラウザコード、GitHub、`NEXT_PUBLIC_`環境変数へ絶対に入れないでください。未設定時は最大2,000行まで、この端末のlocalStorageで確認できます。
 
 GA4機能だけを追加する場合は、先にSEO・広告管理テーブルを作成してから [supabase/ga4-mvp.sql](</supabase/ga4-mvp.sql>) をSQL Editorで実行してください。GA4 CSV本体はStorageへ保存せず、確認済みの行データとGemini分析結果だけをテーブルへ保存します。
@@ -437,7 +442,7 @@ SEO・広告の画面には、データの出所、対象期間、最終保存�
 | 画面 | 何を管理・分析するか | データの取得方法 | 注意点 |
 | --- | --- | --- | --- |
 | `/seo` | 最新の検索実績とGA4概要、SEOキーワード、改善ページ、タスク | Supabaseに保存された最新取り込み、未取り込み時は参考データ | Search ConsoleやGA4の詳しい候補・期間比較は各分析画面を確認します。 |
-| `/seo/search-console` | クリック、表示回数、CTR、掲載順位 | 手動で取り込んだSearch Console CSV | アップロードしたデータ種別・期間だけが対象です。Search Console APIの直接取得は未対応です。 |
+| `/seo/search-console` | クリック、表示回数、CTR、掲載順位 | Search Console APIまたは手動CSV | API取得にはSearch Consoleプロパティへのサービスアカウント権限が必要です。 |
 | `/seo/ga4` | ページ閲覧、流入、エンゲージメント、LINE・予約行動 | GA4 CSVまたはGoogle Analytics Data API | LINE・予約クリックはGA4イベントを正しく計測している場合だけ確認できます。 |
 | `/ads` | 最新広告実績と、広告の目的・予算メモ・LP・訴求内容 | Supabaseに保存された最新取り込み、またはこの端末の広告CSV | 最新1件の実績を表示します。詳しい期間比較や媒体別集計は`/ads/imports`を確認します。 |
 | `/ads/google` | Google広告の実績 | Google広告API（読み取り専用） | 取得だけを行います。出稿、停止、予算変更、除外キーワード登録は行いません。 |
@@ -509,6 +514,17 @@ Geminiは、アプリ側で計算した集計値と改善候補をもとに、�
 6. 問題がなければ`この内容を取り込む`を押します。
 7. `Search Console`画面で集計・期間比較・改善候補を確認します。
 8. `SEO分析する`を押すと、集計済みの上位候補だけをGeminiが分析します。
+
+### Search Console APIから取得する
+
+1. Google CloudでSearch Console APIを有効化します。
+2. Search Consoleの対象プロパティへ、GA4で使っているサービスアカウントをフルユーザーとして追加します。
+3. `.env.local`またはVercel Productionへ`SEARCH_CONSOLE_SITE_URL`を設定します。プロパティ名は`sc-domain:example.com`や`https://www.example.com/`のようにSearch Console表示値と一致させます。
+4. `SEO管理 > CSV取込`を開き、Search Console API欄で期間を確認します。
+5. `Search Console APIで取得`を押します。クエリとページを別の取り込みとしてSupabaseへ保存します。
+6. 同じ期間を再取得しても、同じ内容は重複保存されません。
+
+API取得の詳細、権限、Cron、トラブルシューティングは [docs/search-console-api-integration-runbook.md](</docs/search-console-api-integration-runbook.md>) を参照してください。
 
 対応列:
 
@@ -600,7 +616,7 @@ SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 
 手動取得する場合は、`/seo/ga4/import`を開き、対象期間を確認して`GA4 APIで取得する`を押します。取得したデータは既存のGA4 CSV取り込みと同じテーブルへ保存されるため、`/seo/ga4`と`/seo/conversions`でそのまま確認できます。
 
-Vercel Cronでは毎月2日の朝7時ごろに、前月分のGA4データを`/api/seo/ga4/fetch`で自動取得します。Cron実行には`CRON_SECRET`も必要です。
+Vercel Cronでは毎月5日00:00 UTC（日本時間の同日朝9時ごろ）に、前月分のGA4とSearch Consoleデータを`/api/seo/monthly-fetch`で自動取得します。Cron実行には`CRON_SECRET`も必要です。
 
 GA4 Data APIで取得する初期データは、ランディングページ、参照元/メディア、チャネル、ユーザー、セッション、表示回数、エンゲージメント率、平均セッション時間、キーイベントです。追加でイベント名別データも取得し、`line_click`、`reservation_click`、`booking`、`予約`などのイベント名があれば、LINEクリックや予約クリックとして分類します。
 
@@ -961,8 +977,8 @@ Vercel Cron Jobsを使うと、毎朝自動で `/api/trends/auto-generate` を�
       "schedule": "0 22 * * *"
     },
     {
-      "path": "/api/seo/ga4/fetch",
-      "schedule": "0 22 1 * *"
+      "path": "/api/seo/monthly-fetch",
+      "schedule": "0 0 5 * *"
     }
   ]
 }
@@ -970,7 +986,7 @@ Vercel Cron Jobsを使うと、毎朝自動で `/api/trends/auto-generate` を�
 
 Vercel CronはUTC時間で指定します。日本時間の朝7時は、UTCの前日22時なので `0 22 * * *` です。
 
-`/api/seo/ga4/fetch` は毎月1日22:00 UTC、つまり日本時間の毎月2日朝7時ごろに実行され、前月分のGA4データを取得します。
+`/api/seo/monthly-fetch` は毎月5日00:00 UTC、つまり日本時間の毎月5日朝9時ごろに実行され、前月分のGA4とSearch Consoleデータを取得します。Search Consoleの実行結果は、同じルートでAPI未設定のデータソースをスキップしながら個別に返します。
 
 Vercelの `Project Settings > Environment Variables` に以下を設定してください。
 
@@ -1469,6 +1485,8 @@ GOOGLE_ADS_API_VERSION=v24
 
 - Google広告APIはOAuth 2.0認証とDeveloper Tokenが必要です。
 - APIの取得には `googleAds:searchStream` を使い、読み取り専用の集計データだけを保存します。
+- OAuth同意画面が「外部・テスト中」の場合、Refresh Tokenは7日で失効します。継続運用する場合は、Google CloudのOAuth公開ステータスを「本番環境」に変更してからRefresh Tokenを再発行してください。
+- `invalid_grant` が表示された場合は、失効または取り消されたRefresh Tokenを再利用せず、再認証後にVercelの `GOOGLE_ADS_REFRESH_TOKEN` を更新して再デプロイします。
 
 ## AI品質チェック
 
@@ -1499,3 +1517,9 @@ AI生成文を公開・投稿・広告利用する前に、`/quality-check` で�
 - `GEMINI_API_KEY` が設定済みの場合は、Geminiが文脈も含めて確認します。
 - Gemini未設定、無効、利用制限中でも、ルールベースの検出で動作します。
 - この機能は公開前チェック用です。WordPress投稿、SNS投稿、広告出稿は自動実行しません。
+
+## ローカル生成物
+
+開発サーバーのログは `artifacts/logs/`、手動配布・差分確認用のZIPは `artifacts/release-bundles/` にまとめます。これらはローカル確認用で、Git管理対象外です。
+
+一時的な検証スクリプトと取込サンプルは `scratch/` に置きます。本番コードへ採用する場合は、役割に応じて `src/`、`docs/`、`supabase/` へ移してください。

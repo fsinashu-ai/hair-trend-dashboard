@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
 import { ga4Config } from "@/config/ga4";
 import { parseGa4Csv } from "@/lib/ga4/csv";
+import { findComparablePreviousImport } from "@/lib/ga4/metrics";
 import {
   fetchGa4Analyses,
   fetchGa4Imports,
@@ -51,11 +52,7 @@ export async function GET(request: Request) {
       ? imports.find((item) => item.id === requestedId)
       : imports[0];
     const previous = selected
-      ? imports.find(
-          (item) =>
-            item.id !== selected.id &&
-            item.periodEnd < selected.periodEnd,
-        )
+      ? findComparablePreviousImport(imports, selected)
       : undefined;
     const rowImportIds = [selected?.id, previous?.id].filter(
       (value): value is string => Boolean(value),

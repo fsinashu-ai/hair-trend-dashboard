@@ -11,6 +11,8 @@ import type {
 
 type StatusTone = "neutral" | "info" | "success" | "warning" | "error";
 
+const dashboardCompletionStorageKey = "hair-trend-dashboard-completed-actions-v1";
+
 function formatNumber(value: number) {
   return value.toLocaleString("ja-JP");
 }
@@ -81,6 +83,47 @@ function priorityTone(priority: DashboardTaskItem["priority"]) {
   return "neutral";
 }
 
+function dashboardTaskKey(item: DashboardTaskItem) {
+  return item.taskId
+    ? `seo-task:${item.taskId}`
+    : `action:${[item.source, item.label, item.href].join("|")}`;
+}
+
+function currentMonthKey() {
+  const parts = new Intl.DateTimeFormat("ja-JP", {
+    month: "2-digit",
+    timeZone: "Asia/Tokyo",
+    year: "numeric",
+  }).formatToParts(new Date());
+  const year = parts.find((part) => part.type === "year")?.value ?? "";
+  const month = parts.find((part) => part.type === "month")?.value ?? "";
+  return `${year}-${month}`;
+}
+
+function readCompletedDashboardActions() {
+  try {
+    const parsed = JSON.parse(
+      window.localStorage.getItem(dashboardCompletionStorageKey) ?? "null",
+    ) as { keys?: string[]; month?: string } | null;
+    if (parsed?.month !== currentMonthKey() || !Array.isArray(parsed.keys)) {
+      return new Set<string>();
+    }
+    return new Set(parsed.keys);
+  } catch {
+    return new Set<string>();
+  }
+}
+
+function saveCompletedDashboardActions(keys: Set<string>) {
+  window.localStorage.setItem(
+    dashboardCompletionStorageKey,
+    JSON.stringify({
+      keys: [...keys].filter((key) => key.startsWith("action:")),
+      month: currentMonthKey(),
+    }),
+  );
+}
+
 function MetricCard({
   helper,
   href,
@@ -110,11 +153,15 @@ function MetricCard({
 }
 
 function TaskList({
+  completingTaskKey,
   emptyText,
   items,
+  onComplete,
 }: {
+  completingTaskKey: string;
   emptyText: string;
   items: DashboardTaskItem[];
+  onComplete: (item: DashboardTaskItem) => void;
 }) {
   if (items.length === 0) {
     return <p className="text-sm leading-6 text-stone-500">{emptyText}</p>;
@@ -123,23 +170,39 @@ function TaskList({
   return (
     <div className="space-y-2">
       {items.map((item, index) => (
-        <Link
-          className="block rounded-md border border-stone-200 bg-white p-3 transition hover:border-teal-200 hover:bg-teal-50"
-          href={item.href}
+        <div
+          className="rounded-md border border-stone-200 bg-white"
           key={`${item.label}-${index}`}
         >
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge tone={priorityTone(item.priority)}>
-              {priorityLabel(item.priority)}
-            </Badge>
-            <span className="text-xs font-semibold text-stone-500">
-              {item.source}
-            </span>
+          <Link
+            className="block p-3 transition hover:bg-teal-50"
+            href={item.href}
+          >
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge tone={priorityTone(item.priority)}>
+                {priorityLabel(item.priority)}
+              </Badge>
+              <span className="text-xs font-semibold text-stone-500">
+                {item.source}
+              </span>
+            </div>
+            <p className="mt-2 text-sm font-semibold leading-6 text-stone-950">
+              {item.label}
+            </p>
+          </Link>
+          <div className="border-t border-stone-100 px-3 py-2 text-right">
+            <button
+              className="min-h-9 rounded-md border border-teal-200 px-3 text-xs font-semibold text-teal-800 hover:bg-teal-50 disabled:cursor-wait disabled:opacity-60"
+              disabled={completingTaskKey === dashboardTaskKey(item)}
+              onClick={() => onComplete(item)}
+              type="button"
+            >
+              {completingTaskKey === dashboardTaskKey(item)
+                ? "更新中"
+                : "今月は完了"}
+            </button>
           </div>
-          <p className="mt-2 text-sm font-semibold leading-6 text-stone-950">
-            {item.label}
-          </p>
-        </Link>
+        </div>
       ))}
     </div>
   );
@@ -167,6 +230,13 @@ export function FinalMarketingDashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [tone, setTone] = useState<StatusTone>("info");
   const [message, setMessage] = useState("今月の集客状況を読み込んでいます。");
+  const [completedTaskKeys, setCompletedTaskKeys] = useState<Set<string>>(
+    () =>
+      typeof window === "undefined"
+        ? new Set()
+        : readCompletedDashboardActions(),
+  );
+  const [completingTaskKey, setCompletingTaskKey] = useState("");
 
   useEffect(() => {
     let isMounted = true;
@@ -207,6 +277,65 @@ export function FinalMarketingDashboard() {
     };
   }, []);
 
+  async function completeDashboardTask(item: DashboardTaskItem) {
+    const key = dashboardTaskKey(item);
+    setCompletingTaskKey(key);
+
+    try {
+      if (item.taskId) {
+        const response = await fetch("/api/seo/tasks", {
+          body: JSON.stringify({ status: "done", taskId: item.taskId }),
+          headers: { "Content-Type": "application/json" },
+          method: "PATCH",
+        });
+        const data = (await response.json()) as { error?: string };
+        if (!response.ok) {
+          throw new Error(data.error || "タスクを完了にできませんでした。");
+        }
+      }
+
+      setCompletedTaskKeys((current) => {
+        const next = new Set(current);
+        next.add(key);
+        if (!item.taskId) saveCompletedDashboardActions(next);
+        return next;
+      });
+      setTone("success");
+      setMessage(`「${item.label}」を今月の完了にしました。`);
+    } catch (error) {
+      setTone("error");
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "タスクを完了にできませんでした。",
+      );
+    } finally {
+      setCompletingTaskKey("");
+    }
+  }
+
+  const visibleUnfinishedTasks = useMemo(
+    () =>
+      summary?.unfinishedTasks.filter(
+        (item) => !completedTaskKeys.has(dashboardTaskKey(item)),
+      ) ?? [],
+    [completedTaskKeys, summary],
+  );
+  const visibleTodayActions = useMemo(
+    () =>
+      summary?.todayActions.filter(
+        (item) => !completedTaskKeys.has(dashboardTaskKey(item)),
+      ) ?? [],
+    [completedTaskKeys, summary],
+  );
+  const visibleMonthlyActions = useMemo(
+    () =>
+      summary?.monthlyActions.filter(
+        (item) => !completedTaskKeys.has(dashboardTaskKey(item)),
+      ) ?? [],
+    [completedTaskKeys, summary],
+  );
+
   const metrics = useMemo(() => {
     if (!summary) return [];
     return [
@@ -243,13 +372,13 @@ export function FinalMarketingDashboard() {
       },
       {
         helper: summary.line.hasData
-          ? `予約クリック ${formatNumber(summary.line.reservationClicks)} / キーイベント ${formatNumber(summary.line.conversions)}`
+          ? `LP LINE ${formatNumber(summary.line.lpLineTaps)} / 電話 ${formatNumber(summary.line.phoneTaps)} / 予約 ${formatNumber(summary.line.reservationClicks)}`
           : "GA4データがまだありません",
         href: "/seo/ga4",
         label: "LINE導線",
         sourceLabel: summary.line.sourceLabel,
         value: summary.line.hasData
-          ? `${formatNumber(summary.line.lineClicks)} LINEクリック`
+          ? `${formatNumber(summary.line.lineClicks)} TOP LINEクリック`
           : "未取得",
       },
       {
@@ -325,14 +454,16 @@ export function FinalMarketingDashboard() {
             <section className="rounded-lg border border-stone-200 bg-white p-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <h3 className="font-semibold text-stone-950">未完了タスク</h3>
-                <Badge tone={summary.unfinishedTasks.length ? "warning" : "success"}>
-                  {summary.unfinishedTasks.length}件
+                <Badge tone={visibleUnfinishedTasks.length ? "warning" : "success"}>
+                  {visibleUnfinishedTasks.length}件
                 </Badge>
               </div>
               <div className="mt-3">
                 <TaskList
+                  completingTaskKey={completingTaskKey}
                   emptyText="未完了タスクはありません。"
-                  items={summary.unfinishedTasks}
+                  items={visibleUnfinishedTasks}
+                  onComplete={(item) => void completeDashboardTask(item)}
                 />
               </div>
             </section>
@@ -369,8 +500,10 @@ export function FinalMarketingDashboard() {
               <h3 className="font-semibold text-stone-950">今日やること</h3>
               <div className="mt-3">
                 <TaskList
+                  completingTaskKey={completingTaskKey}
                   emptyText="今日やることはありません。"
-                  items={summary.todayActions}
+                  items={visibleTodayActions}
+                  onComplete={(item) => void completeDashboardTask(item)}
                 />
               </div>
             </section>
@@ -379,8 +512,10 @@ export function FinalMarketingDashboard() {
               <h3 className="font-semibold text-stone-950">今月やること</h3>
               <div className="mt-3">
                 <TaskList
+                  completingTaskKey={completingTaskKey}
                   emptyText="今月やることはありません。"
-                  items={summary.monthlyActions}
+                  items={visibleMonthlyActions}
+                  onComplete={(item) => void completeDashboardTask(item)}
                 />
               </div>
             </section>

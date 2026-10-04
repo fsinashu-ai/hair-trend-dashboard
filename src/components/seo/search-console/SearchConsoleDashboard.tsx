@@ -214,7 +214,7 @@ export function SearchConsoleDashboard({ initialImportId }: SearchConsoleDashboa
         ]}
         description="この分析は、選択したSearch Console CSVだけを対象にしています。データの期間と種類を確認してから、数値を判断してください。"
         limitations={[
-          "Search Console APIとの直接連携はこの画面では行いません。CSVで取り込んだデータだけを使います。",
+          "Search Console APIまたはCSVで取り込んだデータだけを使います。対象期間と取得元を確認してから数値を判断してください。",
           "取り込んでいない検索クエリ・ページ・デバイス・国の情報は、この結果には含まれません。",
           "GeminiへCSVの全行は送信しません。アプリで集計した値と候補だけを送ります。",
         ]}

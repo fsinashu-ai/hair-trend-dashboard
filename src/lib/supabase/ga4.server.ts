@@ -1,4 +1,10 @@
 import { getServerSupabaseClient } from "@/lib/supabase/serverClient";
+import {
+  classifyGa4Event,
+  isAutomaticMeasurementEvent,
+  lpLineEventName,
+  topLineEventName,
+} from "@/lib/ga4/events";
 import type {
   Ga4Analysis,
   Ga4CsvPreview,
@@ -37,6 +43,8 @@ type ImportRow = {
   average_engagement_rate: number;
   average_engagement_seconds: number;
   total_line_clicks: number;
+  total_lp_line_taps: number;
+  total_phone_taps: number;
   total_reservation_clicks: number;
   total_conversions: number;
   landing_page_count: number;
@@ -54,6 +62,13 @@ type DataRow = {
   channel_group: string | null;
   device_category: string | null;
   event_name: string | null;
+  event_count: number;
+  is_key_event: boolean;
+  link_text: string | null;
+  link_url: string | null;
+  lp_line_taps: number;
+  page_path: string | null;
+  phone_taps: number;
   record_date: string | null;
   users: number;
   sessions: number;
@@ -81,6 +96,8 @@ function toImport(row: ImportRow): Ga4Import {
       engagementRate: Number(row.average_engagement_rate),
       landingPageCount: Number(row.landing_page_count),
       lineClicks: Number(row.total_line_clicks),
+      lpLineTaps: Number(row.total_lp_line_taps ?? 0),
+      phoneTaps: Number(row.total_phone_taps ?? 0),
       reservationClicks: Number(row.total_reservation_clicks),
       sessions: Number(row.total_sessions),
       sourceCount: Number(row.source_count),
@@ -99,18 +116,42 @@ function toImport(row: ImportRow): Ga4Import {
 }
 
 function toDataRow(row: DataRow): Ga4Row {
+  const eventName = row.event_name ?? "";
+  const linkUrl = row.link_url ?? "";
+  const storedLineClicks = Number(row.line_clicks);
+  const inferred = classifyGa4Event({
+    eventCount: Number(row.event_count ?? 0),
+    eventName,
+    linkUrl,
+  });
+
   return {
     averageEngagementSeconds: Number(row.average_engagement_seconds),
     channelGroup: row.channel_group ?? "",
-    conversions: Number(row.conversions),
+    conversions: isAutomaticMeasurementEvent(eventName)
+      ? 0
+      : Number(row.conversions),
     deviceCategory: row.device_category ?? "",
     engagementRate: Number(row.engagement_rate),
-    eventName: row.event_name ?? "",
+    eventCount: Number(row.event_count ?? 0),
+    eventName,
     id: row.id,
     importId: row.import_id,
+    isKeyEvent: Boolean(row.is_key_event),
     landingPage: row.landing_page ?? "",
-    lineClicks: Number(row.line_clicks),
+    lineClicks:
+      eventName && eventName !== topLineEventName
+        ? 0
+        : storedLineClicks || inferred.lineClicks,
+    linkText: row.link_text ?? "",
+    linkUrl,
+    lpLineTaps:
+      Number(row.lp_line_taps ?? 0) ||
+      inferred.lpLineTaps ||
+      (eventName === lpLineEventName ? storedLineClicks : 0),
+    pagePath: row.page_path ?? "",
     pageTitle: row.page_title ?? "",
+    phoneTaps: Number(row.phone_taps ?? 0) || inferred.phoneTaps,
     recordDate: row.record_date ?? "",
     reservationClicks: Number(row.reservation_clicks),
     sessions: Number(row.sessions),
@@ -128,6 +169,8 @@ function metricsToColumns(metrics: Ga4Metrics) {
     source_count: metrics.sourceCount,
     total_conversions: metrics.conversions,
     total_line_clicks: metrics.lineClicks,
+    total_lp_line_taps: metrics.lpLineTaps,
+    total_phone_taps: metrics.phoneTaps,
     total_reservation_clicks: metrics.reservationClicks,
     total_sessions: metrics.sessions,
     total_users: metrics.users,
@@ -199,11 +242,18 @@ export async function saveGa4Import(
         conversions: row.conversions,
         device_category: row.deviceCategory || null,
         engagement_rate: row.engagementRate,
+        event_count: row.eventCount,
         event_name: row.eventName || null,
         import_id: importId,
         landing_page: row.landingPage || null,
         line_clicks: row.lineClicks,
+        link_text: row.linkText || null,
+        link_url: row.linkUrl || null,
+        lp_line_taps: row.lpLineTaps,
+        is_key_event: row.isKeyEvent,
+        page_path: row.pagePath || null,
         page_title: row.pageTitle || null,
+        phone_taps: row.phoneTaps,
         record_date: row.recordDate || null,
         reservation_clicks: row.reservationClicks,
         sessions: row.sessions,
@@ -336,6 +386,8 @@ export async function saveGa4Analysis({
     summary: analysis.summary,
     total_conversions: metrics.conversions,
     total_line_clicks: metrics.lineClicks,
+    total_lp_line_taps: metrics.lpLineTaps,
+    total_phone_taps: metrics.phoneTaps,
     total_reservation_clicks: metrics.reservationClicks,
     total_sessions: metrics.sessions,
     total_users: metrics.users,

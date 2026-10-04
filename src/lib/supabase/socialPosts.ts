@@ -26,6 +26,13 @@ type SocialPostRow = {
   blog_idea: string | null;
   counseling_idea: string | null;
   source_name?: string | null;
+  provider?: string | null;
+  actor_id?: string | null;
+  actor_run_id?: string | null;
+  dataset_id?: string | null;
+  import_run_id?: string | null;
+  import_key?: string | null;
+  payload_hash?: string | null;
   account_name?: string | null;
   handle?: string | null;
   external_id?: string | null;
@@ -34,6 +41,11 @@ type SocialPostRow = {
   play_count?: number | null;
   share_count?: number | null;
   raw_payload?: Record<string, unknown> | null;
+  classification_provider?: string | null;
+  classification_model?: string | null;
+  classification_status?: string | null;
+  classification_error?: string | null;
+  classified_at?: string | null;
   review_status?: string | null;
   is_favorite?: boolean | null;
   imported_at: string;
@@ -42,11 +54,18 @@ type SocialPostRow = {
 };
 
 const selectFields =
-  "id,source_id,sns_type,url,canonical_url,title,description,og_image_url,published_at,category,tags,ai_summary,relevance,instagram_post_idea,blog_idea,counseling_idea,source_name,account_name,handle,external_id,like_count,comment_count,play_count,share_count,raw_payload,review_status,is_favorite,imported_at,created_at,updated_at";
+  "id,source_id,sns_type,url,canonical_url,title,description,og_image_url,published_at,category,tags,ai_summary,relevance,instagram_post_idea,blog_idea,counseling_idea,source_name,provider,actor_id,actor_run_id,dataset_id,import_run_id,import_key,payload_hash,account_name,handle,external_id,like_count,comment_count,play_count,share_count,raw_payload,classification_provider,classification_model,classification_status,classification_error,classified_at,review_status,is_favorite,imported_at,created_at,updated_at";
 const legacySelectFields =
   "id,source_id,sns_type,url,canonical_url,title,description,og_image_url,published_at,category,tags,ai_summary,relevance,instagram_post_idea,blog_idea,counseling_idea,imported_at,created_at,updated_at";
 const legacyInsertOnlyFields = [
   "source_name",
+  "provider",
+  "actor_id",
+  "actor_run_id",
+  "dataset_id",
+  "import_run_id",
+  "import_key",
+  "payload_hash",
   "account_name",
   "handle",
   "external_id",
@@ -55,6 +74,11 @@ const legacyInsertOnlyFields = [
   "play_count",
   "share_count",
   "raw_payload",
+  "classification_provider",
+  "classification_model",
+  "classification_status",
+  "classification_error",
+  "classified_at",
   "review_status",
   "is_favorite",
 ] as const;
@@ -98,15 +122,30 @@ function toSocialPost(row: SocialPostRow): SocialPost {
     accountName: row.account_name ?? undefined,
     commentCount: row.comment_count ?? undefined,
     isFavorite: row.is_favorite ?? false,
+    classificationError: row.classification_error ?? undefined,
+    classificationModel: row.classification_model ?? undefined,
+    classificationProvider: row.classification_provider ?? undefined,
+    classificationStatus:
+      row.classification_status === "gemini" ||
+      row.classification_status === "mock" ||
+      row.classification_status === "fallback" ||
+      row.classification_status === "not_requested"
+        ? row.classification_status
+        : undefined,
+    classifiedAt: row.classified_at ?? undefined,
     createdAt: row.created_at,
     description: row.description ?? "",
     externalId: row.external_id ?? undefined,
     handle: row.handle ?? undefined,
     id: row.id,
     importedAt: row.imported_at,
+    importKey: row.import_key ?? undefined,
+    importRunId: row.import_run_id ?? undefined,
     instagramPostIdea: row.instagram_post_idea ?? "",
     likeCount: row.like_count ?? undefined,
     ogImageUrl: row.og_image_url ?? "",
+    payloadHash: row.payload_hash ?? undefined,
+    provider: row.provider ?? undefined,
     playCount: row.play_count ?? undefined,
     publishedAt: row.published_at ?? undefined,
     rawPayload: row.raw_payload ?? undefined,
@@ -119,6 +158,9 @@ function toSocialPost(row: SocialPostRow): SocialPost {
     tags: row.tags ?? [],
     title: row.title,
     updatedAt: row.updated_at,
+    actorId: row.actor_id ?? undefined,
+    actorRunId: row.actor_run_id ?? undefined,
+    datasetId: row.dataset_id ?? undefined,
     url: row.url,
   };
 }
@@ -131,14 +173,25 @@ function toRow(input: NewSocialPost) {
     category: input.category,
     counseling_idea: input.counselingIdea,
     description: input.description,
+    actor_id: input.actorId || null,
+    actor_run_id: input.actorRunId || null,
+    classification_error: input.classificationError || null,
+    classification_model: input.classificationModel || null,
+    classification_provider: input.classificationProvider || null,
+    classification_status: input.classificationStatus || null,
+    classified_at: input.classifiedAt || null,
+    dataset_id: input.datasetId || null,
     account_name: input.accountName || null,
     comment_count: input.commentCount ?? null,
     external_id: input.externalId || null,
     handle: input.handle || null,
     imported_at: input.importedAt,
+    import_key: input.importKey || null,
+    import_run_id: input.importRunId || null,
     instagram_post_idea: input.instagramPostIdea,
     like_count: input.likeCount ?? null,
     og_image_url: input.ogImageUrl,
+    payload_hash: input.payloadHash || null,
     play_count: input.playCount ?? null,
     published_at: input.publishedAt || null,
     raw_payload: input.rawPayload ?? {},
@@ -148,6 +201,7 @@ function toRow(input: NewSocialPost) {
     share_count: input.shareCount ?? null,
     sns_type: input.snsType,
     source_name: input.sourceName || null,
+    provider: input.provider || null,
     source_id: input.sourceId || null,
     tags: input.tags,
     title: input.title,

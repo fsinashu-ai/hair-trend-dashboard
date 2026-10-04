@@ -1,0 +1,314 @@
+{
+  "name": "Apify SNS import - sanitized example",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "weeks",
+              "weeksInterval": 1,
+              "triggerAtDay": [
+                1
+              ],
+              "triggerAtHour": 9,
+              "triggerAtMinute": 10
+            }
+          ]
+        }
+      },
+      "id": "schedule-apify-import",
+      "name": "Weekly trigger Monday 09:10 JST",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        260,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.apify.com/v2/users/me/limits",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendHeaders": false,
+        "headerParameters": {
+          "parameters": []
+        },
+        "options": {}
+      },
+      "id": "get-apify-limits",
+      "name": "Get Apify limits",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "<APIFY_HTTP_BEARER_CREDENTIAL_ID>",
+          "name": "Apify API Bearer"
+        }
+      },
+      "position": [
+        480,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "safe-monthly-usage-check",
+              "leftValue": "={{ Number($json.data.current.monthlyUsageUsd ?? 0) }}",
+              "rightValue": "={{ Number($env.APIFY_SAFE_USAGE_USD || 4) }}",
+              "operator": {
+                "type": "number",
+                "operation": "lt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-apify-budget",
+      "name": "Check Apify free budget",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        740,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.apify.com/v2/acts/{{$env.APIFY_INSTAGRAM_ACTOR_ID}}/runs?maxTotalChargeUsd={{$env.APIFY_MAX_RUN_USD || 0.5}}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendHeaders": false,
+        "headerParameters": {
+          "parameters": []
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ input: { maxItems: 30, directUrls: [] } }) }}",
+        "options": {}
+      },
+      "id": "start-apify-actor",
+      "name": "Start Apify Actor",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "<APIFY_HTTP_BEARER_CREDENTIAL_ID>",
+          "name": "Apify API Bearer"
+        }
+      },
+      "position": [
+        1000,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "amount": 90,
+        "unit": "seconds"
+      },
+      "id": "wait-for-apify",
+      "name": "Wait before polling",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1260,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.apify.com/v2/actor-runs/{{$json.data.id}}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendHeaders": false,
+        "headerParameters": {
+          "parameters": []
+        },
+        "options": {}
+      },
+      "id": "poll-apify-run",
+      "name": "Poll Apify run",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "<APIFY_HTTP_BEARER_CREDENTIAL_ID>",
+          "name": "Apify API Bearer"
+        }
+      },
+      "position": [
+        1520,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.apify.com/v2/datasets/{{$json.data.defaultDatasetId}}/items?clean=true&format=json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendHeaders": false,
+        "headerParameters": {
+          "parameters": []
+        },
+        "options": {}
+      },
+      "id": "get-apify-items",
+      "name": "Get Dataset items",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "<APIFY_HTTP_BEARER_CREDENTIAL_ID>",
+          "name": "Apify API Bearer"
+        }
+      },
+      "position": [
+        1780,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.SOCIAL_IMPORT_URL}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.AUTOMATION_WEBHOOK_SECRET}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Idempotency-Key",
+              "value": "=Apify:{{$node['Start Apify Actor'].json.data.id}}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ provider: 'Apify', sourceName: 'Apify Instagram Actor', budgetMode: 'free', maxItems: 30, aiLimit: 3, actorId: $env.APIFY_INSTAGRAM_ACTOR_ID, actorRunId: $node['Start Apify Actor'].json.data.id, datasetId: $node['Poll Apify run'].json.data.defaultDatasetId, requestId: $execution.id, idempotencyKey: `Apify:${$node['Start Apify Actor'].json.data.id}`, items: $input.all().map(item => item.json) }) }}",
+        "options": {}
+      },
+      "executeOnce": true,
+      "id": "send-to-dashboard",
+      "name": "Send to dashboard",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        2040,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Weekly trigger Monday 09:10 JST": {
+      "main": [
+        [
+          {
+            "node": "Get Apify limits",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Apify limits": {
+      "main": [
+        [
+          {
+            "node": "Check Apify free budget",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Apify free budget": {
+      "main": [
+        [
+          {
+            "node": "Start Apify Actor",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Start Apify Actor": {
+      "main": [
+        [
+          {
+            "node": "Wait before polling",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait before polling": {
+      "main": [
+        [
+          {
+            "node": "Poll Apify run",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Poll Apify run": {
+      "main": [
+        [
+          {
+            "node": "Get Dataset items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Dataset items": {
+      "main": [
+        [
+          {
+            "node": "Send to dashboard",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Tokyo"
+  },
+  "versionId": "sanitized-example",
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "pinData": {}
+}

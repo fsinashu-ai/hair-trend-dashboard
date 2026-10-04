@@ -2,6 +2,7 @@
 
 import { FormEvent, useState } from "react";
 import { ga4Config } from "@/config/ga4";
+import { countGa4RowActions } from "@/lib/ga4/events";
 import { addLocalGa4Import, readLocalGa4Dataset } from "@/lib/ga4/localStorage";
 import { StatusMessage } from "@/components/ui/StatusMessage";
 import type { Ga4CsvPreview, Ga4Import } from "@/types/ga4";
@@ -356,7 +357,9 @@ export function Ga4ImportManager() {
             <Metric label="正常行" value={`${preview.validRowCount}件`} />
             <Metric label="除外行" value={`${preview.excludedRowCount}件`} />
             <Metric label="ユーザー" value={`${preview.metrics.users.toLocaleString("ja-JP")}人`} />
-            <Metric label="LINEクリック" value={`${preview.metrics.lineClicks.toLocaleString("ja-JP")}件`} />
+            <Metric label="TOP LINEクリック" value={`${preview.metrics.lineClicks.toLocaleString("ja-JP")}件`} />
+            <Metric label="LP LINEタップ" value={`${preview.metrics.lpLineTaps.toLocaleString("ja-JP")}件`} />
+            <Metric label="電話タップ" value={`${preview.metrics.phoneTaps.toLocaleString("ja-JP")}件`} />
           </div>
           <div className="mt-5">
             <h2 className="text-sm font-semibold text-stone-950">認識した列</h2>
@@ -415,6 +418,7 @@ function PreviewTable({ preview }: { preview: Ga4CsvPreview }) {
 
 function previewRowLabel(row: Ga4CsvPreview["previewRows"][number]) {
   const base =
+    row.pagePath ||
     row.landingPage ||
     row.pageTitle ||
     row.sourceMedium ||
@@ -427,10 +431,10 @@ function previewRowLabel(row: Ga4CsvPreview["previewRows"][number]) {
 }
 
 function previewActionLabel(row: Ga4CsvPreview["previewRows"][number]) {
-  const total = row.lineClicks + row.reservationClicks + row.conversions;
+  const total = countGa4RowActions(row);
 
-  if (row.lineClicks || row.reservationClicks) {
-    return `${total}件（LINE ${row.lineClicks} / 予約 ${row.reservationClicks}）`;
+  if (row.lineClicks || row.lpLineTaps || row.phoneTaps || row.reservationClicks) {
+    return `${total}件（TOP LINE ${row.lineClicks} / LP LINE ${row.lpLineTaps} / 電話 ${row.phoneTaps} / 予約 ${row.reservationClicks}）`;
   }
 
   return total;

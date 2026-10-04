@@ -9,6 +9,13 @@ export type Ga4Row = {
   channelGroup: string;
   deviceCategory: string;
   eventName: string;
+  eventCount: number;
+  isKeyEvent: boolean;
+  linkText: string;
+  linkUrl: string;
+  lpLineTaps: number;
+  pagePath: string;
+  phoneTaps: number;
   recordDate: string;
   users: number;
   sessions: number;
@@ -27,6 +34,8 @@ export type Ga4Metrics = {
   engagementRate: number;
   averageEngagementSeconds: number;
   lineClicks: number;
+  lpLineTaps: number;
+  phoneTaps: number;
   reservationClicks: number;
   conversions: number;
   landingPageCount: number;

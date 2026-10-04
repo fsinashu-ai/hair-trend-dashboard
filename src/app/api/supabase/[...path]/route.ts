@@ -11,6 +11,7 @@ const allowedTables = new Set([
   "sns_posts",
   "social_sources",
   "social_posts",
+  "social_import_runs",
   "blog_posts",
 ]);
 const forwardedRequestHeaders = [

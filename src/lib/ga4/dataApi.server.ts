@@ -1,11 +1,20 @@
-import { createHash, createSign } from "node:crypto";
+import { createHash } from "node:crypto";
 import { ga4Config } from "@/config/ga4";
+import {
+  getGoogleServiceAccountAccessToken,
+  isGoogleServiceAccountConfigured,
+} from "@/lib/google/serviceAccount.server";
+import {
+  classifyGa4Event,
+  countGa4RowActions,
+  isAutomaticMeasurementEvent,
+  lpLineEventName,
+  lpLinePagePath,
+} from "@/lib/ga4/events";
 import { summarizeGa4Rows } from "@/lib/ga4/metrics";
 import type { Ga4CsvIssue, Ga4CsvPreview, Ga4Row } from "@/types/ga4";
 
 type Ga4DataApiConfig = {
-  clientEmail: string;
-  privateKey: string;
   propertyId: string;
 };
 
@@ -39,60 +48,28 @@ type Ga4RunReportResponse = {
 };
 
 const analyticsScope = "https://www.googleapis.com/auth/analytics.readonly";
-const oauthTokenUrl = "https://oauth2.googleapis.com/token";
-
-let tokenCache: { accessToken: string; expiresAt: number } | null = null;
-
-function base64Url(input: string | Buffer) {
-  return Buffer.from(input)
-    .toString("base64")
-    .replace(/=/g, "")
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_");
-}
-
 function readServiceAccountConfig(): Ga4DataApiConfig | null {
   const jsonValue = process.env.GOOGLE_SERVICE_ACCOUNT_JSON?.trim();
 
   if (jsonValue) {
     try {
       const parsed = JSON.parse(jsonValue) as Partial<{
-        client_email: string;
-        private_key: string;
         property_id: string;
       }>;
       const propertyId = normalizePropertyId(
         process.env.GA4_PROPERTY_ID || parsed.property_id || "",
       );
-      if (parsed.client_email && parsed.private_key && propertyId) {
-        return {
-          clientEmail: parsed.client_email,
-          privateKey: normalizePrivateKey(parsed.private_key),
-          propertyId,
-        };
-      }
+      if (isGoogleServiceAccountConfigured() && propertyId) return { propertyId };
     } catch {
       return null;
     }
   }
 
-  const clientEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL?.trim() || "";
-  const privateKey = normalizePrivateKey(
-    process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY || "",
-  );
   const propertyId = normalizePropertyId(process.env.GA4_PROPERTY_ID || "");
 
-  if (!clientEmail || !privateKey || !propertyId) return null;
+  if (!isGoogleServiceAccountConfigured() || !propertyId) return null;
 
-  return { clientEmail, privateKey, propertyId };
-}
-
-function normalizePrivateKey(value: string) {
-  return value
-    .trim()
-    .replace(/^"|"$/g, "")
-    .replace(/^'|'$/g, "")
-    .replace(/\\n/g, "\n");
+  return { propertyId };
 }
 
 function normalizePropertyId(value: string) {
@@ -101,59 +78,6 @@ function normalizePropertyId(value: string) {
 
 export function isGa4DataApiConfigured() {
   return Boolean(readServiceAccountConfig());
-}
-
-async function getAccessToken(config: Ga4DataApiConfig) {
-  const now = Math.floor(Date.now() / 1000);
-
-  if (tokenCache && tokenCache.expiresAt - 60 > now) {
-    return tokenCache.accessToken;
-  }
-
-  const header = base64Url(JSON.stringify({ alg: "RS256", typ: "JWT" }));
-  const claimSet = base64Url(
-    JSON.stringify({
-      aud: oauthTokenUrl,
-      exp: now + 3600,
-      iat: now,
-      iss: config.clientEmail,
-      scope: analyticsScope,
-    }),
-  );
-  const signingInput = `${header}.${claimSet}`;
-  const signature = createSign("RSA-SHA256")
-    .update(signingInput)
-    .sign(config.privateKey);
-  const assertion = `${signingInput}.${base64Url(signature)}`;
-
-  const body = new URLSearchParams({
-    assertion,
-    grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
-  });
-  const response = await fetch(oauthTokenUrl, {
-    body,
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    method: "POST",
-  });
-  const json = (await response.json()) as {
-    access_token?: string;
-    error?: string;
-    error_description?: string;
-    expires_in?: number;
-  };
-
-  if (!response.ok || !json.access_token) {
-    throw new Error(
-      `Google認証に失敗しました。サービスアカウントのメール、秘密鍵、GA4権限を確認してください。`,
-    );
-  }
-
-  tokenCache = {
-    accessToken: json.access_token,
-    expiresAt: now + (json.expires_in ?? 3600),
-  };
-
-  return json.access_token;
 }
 
 function getMetricValue(
@@ -224,6 +148,7 @@ async function runReport(
 function trafficReportSpec(conversionMetricName: Ga4MetricSet["conversionMetricName"]) {
   return {
     dimensions: [
+      "date",
       "landingPagePlusQueryString",
       "sessionSourceMedium",
       "sessionDefaultChannelGroup",
@@ -240,13 +165,17 @@ function trafficReportSpec(conversionMetricName: Ga4MetricSet["conversionMetricN
   } satisfies Ga4ReportSpec;
 }
 
-function eventReportSpec(conversionMetricName: Ga4MetricSet["conversionMetricName"]) {
+function eventReportSpec(
+  conversionMetricName: Ga4MetricSet["conversionMetricName"],
+  includeLinkDimensions = true,
+) {
   return {
     dimensions: [
+      "date",
       "eventName",
-      "landingPagePlusQueryString",
-      "sessionSourceMedium",
-      "sessionDefaultChannelGroup",
+      "unifiedPagePathScreen",
+      ...(includeLinkDimensions ? ["linkUrl", "linkText"] : []),
+      "isKeyEvent",
     ],
     metrics: ["eventCount", conversionMetricName],
     orderByMetricName: "eventCount",
@@ -282,15 +211,21 @@ async function runTrafficReportWithFallbackMetrics(
   }
 }
 
-async function runEventReportWithFallbackMetrics(
+async function runEventSpecWithFallbackMetrics(
   config: Ga4DataApiConfig,
   token: string,
   dateRange: Pick<Ga4DateRange, "endDate" | "startDate">,
+  includeLinkDimensions: boolean,
 ) {
   try {
     return {
       conversionMetricName: "keyEvents" as const,
-      response: await runReport(config, token, dateRange, eventReportSpec("keyEvents")),
+      response: await runReport(
+        config,
+        token,
+        dateRange,
+        eventReportSpec("keyEvents", includeLinkDimensions),
+      ),
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : "";
@@ -305,30 +240,34 @@ async function runEventReportWithFallbackMetrics(
         config,
         token,
         dateRange,
-        eventReportSpec("conversions"),
+        eventReportSpec("conversions", includeLinkDimensions),
       ),
     };
   }
 }
 
-function inferEventClicks(eventName: string, keyEventCount: number, eventCount: number) {
-  const normalized = eventName.toLowerCase();
-  const clickCount = Math.round(Math.max(keyEventCount, eventCount));
+async function runEventReportWithFallbackMetrics(
+  config: Ga4DataApiConfig,
+  token: string,
+  dateRange: Pick<Ga4DateRange, "endDate" | "startDate">,
+) {
+  try {
+    return {
+      ...(await runEventSpecWithFallbackMetrics(config, token, dateRange, true)),
+      includesLinkDimensions: true,
+    };
+  } catch {
+    return {
+      ...(await runEventSpecWithFallbackMetrics(config, token, dateRange, false)),
+      includesLinkDimensions: false,
+    };
+  }
+}
 
-  return {
-    lineClicks:
-      normalized.includes("line") || normalized.includes("ライン")
-        ? Math.max(clickCount, 1)
-        : 0,
-    reservationClicks:
-      normalized.includes("reserve") ||
-      normalized.includes("reservation") ||
-      normalized.includes("booking") ||
-      normalized.includes("yoyaku") ||
-      normalized.includes("予約")
-        ? Math.max(clickCount, 1)
-        : 0,
-  };
+function normalizeGa4Date(value: string) {
+  return /^\d{8}$/.test(value)
+    ? `${value.slice(0, 4)}-${value.slice(4, 6)}-${value.slice(6, 8)}`
+    : value;
 }
 
 function trafficResponseToRows(
@@ -358,15 +297,24 @@ function trafficResponseToRows(
         : 0,
       deviceCategory: "",
       engagementRate: getMetricValue(row, metricHeaders, "engagementRate"),
+      eventCount: 0,
       eventName: "",
+      isKeyEvent: false,
       landingPage: getDimensionValue(
         row,
         dimensionHeaders,
         "landingPagePlusQueryString",
       ),
       lineClicks: 0,
+      linkText: "",
+      linkUrl: "",
+      lpLineTaps: 0,
+      pagePath: "",
       pageTitle: "",
-      recordDate: "",
+      phoneTaps: 0,
+      recordDate: normalizeGa4Date(
+        getDimensionValue(row, dimensionHeaders, "date"),
+      ),
       reservationClicks: 0,
       sessions: Math.round(getMetricValue(row, metricHeaders, "sessions")),
       sourceMedium: getDimensionValue(
@@ -400,41 +348,49 @@ function eventResponseToRows(
         getMetricValue(row, metricHeaders, conversionMetricName),
       );
       const eventCount = Math.round(getMetricValue(row, metricHeaders, "eventCount"));
-      const inferredClicks = inferEventClicks(eventName, keyEventCount, eventCount);
+      const linkUrl = getDimensionValue(row, dimensionHeaders, "linkUrl");
+      const reportedPagePath = getDimensionValue(
+        row,
+        dimensionHeaders,
+        "unifiedPagePathScreen",
+      );
+      const pagePath =
+        reportedPagePath ||
+        (eventName === lpLineEventName ? lpLinePagePath : "");
+      const inferredClicks = classifyGa4Event({ eventCount, eventName, linkUrl });
 
       return {
         averageEngagementSeconds: 0,
-        channelGroup: getDimensionValue(
-          row,
-          dimensionHeaders,
-          "sessionDefaultChannelGroup",
-        ),
-        conversions: keyEventCount,
+        channelGroup: "",
+        conversions: isAutomaticMeasurementEvent(eventName) ? 0 : keyEventCount,
         deviceCategory: "",
         engagementRate: 0,
+        eventCount,
         eventName,
-        landingPage: getDimensionValue(
-          row,
-          dimensionHeaders,
-          "landingPagePlusQueryString",
-        ),
+        isKeyEvent:
+          getDimensionValue(row, dimensionHeaders, "isKeyEvent").toLowerCase() ===
+          "true",
+        landingPage: pagePath,
         lineClicks: inferredClicks.lineClicks,
+        linkText: getDimensionValue(row, dimensionHeaders, "linkText"),
+        linkUrl,
+        lpLineTaps: inferredClicks.lpLineTaps,
+        pagePath,
         pageTitle: "",
-        recordDate: "",
+        phoneTaps: inferredClicks.phoneTaps,
+        recordDate: normalizeGa4Date(
+          getDimensionValue(row, dimensionHeaders, "date"),
+        ),
         reservationClicks: inferredClicks.reservationClicks,
         sessions: 0,
-        sourceMedium: getDimensionValue(
-          row,
-          dimensionHeaders,
-          "sessionSourceMedium",
-        ),
+        sourceMedium: "",
         users: 0,
         views: 0,
       };
     })
     .filter((row) => {
-      const hasDimension = Boolean(row.eventName || row.landingPage || row.sourceMedium);
-      const hasMetric = row.conversions + row.lineClicks + row.reservationClicks > 0;
+      const hasDimension = Boolean(row.eventName || row.pagePath || row.linkUrl);
+      const hasMetric = countGa4RowActions(row) > 0;
       return hasDimension && hasMetric;
     });
 }
@@ -503,7 +459,7 @@ export async function fetchGa4DataApiPreview(dateRange: Ga4DateRange) {
     );
   }
 
-  const token = await getAccessToken(config);
+  const token = await getGoogleServiceAccountAccessToken(analyticsScope);
   const trafficResult = await runTrafficReportWithFallbackMetrics(
     config,
     token,
@@ -527,6 +483,11 @@ export async function fetchGa4DataApiPreview(dateRange: Ga4DateRange) {
         eventResult.conversionMetricName,
       )
     : [];
+  const eventIncludesLinkDimensions = Boolean(
+    eventResult.response &&
+      "includesLinkDimensions" in eventResult &&
+      eventResult.includesLinkDimensions,
+  );
   const trafficRows = trafficResponseToRows(
     trafficResult.response,
     trafficResult.conversionMetricName,
@@ -541,6 +502,19 @@ export async function fetchGa4DataApiPreview(dateRange: Ga4DateRange) {
   if ("errorMessage" in eventResult && eventResult.errorMessage) {
     issues.push({
       message: `イベント名別データは取得できませんでした。ページ・流入元データだけ保存します。${eventResult.errorMessage}`,
+      rowNumber: trafficRows.length + 1,
+      severity: "warning",
+    });
+  }
+
+  if (
+    eventResult.response &&
+    "includesLinkDimensions" in eventResult &&
+    !eventResult.includesLinkDimensions
+  ) {
+    issues.push({
+      message:
+        "GA4のリンクURL・リンク文言ディメンションに互換性がなかったため、イベント名・発生ページ・キーイベント状態だけを保存しました。",
       rowNumber: trafficRows.length + 1,
       severity: "warning",
     });
@@ -570,6 +544,7 @@ export async function fetchGa4DataApiPreview(dateRange: Ga4DateRange) {
     previewRows: rows.slice(0, ga4Config.previewRowLimit),
     recognizedColumns: [
       "landingPagePlusQueryString → landingPage",
+      "date → recordDate",
       "sessionSourceMedium → sourceMedium",
       "sessionDefaultChannelGroup → channelGroup",
       "totalUsers → users",
@@ -581,7 +556,12 @@ export async function fetchGa4DataApiPreview(dateRange: Ga4DateRange) {
       ...(eventRows.length > 0
         ? [
             "eventName → eventName",
-            "eventCount → lineClicks / reservationClicks",
+            "unifiedPagePathScreen → pagePath",
+            ...(eventIncludesLinkDimensions
+              ? ["linkUrl → linkUrl", "linkText → linkText"]
+              : []),
+            "isKeyEvent → isKeyEvent",
+            "eventCount → lineClicks / lpLineTaps / phoneTaps / reservationClicks",
             `${eventResult.conversionMetricName} → conversions`,
           ]
         : []),
@@ -589,6 +569,7 @@ export async function fetchGa4DataApiPreview(dateRange: Ga4DateRange) {
     rows,
     sourceColumns: [
       "landingPagePlusQueryString",
+      "date",
       "sessionSourceMedium",
       "sessionDefaultChannelGroup",
       "totalUsers",
@@ -598,7 +579,15 @@ export async function fetchGa4DataApiPreview(dateRange: Ga4DateRange) {
       "averageSessionDuration",
       trafficResult.conversionMetricName,
       ...(eventRows.length > 0
-        ? ["eventName", "eventCount", eventResult.conversionMetricName]
+        ? [
+            "date",
+            "eventName",
+            "unifiedPagePathScreen",
+            ...(eventIncludesLinkDimensions ? ["linkUrl", "linkText"] : []),
+            "isKeyEvent",
+            "eventCount",
+            eventResult.conversionMetricName,
+          ]
         : []),
     ],
     totalRowCount: rowCount,

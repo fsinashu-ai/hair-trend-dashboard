@@ -14,6 +14,10 @@ type StatusTone = "info" | "success" | "warning" | "error";
 
 const today = new Date();
 const defaultMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`;
+const previousMonthStart = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+const previousMonthEnd = new Date(today.getFullYear(), today.getMonth(), 0);
+const formatDate = (date: Date) =>
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 
 export function SearchConsoleImportManager() {
   const [file, setFile] = useState<File | null>(null);
@@ -23,6 +27,10 @@ export function SearchConsoleImportManager() {
   const [reportMonth, setReportMonth] = useState(defaultMonth);
   const [comparisonLabel, setComparisonLabel] = useState("前月");
   const [memo, setMemo] = useState("");
+  const [apiEndDate, setApiEndDate] = useState(formatDate(previousMonthEnd));
+  const [apiLoading, setApiLoading] = useState(false);
+  const [apiMessage, setApiMessage] = useState("前月のSearch Console APIデータを取得できます。");
+  const [apiStartDate, setApiStartDate] = useState(formatDate(previousMonthStart));
   const [preview, setPreview] = useState<SearchConsoleCsvPreview | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [tone, setTone] = useState<StatusTone>("info");
@@ -136,8 +144,66 @@ export function SearchConsoleImportManager() {
     void send("preview");
   }
 
+  async function fetchFromApi() {
+    setApiLoading(true);
+    setApiMessage("Search Console APIから取得しています。");
+    try {
+      const response = await fetch("/api/seo/search-console/fetch", {
+        body: JSON.stringify({
+          dimensions: ["query", "page"],
+          endDate: apiEndDate,
+          startDate: apiStartDate,
+        }),
+        headers: { "Content-Type": "application/json" },
+        method: "POST",
+      });
+      const data = (await response.json().catch(() => ({}))) as {
+        error?: string;
+        results?: Array<{ duplicate: boolean; rowCount: number; type: string }>;
+      };
+      if (!response.ok) throw new Error(data.error || "Search Console APIの取得に失敗しました。");
+      const summary = (data.results ?? [])
+        .map((item) => `${item.type}: ${item.rowCount}行${item.duplicate ? "（重複）" : ""}`)
+        .join(" / ");
+      setApiMessage(`Search Console APIの取得が完了しました。${summary}`);
+      window.dispatchEvent(new Event("search-console-updated"));
+    } catch (error) {
+      setApiMessage(error instanceof Error ? error.message : "Search Console APIの取得に失敗しました。");
+    } finally {
+      setApiLoading(false);
+    }
+  }
+
   return (
     <div className="space-y-5 pb-10">
+      <section className="rounded-lg border border-teal-200 bg-teal-50 p-4 shadow-sm sm:p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-teal-700">Search Console API</p>
+            <h2 className="mt-1 text-lg font-semibold text-teal-950">前月の検索実績を公式APIから取得</h2>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-teal-900">
+              Google CloudとSearch Consoleで権限を設定すると、クエリとページをSupabaseへ保存します。APIキーや秘密鍵はブラウザへ返しません。
+            </p>
+          </div>
+          <span className="rounded-full border border-teal-300 bg-white px-3 py-1 text-xs font-semibold text-teal-800">サーバー側取得</span>
+        </div>
+        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+          <label className="grid gap-2 text-sm font-medium text-teal-950">
+            開始日
+            <input className="min-h-11 rounded-md border border-teal-300 bg-white px-3" onChange={(event) => setApiStartDate(event.target.value)} type="date" value={apiStartDate} />
+          </label>
+          <label className="grid gap-2 text-sm font-medium text-teal-950">
+            終了日
+            <input className="min-h-11 rounded-md border border-teal-300 bg-white px-3" onChange={(event) => setApiEndDate(event.target.value)} type="date" value={apiEndDate} />
+          </label>
+        </div>
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <button className="min-h-11 rounded-md bg-teal-800 px-4 text-sm font-semibold text-white hover:bg-teal-900 disabled:opacity-60" disabled={apiLoading} onClick={() => void fetchFromApi()} type="button">
+            {apiLoading ? "API取得中" : "Search Console APIで取得"}
+          </button>
+          <p aria-live="polite" className="text-sm text-teal-900">{apiMessage}</p>
+        </div>
+      </section>
       <form className="rounded-lg border border-stone-200 bg-white p-4 shadow-sm sm:p-5" onSubmit={handlePreview}>
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="grid gap-2 text-sm font-medium text-stone-700 sm:col-span-2">
@@ -243,4 +309,3 @@ function PreviewTable({ preview }: { preview: SearchConsoleCsvPreview }) {
     </div>
   );
 }
-

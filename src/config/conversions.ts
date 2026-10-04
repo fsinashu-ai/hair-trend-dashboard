@@ -2,10 +2,17 @@ import type { ConversionDefinition } from "@/types/conversions";
 
 export const conversionDefinitions: ConversionDefinition[] = [
   {
-    description: "LINE相談、LINE予約、LINEリンクのクリックを成果として見ます。",
-    examples: ["line_click", "LINE相談", "LINE予約"],
+    description: "TOPページのLINEリンクだけをline_clickとして見ます。",
+    examples: ["line_click（TOP）"],
     id: "line",
     label: "LINEクリック",
+    priority: "high",
+  },
+  {
+    description: "LPのLINEボタンをTOPとは分けて成果として見ます。",
+    examples: ["LINE_click_ad（LP）"],
+    id: "line_lp",
+    label: "LINEタップ",
     priority: "high",
   },
   {
@@ -17,7 +24,7 @@ export const conversionDefinitions: ConversionDefinition[] = [
   },
   {
     description: "電話ボタンやtelリンクのクリックを成果として見ます。",
-    examples: ["tel_click", "電話クリック", "phone"],
+    examples: ["TEL", "link_urlがtel:のclick"],
     id: "phone",
     label: "電話クリック",
     priority: "medium",

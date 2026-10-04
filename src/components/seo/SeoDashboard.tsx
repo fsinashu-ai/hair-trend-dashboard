@@ -123,7 +123,7 @@ export async function SeoDashboard() {
         }
         href="/seo/search-console"
         limitations={[
-          "Search Console APIとの直接連携は未対応です。CSVを取り込んだ分だけが分析対象です。",
+          "Search Console APIまたはCSVで取り込んだデータが分析対象です。API利用にはGoogle側の権限設定が必要です。",
           "対象期間やデータ種別が異なるCSVを取り込むと、別の取り込みデータとして扱われます。",
         ]}
         linkLabel="Search Consoleの詳細を見る"
@@ -212,7 +212,9 @@ export async function SeoDashboard() {
             <MetricCard label="ユーザー" value={ga4Import.metrics.users.toLocaleString("ja-JP")} />
             <MetricCard label="セッション" value={ga4Import.metrics.sessions.toLocaleString("ja-JP")} />
             <MetricCard label="表示回数" value={ga4Import.metrics.views.toLocaleString("ja-JP")} />
-            <MetricCard label="LINEクリック" value={ga4Import.metrics.lineClicks.toLocaleString("ja-JP")} />
+            <MetricCard label="TOP LINEクリック" value={ga4Import.metrics.lineClicks.toLocaleString("ja-JP")} />
+            <MetricCard label="LP LINEタップ" value={ga4Import.metrics.lpLineTaps.toLocaleString("ja-JP")} />
+            <MetricCard label="電話タップ" value={ga4Import.metrics.phoneTaps.toLocaleString("ja-JP")} />
             <MetricCard label="予約クリック" value={ga4Import.metrics.reservationClicks.toLocaleString("ja-JP")} />
           </div>
         </section>

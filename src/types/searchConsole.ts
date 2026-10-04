@@ -5,6 +5,8 @@ export type SearchConsoleImportType =
   | "country"
   | "date";
 
+export type SearchConsoleImportSource = "csv" | "search_console_api";
+
 export type SearchConsoleImportStatus =
   | "preview"
   | "imported"
@@ -46,6 +48,9 @@ export type SearchConsoleImport = {
   comparisonLabel: string;
   memo: string;
   rowCount: number;
+  searchType?: string;
+  source?: SearchConsoleImportSource;
+  sourceProperty?: string;
   excludedRowCount: number;
   warningCount: number;
   status: SearchConsoleImportStatus;
@@ -192,4 +197,3 @@ export type SearchConsoleDataset = {
   rowsByImport: Record<string, SearchConsoleRow[]>;
   analysesByImport: Record<string, SearchConsoleSeoAnalysis>;
 };
-

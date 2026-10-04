@@ -1,15 +1,18 @@
 import { ga4Config } from "@/config/ga4";
+import { countGa4RowActions } from "@/lib/ga4/events";
 import type {
   Ga4BasicAnalysis,
   Ga4Candidate,
   Ga4Comparison,
   Ga4MetricChange,
   Ga4Metrics,
+  Ga4Import,
   Ga4Row,
 } from "@/types/ga4";
 
 function rowKey(row: Ga4Row) {
   return (
+    row.pagePath ||
     row.landingPage ||
     row.pageTitle ||
     row.sourceMedium ||
@@ -43,9 +46,13 @@ export function summarizeGa4Rows(rows: Ga4Row[]): Ga4Metrics {
     conversions: rows.reduce((sum, row) => sum + row.conversions, 0),
     engagementRate: weight > 0 ? weightedEngagement / weight : 0,
     landingPageCount: new Set(
-      rows.map((row) => row.landingPage || row.pageTitle).filter(Boolean),
+      rows
+        .map((row) => row.pagePath || row.landingPage || row.pageTitle)
+        .filter(Boolean),
     ).size,
-    lineClicks: rows.reduce((sum, row) => sum + row.lineClicks, 0),
+    lineClicks: rows.reduce((sum, row) => sum + (row.lineClicks ?? 0), 0),
+    lpLineTaps: rows.reduce((sum, row) => sum + (row.lpLineTaps ?? 0), 0),
+    phoneTaps: rows.reduce((sum, row) => sum + (row.phoneTaps ?? 0), 0),
     reservationClicks: rows.reduce((sum, row) => sum + row.reservationClicks, 0),
     sessions,
     sourceCount: new Set(
@@ -75,6 +82,8 @@ export function aggregateGa4Rows(rows: Ga4Row[]) {
       engagementRate: metrics.engagementRate,
       key,
       lineClicks: metrics.lineClicks,
+      lpLineTaps: metrics.lpLineTaps,
+      phoneTaps: metrics.phoneTaps,
       reservationClicks: metrics.reservationClicks,
       sessions: metrics.sessions,
       users: metrics.users,
@@ -99,8 +108,16 @@ export function compareGa4Periods(
 ): Ga4Comparison {
   const current = summarizeGa4Rows(currentRows);
   const previous = summarizeGa4Rows(previousRows);
-  const currentConversionClicks = current.lineClicks + current.reservationClicks;
-  const previousConversionClicks = previous.lineClicks + previous.reservationClicks;
+  const currentConversionClicks =
+    current.lineClicks +
+    current.lpLineTaps +
+    current.phoneTaps +
+    current.reservationClicks;
+  const previousConversionClicks =
+    previous.lineClicks +
+    previous.lpLineTaps +
+    previous.phoneTaps +
+    previous.reservationClicks;
 
   return {
     conversionClicks: metricChange(currentConversionClicks, previousConversionClicks),
@@ -114,6 +131,57 @@ export function compareGa4Periods(
     users: metricChange(current.users, previous.users),
     views: metricChange(current.views, previous.views),
   };
+}
+
+function inclusiveDayCount(startDate: string, endDate: string) {
+  const start = Date.parse(`${startDate}T00:00:00Z`);
+  const end = Date.parse(`${endDate}T00:00:00Z`);
+
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) return 0;
+  return Math.round((end - start) / 86_400_000) + 1;
+}
+
+export function findComparablePreviousImport(
+  imports: Ga4Import[],
+  currentImport: Ga4Import,
+) {
+  const currentDays = inclusiveDayCount(
+    currentImport.periodStart,
+    currentImport.periodEnd,
+  );
+  const isFullMonth = (start: string, end: string) => {
+    if (!/^\d{4}-\d{2}-01$/.test(start) || inclusiveDayCount(start, end) === 0) return false;
+    const nextMonth = new Date(`${end}T00:00:00Z`);
+    nextMonth.setUTCDate(nextMonth.getUTCDate() + 1);
+    return start.slice(0, 7) === end.slice(0, 7) && nextMonth.getUTCDate() === 1;
+  };
+  if (currentDays === 0) return undefined;
+
+  return imports
+    .filter(
+      (item) =>
+        item.id !== currentImport.id &&
+        item.periodEnd < currentImport.periodStart &&
+        (isFullMonth(currentImport.periodStart, currentImport.periodEnd)
+          ? isFullMonth(item.periodStart, item.periodEnd)
+          : inclusiveDayCount(item.periodStart, item.periodEnd) === currentDays),
+    )
+    .sort(
+      (a, b) =>
+        b.periodEnd.localeCompare(a.periodEnd) ||
+        b.createdAt.localeCompare(a.createdAt),
+    )[0];
+}
+
+function rowActionCount(row: Ga4Row) {
+  return countGa4RowActions({
+    conversions: row.conversions,
+    eventName: row.eventName,
+    lineClicks: row.lineClicks ?? 0,
+    lpLineTaps: row.lpLineTaps ?? 0,
+    phoneTaps: row.phoneTaps ?? 0,
+    reservationClicks: row.reservationClicks,
+  });
 }
 
 function toCandidate(
@@ -131,21 +199,17 @@ export function createGa4BasicAnalysis(rows: Ga4Row[]): Ga4BasicAnalysis {
   const byViews = [...aggregated].sort((a, b) => b.views - a.views);
   const byUsers = [...aggregated].sort((a, b) => b.users - a.users);
   const byConversions = [...aggregated].sort(
-    (a, b) =>
-      b.lineClicks +
-      b.reservationClicks +
-      b.conversions -
-      (a.lineClicks + a.reservationClicks + a.conversions),
+    (a, b) => rowActionCount(b) - rowActionCount(a),
   );
 
   return {
     conversionPages: byConversions
-      .filter((row) => row.lineClicks + row.reservationClicks + row.conversions > 0)
+      .filter((row) => rowActionCount(row) > 0)
       .map((row) =>
         toCandidate(
           row,
           "conversion_page",
-          `LINE・予約・キーイベント合計${row.lineClicks + row.reservationClicks + row.conversions}件`,
+          `LINE・電話・予約リンクのクリック合計${rowActionCount(row)}件（予約確定数ではありません）`,
         ),
       )
       .slice(0, limit),
@@ -153,7 +217,7 @@ export function createGa4BasicAnalysis(rows: Ga4Row[]): Ga4BasicAnalysis {
       .filter(
         (row) =>
           row.users >= thresholds.noConversionMinimumUsers &&
-          row.lineClicks + row.reservationClicks + row.conversions === 0,
+          rowActionCount(row) === 0,
       )
       .map((row) =>
         toCandidate(
@@ -181,14 +245,14 @@ export function createGa4BasicAnalysis(rows: Ga4Row[]): Ga4BasicAnalysis {
       .filter(
         (row) =>
           row.users >= thresholds.lineOpportunityMinimumUsers &&
-          row.lineClicks === 0 &&
-          (row.landingPage || row.pageTitle),
+          row.lineClicks + row.lpLineTaps === 0 &&
+          (row.pagePath || row.landingPage || row.pageTitle),
       )
       .map((row) =>
         toCandidate(
           row,
           "line_opportunity",
-          `ユーザー${row.users.toLocaleString("ja-JP")}人でLINEクリック0件`,
+          `ユーザー${row.users.toLocaleString("ja-JP")}人でLINE成果0件`,
         ),
       )
       .slice(0, limit),

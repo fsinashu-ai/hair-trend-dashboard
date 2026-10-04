@@ -66,6 +66,7 @@ function toTaskItem(task: SeoTask, source = "SEOタスク"): DashboardTaskItem {
     label: task.title,
     priority: normalizeTaskPriority(task.priority),
     source,
+    taskId: task.id,
   };
 }
 
@@ -235,6 +236,8 @@ export async function createFinalMarketingDashboardSummary(): Promise<FinalMarke
           engagementRate: 0,
           landingPageCount: 0,
           lineClicks: 0,
+          lpLineTaps: 0,
+          phoneTaps: 0,
           reservationClicks: 0,
           sessions: 0,
           sourceCount: 0,
@@ -247,16 +250,21 @@ export async function createFinalMarketingDashboardSummary(): Promise<FinalMarke
     : usesSupabase
       ? []
       : pickActionTasks(dummySeoTasks);
+  const savedTaskTitles = new Set(
+    (seoTasks ?? []).map((task) => task.title.trim()),
+  );
   const analysisTasks = [
     ...(latestSeoAnalysis?.monthlyTasks ?? []),
     ...(latestGa4Analysis?.monthlyTasks ??
       (usesSupabase ? [] : ga4MockAnalysis.monthlyTasks)),
-  ].map((task) => ({
-    href: "/seo/tasks",
-    label: task.title,
-    priority: normalizeTaskPriority(task.priority),
-    source: "Gemini提案",
-  }));
+  ]
+    .filter((task) => !savedTaskTitles.has(task.title.trim()))
+    .map((task) => ({
+      href: "/seo/tasks",
+      label: task.title,
+      priority: normalizeTaskPriority(task.priority),
+      source: "Gemini提案",
+    }));
   const adAction =
     (adCreatives ?? []).some((creative) =>
       actionableCreativeStatuses.has(creative.status),
@@ -409,6 +417,8 @@ export async function createFinalMarketingDashboardSummary(): Promise<FinalMarke
       conversions: ga4Metrics.conversions,
       hasData: Boolean(latestGa4) || !usesSupabase,
       lineClicks: ga4Metrics.lineClicks,
+      lpLineTaps: ga4Metrics.lpLineTaps,
+      phoneTaps: ga4Metrics.phoneTaps,
       reservationClicks: ga4Metrics.reservationClicks,
       sourceLabel: latestGa4
         ? `${latestGa4.periodStart}〜${latestGa4.periodEnd}`

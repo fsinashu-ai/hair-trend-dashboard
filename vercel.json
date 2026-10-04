@@ -5,8 +5,8 @@
       "schedule": "0 22 * * *"
     },
     {
-      "path": "/api/seo/ga4/fetch",
-      "schedule": "0 0 2 * *"
+      "path": "/api/seo/monthly-fetch",
+      "schedule": "0 0 5 * *"
     }
   ]
 }

@@ -1054,6 +1054,55 @@ set
   priority = excluded.priority,
   memo = excluded.memo;
 
+create table if not exists public.social_import_runs (
+  id uuid primary key default gen_random_uuid(),
+  provider text not null default 'Apify',
+  source_name text not null default 'Apify',
+  actor_id text,
+  actor_run_id text,
+  dataset_id text,
+  request_id text,
+  idempotency_key text,
+  status text not null default 'running',
+  received_count integer not null default 0,
+  normalized_count integer not null default 0,
+  saved_count integer not null default 0,
+  duplicate_count integer not null default 0,
+  skipped_count integer not null default 0,
+  error_count integer not null default 0,
+  ai_classified_count integer not null default 0,
+  source_matched_count integer not null default 0,
+  error_summary text,
+  metadata jsonb not null default '{}'::jsonb,
+  started_at timestamptz not null default now(),
+  finished_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table public.social_import_runs add column if not exists provider text not null default 'Apify';
+alter table public.social_import_runs add column if not exists source_name text not null default 'Apify';
+alter table public.social_import_runs add column if not exists actor_id text;
+alter table public.social_import_runs add column if not exists actor_run_id text;
+alter table public.social_import_runs add column if not exists dataset_id text;
+alter table public.social_import_runs add column if not exists request_id text;
+alter table public.social_import_runs add column if not exists idempotency_key text;
+alter table public.social_import_runs add column if not exists status text not null default 'running';
+alter table public.social_import_runs add column if not exists received_count integer not null default 0;
+alter table public.social_import_runs add column if not exists normalized_count integer not null default 0;
+alter table public.social_import_runs add column if not exists saved_count integer not null default 0;
+alter table public.social_import_runs add column if not exists duplicate_count integer not null default 0;
+alter table public.social_import_runs add column if not exists skipped_count integer not null default 0;
+alter table public.social_import_runs add column if not exists error_count integer not null default 0;
+alter table public.social_import_runs add column if not exists ai_classified_count integer not null default 0;
+alter table public.social_import_runs add column if not exists source_matched_count integer not null default 0;
+alter table public.social_import_runs add column if not exists error_summary text;
+alter table public.social_import_runs add column if not exists metadata jsonb not null default '{}'::jsonb;
+alter table public.social_import_runs add column if not exists started_at timestamptz not null default now();
+alter table public.social_import_runs add column if not exists finished_at timestamptz;
+alter table public.social_import_runs add column if not exists created_at timestamptz not null default now();
+alter table public.social_import_runs add column if not exists updated_at timestamptz not null default now();
+
 create table if not exists public.social_posts (
   id uuid primary key default gen_random_uuid(),
   source_id uuid references public.social_sources(id) on delete set null,
@@ -1072,6 +1121,13 @@ create table if not exists public.social_posts (
   blog_idea text not null default '',
   counseling_idea text not null default '',
   source_name text not null default '',
+  provider text not null default '',
+  actor_id text,
+  actor_run_id text,
+  dataset_id text,
+  import_run_id uuid references public.social_import_runs(id) on delete set null,
+  import_key text,
+  payload_hash text,
   account_name text not null default '',
   handle text not null default '',
   external_id text not null default '',
@@ -1080,6 +1136,11 @@ create table if not exists public.social_posts (
   play_count integer,
   share_count integer,
   raw_payload jsonb not null default '{}'::jsonb,
+  classification_provider text,
+  classification_model text,
+  classification_status text,
+  classification_error text,
+  classified_at timestamptz,
   review_status text not null default '未確認',
   is_favorite boolean not null default false,
   imported_at timestamptz not null default now(),
@@ -1101,6 +1162,13 @@ alter table public.social_posts add column if not exists instagram_post_idea tex
 alter table public.social_posts add column if not exists blog_idea text not null default '';
 alter table public.social_posts add column if not exists counseling_idea text not null default '';
 alter table public.social_posts add column if not exists source_name text not null default '';
+alter table public.social_posts add column if not exists provider text not null default '';
+alter table public.social_posts add column if not exists actor_id text;
+alter table public.social_posts add column if not exists actor_run_id text;
+alter table public.social_posts add column if not exists dataset_id text;
+alter table public.social_posts add column if not exists import_run_id uuid;
+alter table public.social_posts add column if not exists import_key text;
+alter table public.social_posts add column if not exists payload_hash text;
 alter table public.social_posts add column if not exists account_name text not null default '';
 alter table public.social_posts add column if not exists handle text not null default '';
 alter table public.social_posts add column if not exists external_id text not null default '';
@@ -1109,6 +1177,11 @@ alter table public.social_posts add column if not exists comment_count integer;
 alter table public.social_posts add column if not exists play_count integer;
 alter table public.social_posts add column if not exists share_count integer;
 alter table public.social_posts add column if not exists raw_payload jsonb not null default '{}'::jsonb;
+alter table public.social_posts add column if not exists classification_provider text;
+alter table public.social_posts add column if not exists classification_model text;
+alter table public.social_posts add column if not exists classification_status text;
+alter table public.social_posts add column if not exists classification_error text;
+alter table public.social_posts add column if not exists classified_at timestamptz;
 alter table public.social_posts add column if not exists review_status text not null default '未確認';
 alter table public.social_posts add column if not exists is_favorite boolean not null default false;
 alter table public.social_posts add column if not exists imported_at timestamptz not null default now();
@@ -1162,6 +1235,22 @@ begin
 end
 $$;
 
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'social_posts_import_run_id_fkey'
+  ) then
+    alter table public.social_posts
+    add constraint social_posts_import_run_id_fkey
+    foreign key (import_run_id)
+    references public.social_import_runs(id)
+    on delete set null;
+  end if;
+end
+$$;
+
 delete from public.social_posts as duplicate
 using public.social_posts as original
 where duplicate.canonical_url = original.canonical_url
@@ -1204,6 +1293,42 @@ on public.social_posts (handle);
 
 create index if not exists social_posts_external_id_idx
 on public.social_posts (external_id);
+
+create index if not exists social_posts_import_run_id_idx
+on public.social_posts (import_run_id);
+
+create index if not exists social_posts_import_key_idx
+on public.social_posts (import_key)
+where import_key is not null and import_key <> '';
+
+create unique index if not exists social_posts_import_key_uidx
+on public.social_posts (import_key)
+where import_key is not null and import_key <> '';
+
+create index if not exists social_posts_classification_status_idx
+on public.social_posts (classification_status, imported_at desc);
+
+alter table public.social_import_runs drop constraint if exists social_import_runs_status_check;
+alter table public.social_import_runs add constraint social_import_runs_status_check
+check (status in ('running', 'success', 'partial', 'failed', 'no_items', 'preview'));
+
+alter table public.social_import_runs drop constraint if exists social_import_runs_counts_check;
+alter table public.social_import_runs add constraint social_import_runs_counts_check
+check (
+  received_count >= 0 and normalized_count >= 0 and saved_count >= 0
+  and duplicate_count >= 0 and skipped_count >= 0 and error_count >= 0
+  and ai_classified_count >= 0 and source_matched_count >= 0
+);
+
+create index if not exists social_import_runs_started_at_idx
+on public.social_import_runs (started_at desc);
+
+create index if not exists social_import_runs_status_idx
+on public.social_import_runs (status, started_at desc);
+
+create unique index if not exists social_import_runs_idempotency_uidx
+on public.social_import_runs (provider, idempotency_key)
+where idempotency_key is not null and idempotency_key <> '';
 
 create table if not exists public.blog_posts (
   id uuid primary key default gen_random_uuid(),
@@ -1321,6 +1446,7 @@ alter table public.trend_sources enable row level security;
 alter table public.sns_posts enable row level security;
 alter table public.social_sources enable row level security;
 alter table public.social_posts enable row level security;
+alter table public.social_import_runs enable row level security;
 alter table public.blog_posts enable row level security;
 
 -- Personal-use server-only access.
@@ -1337,6 +1463,7 @@ revoke all on table
   public.sns_posts,
   public.social_sources,
   public.social_posts,
+  public.social_import_runs,
   public.blog_posts
 from anon, authenticated;
 
@@ -1349,6 +1476,7 @@ on table
   public.sns_posts,
   public.social_sources,
   public.social_posts,
+  public.social_import_runs,
   public.blog_posts
 to service_role;
 
@@ -1368,6 +1496,8 @@ drop policy if exists "personal_sns_posts_all" on public.sns_posts;
 drop policy if exists "personal_social_sources_all" on public.social_sources;
 
 drop policy if exists "personal_social_posts_all" on public.social_posts;
+
+drop policy if exists "personal_social_import_runs_all" on public.social_import_runs;
 
 drop policy if exists "personal_blog_posts_all" on public.blog_posts;
 
@@ -1648,6 +1778,9 @@ create table if not exists public.seo_search_console_imports (
   status text not null default 'preview',
   error_message text not null default '',
   content_hash text not null,
+  source text not null default 'csv',
+  source_property text,
+  search_type text not null default 'web',
   total_clicks bigint not null default 0,
   total_impressions bigint not null default 0,
   average_ctr numeric(10, 8) not null default 0,
@@ -1657,9 +1790,17 @@ create table if not exists public.seo_search_console_imports (
   constraint seo_sc_import_type_check check (import_type in ('query', 'page', 'device', 'country', 'date')),
   constraint seo_sc_import_status_check check (status in ('preview', 'imported', 'analyzed', 'failed')),
   constraint seo_sc_import_period_check check (period_end >= period_start),
+  constraint seo_sc_import_source_check check (source in ('csv', 'search_console_api')),
   constraint seo_sc_import_counts_check check (row_count >= 0 and excluded_row_count >= 0 and warning_count >= 0),
   constraint seo_sc_import_metrics_check check (total_clicks >= 0 and total_impressions >= 0 and average_ctr >= 0 and average_ctr <= 1 and average_position >= 0)
 );
+
+alter table public.seo_search_console_imports add column if not exists source text not null default 'csv';
+alter table public.seo_search_console_imports add column if not exists source_property text;
+alter table public.seo_search_console_imports add column if not exists search_type text not null default 'web';
+alter table public.seo_search_console_imports drop constraint if exists seo_sc_import_source_check;
+alter table public.seo_search_console_imports add constraint seo_sc_import_source_check
+check (source in ('csv', 'search_console_api'));
 
 create table if not exists public.seo_search_console_rows (
   id uuid primary key default gen_random_uuid(),
@@ -1711,6 +1852,7 @@ check (generated_by in ('gemini', 'mock', 'manual'));
 
 create index if not exists seo_sc_imports_user_period_idx on public.seo_search_console_imports (user_id, period_end desc);
 create index if not exists seo_sc_imports_hash_idx on public.seo_search_console_imports (content_hash, import_type, period_start, period_end);
+create index if not exists seo_sc_imports_source_period_idx on public.seo_search_console_imports (source, period_end desc);
 create index if not exists seo_sc_rows_import_idx on public.seo_search_console_rows (import_id);
 create index if not exists seo_sc_rows_query_idx on public.seo_search_console_rows (query) where query is not null;
 create index if not exists seo_sc_rows_page_idx on public.seo_search_console_rows (page_url) where page_url is not null;
@@ -1884,6 +2026,8 @@ create table if not exists public.seo_ga4_imports (
   average_engagement_rate numeric not null default 0,
   average_engagement_seconds numeric not null default 0,
   total_line_clicks integer not null default 0,
+  total_lp_line_taps integer not null default 0,
+  total_phone_taps integer not null default 0,
   total_reservation_clicks integer not null default 0,
   total_conversions integer not null default 0,
   landing_page_count integer not null default 0,
@@ -1904,6 +2048,11 @@ create table if not exists public.seo_ga4_rows (
   channel_group text,
   device_category text,
   event_name text,
+  event_count integer not null default 0,
+  page_path text,
+  link_url text,
+  link_text text,
+  is_key_event boolean not null default false,
   record_date date,
   users integer not null default 0,
   sessions integer not null default 0,
@@ -1911,6 +2060,8 @@ create table if not exists public.seo_ga4_rows (
   engagement_rate numeric not null default 0,
   average_engagement_seconds numeric not null default 0,
   line_clicks integer not null default 0,
+  lp_line_taps integer not null default 0,
+  phone_taps integer not null default 0,
   reservation_clicks integer not null default 0,
   conversions integer not null default 0,
   created_at timestamptz not null default now()
@@ -1928,6 +2079,8 @@ create table if not exists public.seo_ga4_reports (
   average_engagement_rate numeric not null default 0,
   average_engagement_seconds numeric not null default 0,
   total_line_clicks integer not null default 0,
+  total_lp_line_taps integer not null default 0,
+  total_phone_taps integer not null default 0,
   total_reservation_clicks integer not null default 0,
   total_conversions integer not null default 0,
   ai_analysis text not null default '',
@@ -1943,11 +2096,30 @@ create table if not exists public.seo_ga4_reports (
   constraint seo_ga4_reports_generated_by_check check (generated_by in ('gemini', 'mock', 'manual'))
 );
 
+alter table public.seo_ga4_imports
+  add column if not exists total_lp_line_taps integer not null default 0,
+  add column if not exists total_phone_taps integer not null default 0;
+
+alter table public.seo_ga4_rows
+  add column if not exists event_count integer not null default 0,
+  add column if not exists page_path text,
+  add column if not exists link_url text,
+  add column if not exists link_text text,
+  add column if not exists is_key_event boolean not null default false,
+  add column if not exists lp_line_taps integer not null default 0,
+  add column if not exists phone_taps integer not null default 0;
+
+alter table public.seo_ga4_reports
+  add column if not exists total_lp_line_taps integer not null default 0,
+  add column if not exists total_phone_taps integer not null default 0;
+
 create index if not exists seo_ga4_imports_user_period_idx on public.seo_ga4_imports (user_id, period_end desc);
 create index if not exists seo_ga4_imports_hash_idx on public.seo_ga4_imports (content_hash, period_start, period_end);
 create index if not exists seo_ga4_rows_import_idx on public.seo_ga4_rows (import_id);
 create index if not exists seo_ga4_rows_landing_page_idx on public.seo_ga4_rows (landing_page) where landing_page is not null;
 create index if not exists seo_ga4_rows_source_idx on public.seo_ga4_rows (source_medium) where source_medium is not null;
+create index if not exists seo_ga4_rows_page_path_idx on public.seo_ga4_rows (page_path) where page_path is not null;
+create index if not exists seo_ga4_rows_event_date_idx on public.seo_ga4_rows (event_name, record_date) where event_name is not null;
 create index if not exists seo_ga4_reports_import_idx on public.seo_ga4_reports (ga4_import_id);
 create index if not exists seo_ga4_reports_hash_idx on public.seo_ga4_reports (input_hash) where input_hash <> '';
 

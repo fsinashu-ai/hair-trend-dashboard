@@ -76,6 +76,12 @@ export type SocialClassification = {
   providerLabel: string;
 };
 
+export type SocialClassificationStatus =
+  | "gemini"
+  | "mock"
+  | "fallback"
+  | "not_requested";
+
 export type SocialPost = {
   id: string;
   sourceId?: string;
@@ -94,6 +100,13 @@ export type SocialPost = {
   blogIdea: string;
   counselingIdea: string;
   sourceName?: string;
+  provider?: string;
+  actorId?: string;
+  actorRunId?: string;
+  datasetId?: string;
+  importRunId?: string;
+  importKey?: string;
+  payloadHash?: string;
   accountName?: string;
   handle?: string;
   externalId?: string;
@@ -102,6 +115,11 @@ export type SocialPost = {
   playCount?: number;
   shareCount?: number;
   rawPayload?: Record<string, unknown>;
+  classificationProvider?: string;
+  classificationModel?: string;
+  classificationStatus?: SocialClassificationStatus;
+  classificationError?: string;
+  classifiedAt?: string;
   reviewStatus: SocialReviewStatus;
   isFavorite: boolean;
   importedAt: string;

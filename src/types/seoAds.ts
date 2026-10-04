@@ -1,5 +1,7 @@
 export type SeoPriority = "high" | "medium" | "low";
 
+export type SeoTaskStatus = "todo" | "doing" | "done" | "hold";
+
 export type SeoKeyword = {
   id: string;
   keyword: string;
@@ -25,7 +27,7 @@ export type SeoTask = {
   title: string;
   taskType: string;
   priority: SeoPriority;
-  status: string;
+  status: SeoTaskStatus | "未着手" | "対応中";
   relatedKeyword: string;
   relatedPageUrl: string;
   dueDate: string;

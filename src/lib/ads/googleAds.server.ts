@@ -1,6 +1,11 @@
 import { createHash } from "node:crypto";
 import { adCsvConfig } from "@/config/adCsv";
 import { summarizeAdCsvRows } from "@/lib/ads/adCsvAnalysis";
+import {
+  GoogleAdsOAuthError,
+  googleAdsOAuthErrorMessage,
+  readGoogleOAuthErrorCode,
+} from "@/lib/ads/googleAdsOauth";
 import { saveAdCsvImport } from "@/lib/supabase/adCsv.server";
 import type {
   AdCsvImportMetadata,
@@ -31,6 +36,21 @@ type GoogleAdsFetchInput = {
 type GoogleAdsSearchStreamChunk = {
   results?: Array<Record<string, unknown>>;
 };
+
+type GoogleOAuthTokenResponse = {
+  access_token?: unknown;
+  expires_in?: unknown;
+};
+
+type GoogleAdsAccessTokenCache = {
+  accessToken: string;
+  credentialFingerprint: string;
+  expiresAt: number;
+};
+
+const oauthRequestTimeoutMs = 20_000;
+const oauthExpirySafetyMs = 5 * 60 * 1000;
+let accessTokenCache: GoogleAdsAccessTokenCache | null = null;
 
 const supportedReportTypes: AdCsvImportType[] = [
   "campaign",
@@ -97,26 +117,65 @@ function validateInput(input: GoogleAdsFetchInput) {
 }
 
 async function fetchAccessToken(config: GoogleAdsConfig) {
-  const response = await fetch("https://oauth2.googleapis.com/token", {
-    body: new URLSearchParams({
-      client_id: config.clientId,
-      client_secret: config.clientSecret,
-      grant_type: "refresh_token",
-      refresh_token: config.refreshToken,
-    }),
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    method: "POST",
-  });
+  const credentialFingerprint = createHash("sha256")
+    .update(`${config.clientId}\0${config.refreshToken}`)
+    .digest("hex");
+
+  if (
+    accessTokenCache?.credentialFingerprint === credentialFingerprint &&
+    accessTokenCache.expiresAt - oauthExpirySafetyMs > Date.now()
+  ) {
+    return accessTokenCache.accessToken;
+  }
+
+  let response: Response;
+  try {
+    response = await fetch("https://oauth2.googleapis.com/token", {
+      body: new URLSearchParams({
+        client_id: config.clientId,
+        client_secret: config.clientSecret,
+        grant_type: "refresh_token",
+        refresh_token: config.refreshToken,
+      }),
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      method: "POST",
+      signal: AbortSignal.timeout(oauthRequestTimeoutMs),
+    });
+  } catch {
+    throw new GoogleAdsOAuthError(
+      "network_error",
+      "Google広告APIのOAuthサーバーへ接続できませんでした。時間をおいて再試行してください。",
+    );
+  }
+
+  const payload = (await response.json().catch(() => ({}))) as GoogleOAuthTokenResponse;
 
   if (!response.ok) {
-    throw new Error("Google広告APIのOAuth認証に失敗しました。client ID、client secret、refresh tokenを確認してください。");
+    const code = readGoogleOAuthErrorCode(payload);
+    throw new GoogleAdsOAuthError(
+      code,
+      googleAdsOAuthErrorMessage(code, response.status),
+    );
   }
 
-  const data = (await response.json()) as { access_token?: string };
-  if (!data.access_token) {
-    throw new Error("Google広告APIのアクセストークンを取得できませんでした。");
+  if (typeof payload.access_token !== "string" || !payload.access_token) {
+    throw new GoogleAdsOAuthError(
+      "missing_access_token",
+      "Google広告APIのOAuth応答にAccess Tokenが含まれていませんでした。OAuthクライアント設定を確認してください。",
+    );
   }
-  return data.access_token;
+
+  const expiresIn = Number(payload.expires_in);
+  const expiresInMs = Number.isFinite(expiresIn) && expiresIn > 0
+    ? expiresIn * 1000
+    : 60 * 60 * 1000;
+  accessTokenCache = {
+    accessToken: payload.access_token,
+    credentialFingerprint,
+    expiresAt: Date.now() + expiresInMs,
+  };
+
+  return payload.access_token;
 }
 
 function buildGoogleAdsQuery(input: GoogleAdsFetchInput) {

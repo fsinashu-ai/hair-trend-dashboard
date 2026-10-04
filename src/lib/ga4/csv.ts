@@ -1,5 +1,11 @@
 import Papa from "papaparse";
 import { ga4Config } from "@/config/ga4";
+import {
+  classifyGa4Event,
+  isAutomaticMeasurementEvent,
+  lpLineEventName,
+  lpLinePagePath,
+} from "@/lib/ga4/events";
 import { summarizeGa4Rows } from "@/lib/ga4/metrics";
 import type { Ga4CsvIssue, Ga4CsvPreview, Ga4Row } from "@/types/ga4";
 
@@ -27,16 +33,26 @@ const columnAliases = {
   engagementRate: ["エンゲージメント率", "engagement rate"],
   eventCount: ["イベント数", "event count"],
   eventName: ["イベント名", "event name"],
+  isKeyEvent: ["キーイベントに指定", "キーイベントか", "is key event", "isKeyEvent"],
   landingPage: [
     "ランディング ページ + クエリ文字列",
     "ランディング ページ",
     "landing page + query string",
     "landing page",
-    "ページパスとスクリーン クラス",
-    "page path and screen class",
   ],
   lineClicks: ["lineクリック", "line クリック", "line_click", "line clicks"],
+  linkText: ["リンクテキスト", "link text", "linkText"],
+  linkUrl: ["リンク先URL", "リンク URL", "link url", "linkUrl"],
+  lpLineTaps: ["LINEタップ", "LINE_click_ad", "lp line taps"],
+  pagePath: [
+    "ページパスとスクリーン クラス",
+    "統合されたページパスとスクリーン クラス",
+    "page path and screen class",
+    "unified page path screen",
+    "unifiedPagePathScreen",
+  ],
   pageTitle: ["ページ タイトル", "ページタイトル", "page title"],
+  phoneTaps: ["電話タップ", "電話クリック", "phone taps", "phone clicks"],
   reservationClicks: [
     "予約クリック",
     "予約ボタンクリック",
@@ -134,6 +150,10 @@ function parseDate(value: string) {
   return /^\d{4}-\d{1,2}-\d{1,2}$/.test(normalized) ? normalized : "";
 }
 
+function parseBoolean(value: string) {
+  return ["1", "true", "yes", "はい"].includes(value.trim().toLowerCase());
+}
+
 function toSafeFileName(value: string) {
   const leafName = value.split(/[\\/]/).pop() ?? "ga4.csv";
   return leafName.replace(/[\u0000-\u001f<>:"|?*]/g, "_").slice(0, 200);
@@ -150,28 +170,6 @@ function stripGa4ExportPreamble(csvText: string) {
 
 function get(record: Record<string, string>, column: string | undefined) {
   return column ? String(record[column] ?? "").trim() : "";
-}
-
-function inferEventClicks(
-  eventName: string,
-  conversions: number,
-  eventCount: number,
-) {
-  const normalized = eventName.toLowerCase();
-  const clickCount = Math.round(Math.max(conversions, eventCount));
-
-  return {
-    lineClicks:
-      normalized.includes("line") || normalized.includes("ライン")
-        ? clickCount
-        : 0,
-    reservationClicks:
-      normalized.includes("reserve") ||
-      normalized.includes("reservation") ||
-      normalized.includes("予約")
-        ? clickCount
-        : 0,
-  };
 }
 
 export function parseGa4Csv({
@@ -205,6 +203,8 @@ export function parseGa4Csv({
       columns.sourceMedium ||
       columns.channelGroup ||
       columns.eventName ||
+      columns.pagePath ||
+      columns.linkUrl ||
       columns.date ||
       columns.deviceCategory,
   );
@@ -230,11 +230,28 @@ export function parseGa4Csv({
     if (parserErrorRows.has(rowNumber)) return;
 
     const eventName = get(record, columns.eventName);
-    const conversions = Math.round(parseNonNegativeNumber(get(record, columns.conversions)));
+    const reportedConversions = Math.round(
+      parseNonNegativeNumber(get(record, columns.conversions)),
+    );
     const eventCount = Math.round(
       parseNonNegativeNumber(get(record, columns.eventCount)),
     );
-    const inferredClicks = inferEventClicks(eventName, conversions, eventCount);
+    const linkUrl = get(record, columns.linkUrl);
+    const actionCount = Math.max(eventCount, reportedConversions);
+    const inferredClicks = classifyGa4Event({
+      eventCount: actionCount,
+      eventName,
+      linkUrl,
+    });
+    const explicitLineClicks = Math.round(
+      parseNonNegativeNumber(get(record, columns.lineClicks)),
+    );
+    const explicitLpLineTaps = Math.round(
+      parseNonNegativeNumber(get(record, columns.lpLineTaps)),
+    );
+    const conversions = isAutomaticMeasurementEvent(eventName)
+      ? 0
+      : reportedConversions;
     const row: Ga4Row = {
       averageEngagementSeconds: parseDurationSeconds(
         get(record, columns.averageEngagementSeconds),
@@ -243,12 +260,26 @@ export function parseGa4Csv({
       conversions,
       deviceCategory: get(record, columns.deviceCategory),
       engagementRate: parseRatio(get(record, columns.engagementRate)),
+      eventCount,
       eventName,
+      isKeyEvent: parseBoolean(get(record, columns.isKeyEvent)),
       landingPage: get(record, columns.landingPage),
       lineClicks:
-        Math.round(parseNonNegativeNumber(get(record, columns.lineClicks))) ||
-        inferredClicks.lineClicks,
+        inferredClicks.lineClicks ||
+        (eventName && eventName !== "line_click" ? 0 : explicitLineClicks),
+      linkText: get(record, columns.linkText),
+      linkUrl,
+      lpLineTaps:
+        inferredClicks.lpLineTaps ||
+        explicitLpLineTaps ||
+        (eventName === lpLineEventName ? explicitLineClicks : 0),
+      pagePath:
+        get(record, columns.pagePath) ||
+        (eventName === lpLineEventName ? lpLinePagePath : ""),
       pageTitle: get(record, columns.pageTitle),
+      phoneTaps:
+        Math.round(parseNonNegativeNumber(get(record, columns.phoneTaps))) ||
+        inferredClicks.phoneTaps,
       recordDate: parseDate(get(record, columns.date)),
       reservationClicks:
         Math.round(parseNonNegativeNumber(get(record, columns.reservationClicks))) ||
@@ -261,6 +292,8 @@ export function parseGa4Csv({
 
     const key =
       row.landingPage ||
+      row.pagePath ||
+      row.linkUrl ||
       row.pageTitle ||
       row.sourceMedium ||
       row.channelGroup ||
@@ -272,6 +305,8 @@ export function parseGa4Csv({
       row.sessions +
       row.views +
       row.lineClicks +
+      row.lpLineTaps +
+      row.phoneTaps +
       row.reservationClicks +
       row.conversions;
 

@@ -1,4 +1,5 @@
 import { conversionThresholds } from "@/config/conversions";
+import { isAutomaticMeasurementEvent } from "@/lib/ga4/events";
 import type {
   ConversionAggregateRow,
   ConversionMetrics,
@@ -14,6 +15,7 @@ const emptyMetrics: ConversionMetrics = {
   instagramClicks: 0,
   keyEvents: 0,
   lineClicks: 0,
+  lpLineTaps: 0,
   mapClicks: 0,
   phoneClicks: 0,
   reservationClicks: 0,
@@ -30,20 +32,18 @@ function includesAny(value: string, keywords: string[]) {
 
 function inferClicks(row: Ga4Row) {
   const eventName = row.eventName || "";
-  const base = Math.max(row.conversions, 0);
+  const base = Math.max(row.eventCount ?? 0, row.conversions, 0);
   return {
     inquiryClicks: includesAny(eventName, ["contact", "inquiry", "問い合わせ", "問合せ", "相談"])
-      ? Math.max(base, 1)
+      ? base
       : 0,
     instagramClicks: includesAny(eventName, ["instagram", "insta", "インスタ"])
-      ? Math.max(base, 1)
+      ? base
       : 0,
     mapClicks: includesAny(eventName, ["map", "maps", "マップ", "地図"])
-      ? Math.max(base, 1)
+      ? base
       : 0,
-    phoneClicks: includesAny(eventName, ["tel", "phone", "call", "電話"])
-      ? Math.max(base, 1)
-      : 0,
+    phoneClicks: row.phoneTaps ?? 0,
   };
 }
 
@@ -53,13 +53,16 @@ export function summarizeConversionRows(rows: Ga4Row[]): ConversionMetrics {
       const inferred = inferClicks(row);
       const knownClicks =
         row.lineClicks +
+        (row.lpLineTaps ?? 0) +
         row.reservationClicks +
         inferred.phoneClicks +
         inferred.instagramClicks +
         inferred.mapClicks +
         inferred.inquiryClicks;
-      const genericKeyEvents = Math.max(row.conversions - knownClicks, 0);
-      const totalActions = Math.max(row.conversions, knownClicks);
+      const genericKeyEvents = isAutomaticMeasurementEvent(row.eventName)
+        ? 0
+        : Math.max(row.conversions - knownClicks, 0);
+      const totalActions = knownClicks;
 
       return {
         conversionRate: 0,
@@ -68,6 +71,7 @@ export function summarizeConversionRows(rows: Ga4Row[]): ConversionMetrics {
         instagramClicks: sum.instagramClicks + inferred.instagramClicks,
         keyEvents: sum.keyEvents + row.conversions,
         lineClicks: sum.lineClicks + row.lineClicks,
+        lpLineTaps: sum.lpLineTaps + (row.lpLineTaps ?? 0),
         mapClicks: sum.mapClicks + inferred.mapClicks,
         phoneClicks: sum.phoneClicks + inferred.phoneClicks,
         reservationClicks: sum.reservationClicks + row.reservationClicks,
@@ -210,7 +214,7 @@ export function createConversionOverview(rows: Ga4Row[]): ConversionOverview {
   const byPage = groupRows(
     rows,
     "page",
-    (row) => row.landingPage || row.pageTitle,
+    (row) => row.pagePath || row.landingPage || row.pageTitle,
   );
   const bySource = groupRows(
     rows,
