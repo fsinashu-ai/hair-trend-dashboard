@@ -1,10 +1,15 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
+import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { runInNewContext } from "node:vm";
 import test from "node:test";
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const require = createRequire(import.meta.url);
+const ts = require("typescript");
 
 async function readProjectFile(relativePath) {
   return readFile(resolve(projectRoot, relativePath), "utf8");
@@ -71,6 +76,197 @@ test("import route exposes bounded, replay-safe import behavior", async () => {
   assert.match(route, /sourceMatchedCount/);
   assert.match(route, /classificationStatus/);
   assert.match(route, /sanitizePayload/);
+});
+
+test("distinct URLs with the same trend name are not title-deduplicated", async () => {
+  const route = await readProjectFile(
+    "src/app/api/automation/import-social/route.ts",
+  );
+
+  assert.doesNotMatch(route, /getTitleSimilarity|batchTitles|similarTitle/);
+  assert.match(route, /if \(isDuplicateUrl\)/);
+  assert.match(route, /existingUrls\.has\(normalizedUrl\)/);
+  assert.match(route, /existingCanonicalUrls\.has\(normalizedCanonicalUrl\)/);
+  assert.match(route, /existingImportKeys\.has\(normalizedImportKey\)/);
+});
+
+test("saved social posts contain no source text or string raw payload values", async () => {
+  const route = await readProjectFile(
+    "src/app/api/automation/import-social/route.ts",
+  );
+  const sourceFile = ts.createSourceFile(
+    "import-social-route.ts",
+    route,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+  const helperNames = [
+    "isRecord",
+    "getNestedValue",
+    "pickString",
+    "pickNumber",
+    "cleanText",
+    "cleanHandle",
+    "getNeutralPostTitle",
+    "detectSnsTypeFromText",
+    "extractUrl",
+    "extractTags",
+    "sanitizePayload",
+    "createPayloadHash",
+    "normalizeImportKey",
+    "normalizePublishedAt",
+    "normalizeImportItem",
+    "fallbackClassification",
+    "toSocialPostInput",
+  ];
+  const helperSources = new Map();
+
+  for (const statement of sourceFile.statements) {
+    if (
+      ts.isFunctionDeclaration(statement) &&
+      statement.name &&
+      helperNames.includes(statement.name.text)
+    ) {
+      helperSources.set(statement.name.text, statement.getFullText(sourceFile));
+    }
+  }
+
+  for (const name of helperNames) {
+    assert.ok(helperSources.has(name), `route helper ${name} should exist`);
+  }
+
+  const helperCode = ts.transpile(
+    Array.from(helperSources.values()).join("\n"),
+    { module: ts.ModuleKind.None, target: ts.ScriptTarget.ES2022 },
+  );
+  const routeRuntime = {
+    createHash,
+    detectSocialType(url) {
+      return url.includes("instagram.com")
+        ? "Instagram"
+        : url.includes("tiktok.com")
+          ? "TikTok"
+          : "Other";
+    },
+    normalizeSocialUrl(value) {
+      const url = new URL(value);
+      return `${url.origin}${url.pathname.replace(/\/+$/, "")}${url.search}`;
+    },
+    snsTrendCategories: ["髪質改善", "カラー", "パーマ", "白髪ぼかし", "Instagram", "SNS投稿"],
+  };
+
+  runInNewContext(
+    `${helperCode}\nglobalThis.contract = { normalizeImportItem, fallbackClassification, toSocialPostInput };`,
+    routeRuntime,
+  );
+
+  const caption = "この本文コピーは禁止です #髪質改善 #艶髪";
+  const incomingItem = {
+    caption,
+    commentsCount: 8,
+    details: {
+      caption: "raw内の文章",
+      isPinned: false,
+      score: 3,
+      samples: ["配列内の文章", 5, { text: "入れ子の文章", value: 2 }],
+    },
+    id: "post-123",
+    isVideo: true,
+    likesCount: 120,
+    platform: "Instagram",
+    thumbnailUrl: "https://example.com/private-thumbnail.jpg",
+    timestamp: "2026-10-16T08:00:00.000Z",
+    title: "元の投稿タイトルの文章",
+    url: "https://www.instagram.com/p/post-123/",
+    username: "sample_salon",
+  };
+  const item = routeRuntime.contract.normalizeImportItem(
+    incomingItem,
+    "Apify",
+    "Apify",
+  );
+
+  assert.ok(item);
+  assert.equal(item.description, caption);
+  assert.equal(item.title, "@sample_salon の投稿");
+  assert.deepEqual(JSON.parse(JSON.stringify(item.tags)), ["#髪質改善", "#艶髪"]);
+
+  const fallback = routeRuntime.contract.fallbackClassification(item);
+  const fallbackPost = JSON.parse(
+    JSON.stringify(
+      routeRuntime.contract.toSocialPostInput(
+        item,
+        { classification: fallback, provider: "モック分類", status: "mock" },
+        { classifiedAt: "2026-10-16T08:01:00.000Z", provider: "Apify" },
+      ),
+    ),
+  );
+
+  assert.equal(fallbackPost.description, "");
+  assert.equal(fallbackPost.title, "@sample_salon の投稿");
+  assert.equal(fallbackPost.ogImageUrl, "");
+  assert.notEqual(fallbackPost.aiSummary, caption);
+  assert.notEqual(fallbackPost.payloadHash, undefined);
+
+  const aiClassification = {
+    ...fallback,
+    summary: "艶のあるストレートスタイルへの関心が高まっています。",
+    trendName: "艶髪ストレートの需要",
+  };
+  const aiPost = JSON.parse(
+    JSON.stringify(
+      routeRuntime.contract.toSocialPostInput(
+        item,
+        { classification: aiClassification, provider: "Gemini", status: "gemini" },
+        { classifiedAt: "2026-10-16T08:01:00.000Z", provider: "Apify" },
+      ),
+    ),
+  );
+
+  assert.equal(aiPost.title, "艶髪ストレートの需要");
+  assert.equal(aiPost.description, "");
+  assert.equal(aiPost.ogImageUrl, "");
+
+  function assertOnlyNumbersAndBooleans(value) {
+    if (Array.isArray(value)) {
+      value.forEach(assertOnlyNumbersAndBooleans);
+      return;
+    }
+
+    if (value && typeof value === "object") {
+      Object.values(value).forEach(assertOnlyNumbersAndBooleans);
+      return;
+    }
+
+    assert.ok(typeof value === "number" || typeof value === "boolean");
+  }
+
+  for (const post of [fallbackPost, aiPost]) {
+    assertOnlyNumbersAndBooleans(post.rawPayload);
+    const serializedPost = JSON.stringify(post);
+
+    for (const sourceText of [
+      "この本文コピーは禁止です",
+      "元の投稿タイトルの文章",
+      "raw内の文章",
+      "配列内の文章",
+      "入れ子の文章",
+      "private-thumbnail.jpg",
+    ]) {
+      assert.equal(serializedPost.includes(sourceText), false);
+    }
+  }
+
+  const changedCaptionItem = routeRuntime.contract.normalizeImportItem(
+    { ...incomingItem, caption: "別の本文です #カラー", title: "別のタイトル" },
+    "Apify",
+    "Apify",
+  );
+
+  assert.equal(changedCaptionItem.importKey, item.importKey);
+  assert.equal(changedCaptionItem.payloadHash, item.payloadHash);
+  assert.match(item.payloadHash, /^[a-f0-9]{64}$/);
 });
 
 test("database contract records import lineage without exposing the run ledger", async () => {

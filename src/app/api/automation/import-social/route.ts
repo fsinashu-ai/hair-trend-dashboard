@@ -4,7 +4,6 @@ import { generateAiText } from "@/lib/ai/server";
 import { getSalonPromptContext } from "@/lib/salonProfile";
 import {
   detectSocialType,
-  getTitleSimilarity,
   normalizeSocialUrl,
 } from "@/lib/social/url";
 import { getSupabaseClient } from "@/lib/supabase/client";
@@ -185,6 +184,10 @@ function cleanHandle(value: string) {
   return `@${normalized}`.slice(0, 120);
 }
 
+function getNeutralPostTitle(snsType: SnsType, handle: string) {
+  return `${handle || snsType} の投稿`;
+}
+
 function detectSnsTypeFromText(source: Record<string, unknown>, url: string): SnsType {
   const declaredType = pickString(source, [
     "snsType",
@@ -282,20 +285,19 @@ function sanitizePayload(value: unknown, depth = 0): unknown {
     return undefined;
   }
 
-  if (
-    value === null ||
-    typeof value === "number" ||
-    typeof value === "boolean"
-  ) {
+  if (typeof value === "number" && Number.isFinite(value)) {
     return value;
   }
 
-  if (typeof value === "string") {
-    return value.slice(0, 600);
+  if (typeof value === "boolean") {
+    return value;
   }
 
   if (Array.isArray(value)) {
-    return value.slice(0, 20).map((item) => sanitizePayload(item, depth + 1));
+    return value
+      .slice(0, 20)
+      .map((item) => sanitizePayload(item, depth + 1))
+      .filter((item) => typeof item !== "undefined");
   }
 
   if (!isRecord(value)) {
@@ -430,13 +432,7 @@ function normalizeImportItem(
     "shortcode",
     "code",
   ]).slice(0, 160);
-  const title =
-    cleanText(
-      pickString(item, ["title", "headline", "name"]) ||
-        description ||
-        `${snsType} post${handle ? ` by ${handle}` : ""}`,
-      300,
-    ) || `${snsType} post`;
+  const title = getNeutralPostTitle(snsType, handle);
 
   return {
     accountName,
@@ -458,16 +454,7 @@ function normalizeImportItem(
       "diggCount",
       "like_count",
     ]),
-    ogImageUrl: pickString(item, [
-      "thumbnailUrl",
-      "thumbnail_url",
-      "displayUrl",
-      "display_url",
-      "coverUrl",
-      "cover",
-      "image",
-      "imageUrl",
-    ]),
+    ogImageUrl: "",
     playCount: pickNumber(item, [
       "playCount",
       "plays",
@@ -565,7 +552,7 @@ function extractJsonObject(text: string) {
 }
 
 function fallbackClassification(item: NormalizedImportItem): SocialClassification {
-  const text = `${item.title} ${item.description} ${item.tags.join(" ")}`;
+  const text = `${item.title} ${item.tags.join(" ")}`;
   const highKeywords = [
     "髪質改善",
     "縮毛矯正",
@@ -613,9 +600,7 @@ function fallbackClassification(item: NormalizedImportItem): SocialClassificatio
     instagramPostIdea: `${item.title}\n\n気になるデザインは、髪質やダメージ履歴に合わせて調整することが大切です。保存してカウンセリング時の参考にしてください。`,
     providerLabel: "モック分類",
     relevance,
-    summary:
-      item.description ||
-      `${item.snsType}から取り込んだ投稿候補です。美容師向けの投稿ネタ、ブログ、接客提案に使えるか確認してください。`,
+    summary: `${item.snsType}から取り込んだ投稿候補です。美容師向けの投稿ネタ、ブログ、接客提案に使えるか確認してください。`,
     tags,
     trendName: item.title,
   };
@@ -641,7 +626,7 @@ async function classifyItem(
       systemInstruction: [
         "あなたは美容師向けSNSトレンドを整理する日本語アシスタントです。",
         "InstagramやTikTokの投稿候補を、サロンの発信、ブログ、接客提案に使いやすい形へ分類してください。",
-        "本文や画像を転載するのではなく、入力されたタイトル、説明文、URL、反応数、タグだけを材料にしてください。",
+        "説明文は分類のためだけに使い、投稿本文の表現や特徴的な言い回しを転載・再現しないでください。要約や提案は必ず自分の言葉で書いてください。画像は扱いません。",
         "ef.mayke`sは髪質改善、縮毛矯正、くせ毛、パサつき改善、白髪ぼかし、大人女性向け提案との関連度を重視します。",
         getSalonPromptContext(),
       ].join("\n\n"),
@@ -744,7 +729,7 @@ function toSocialPostInput(
     category: classification.category,
     commentCount: item.commentCount,
     counselingIdea: classification.counselingIdea,
-    description: item.description,
+    description: "",
     classificationError: outcome.error,
     classificationModel: outcome.model,
     classificationProvider: outcome.provider,
@@ -759,7 +744,7 @@ function toSocialPostInput(
     instagramPostIdea: classification.instagramPostIdea,
     isFavorite: false,
     likeCount: item.likeCount,
-    ogImageUrl: item.ogImageUrl,
+    ogImageUrl: "",
     payloadHash: item.payloadHash,
     playCount: item.playCount,
     publishedAt: item.publishedAt,
@@ -1203,7 +1188,6 @@ export async function POST(request: Request) {
   const batchUrls = new Set<string>();
   const batchCanonicalUrls = new Set<string>();
   const batchImportKeys = new Set<string>();
-  const batchTitles: string[] = [];
   let savedCount = 0;
   let duplicateCount = 0;
   let previewCount = 0;
@@ -1224,16 +1208,11 @@ export async function POST(request: Request) {
       batchUrls.has(normalizedUrl) ||
       batchCanonicalUrls.has(normalizedCanonicalUrl) ||
       batchImportKeys.has(normalizedImportKey);
-    const similarTitle = batchTitles.find(
-      (title) => getTitleSimilarity(title, item.title) >= 0.92,
-    );
 
-    if (isDuplicateUrl || similarTitle) {
+    if (isDuplicateUrl) {
       duplicateCount += 1;
       results.push({
-        reason: isDuplicateUrl
-          ? "URL, canonical URL, or import key already exists."
-          : "A very similar title already exists.",
+        reason: "URL, canonical URL, or import key already exists.",
         snsType: item.snsType,
         status: "duplicate",
         title: item.title,
@@ -1285,7 +1264,6 @@ export async function POST(request: Request) {
       batchUrls.add(normalizedUrl);
       batchCanonicalUrls.add(normalizedCanonicalUrl);
       batchImportKeys.add(normalizedImportKey);
-      batchTitles.push(input.title);
       continue;
     }
 
@@ -1306,7 +1284,6 @@ export async function POST(request: Request) {
       batchUrls.add(normalizedUrl);
       batchCanonicalUrls.add(normalizedCanonicalUrl);
       batchImportKeys.add(normalizedImportKey);
-      batchTitles.push(input.title);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Save failed.";
 
