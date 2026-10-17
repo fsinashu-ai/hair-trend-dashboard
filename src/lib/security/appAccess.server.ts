@@ -1,20 +1,16 @@
 import "server-only";
-import { createHmac, timingSafeEqual } from "node:crypto";
+import {
+  createAppAccessCookieValue,
+  isAppAccessCookieValueValid,
+  safeCompare,
+} from "./appAccessCore";
+
+export {
+  APP_ACCESS_COOKIE_MAX_AGE_SECONDS,
+  safeCompare,
+} from "./appAccessCore";
 
 export const APP_ACCESS_COOKIE = "hair_trend_dashboard_access";
-const appAccessCookieVersion = "v1";
-
-function safeCompare(value: string, expectedValue: string) {
-  const maxLength = Math.max(value.length, expectedValue.length);
-  let mismatch = value.length === expectedValue.length ? 0 : 1;
-
-  for (let index = 0; index < maxLength; index += 1) {
-    mismatch |=
-      (value.charCodeAt(index) || 0) ^ (expectedValue.charCodeAt(index) || 0);
-  }
-
-  return mismatch === 0;
-}
 
 function getBasicAuthCredentials(request: Request) {
   const authorization = request.headers.get("authorization");
@@ -68,26 +64,27 @@ export function getAppAccessCookieValue() {
   }
 
   const appUser = process.env.APP_USER?.trim() || "salon";
-  return createHmac("sha256", appPassword)
-    .update(`${appAccessCookieVersion}:${appUser}`)
-    .digest("base64url");
+  return createAppAccessCookieValue(appPassword, appUser);
 }
 
-function hasValidAppAccessCookie(request: Request) {
+export function hasValidAppAccessCookie(request: Request) {
   const receivedValue = getCookieValue(request, APP_ACCESS_COOKIE);
-  const expectedValue = getAppAccessCookieValue();
+  const appPassword = process.env.APP_PASSWORD?.trim();
 
-  if (!receivedValue || !expectedValue) {
+  if (!receivedValue || !appPassword) {
     return false;
   }
 
-  const receivedBuffer = Buffer.from(receivedValue);
-  const expectedBuffer = Buffer.from(expectedValue);
-
-  return (
-    receivedBuffer.length === expectedBuffer.length &&
-    timingSafeEqual(receivedBuffer, expectedBuffer)
+  const appUser = process.env.APP_USER?.trim() || "salon";
+  return isAppAccessCookieValueValid(
+    receivedValue,
+    appPassword,
+    appUser,
   );
+}
+
+export function hasBasicAuthAttempt(request: Request) {
+  return /^Basic(?:\s|$)/i.test(request.headers.get("authorization") ?? "");
 }
 
 export function isAppRequestAuthorized(request: Request) {

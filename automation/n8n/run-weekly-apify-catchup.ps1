@@ -8,6 +8,19 @@ $catchupLogDirectory = "C:\n8n\logs"
 $catchupLogPath = Join-Path $catchupLogDirectory "apify-weekly-catchup.log"
 $catchupDockerStartedHere = $false
 $catchupExitCode = 0
+$script:countFieldLabels = [ordered]@{
+  importedCount = "imported"
+  duplicateCount = "duplicates"
+  truncatedCount = "truncated"
+  savedCount = "saved"
+  skippedCount = "skipped"
+  receivedCount = "received"
+  sourceMatchedCount = "sources"
+  aiClassifiedCount = "classified"
+  normalizedCount = "normalized"
+  errorCount = "errors"
+  previewCount = "preview"
+}
 $catchupWorkflows = @(
   @{ Id = "2H8r0zTnuNhJq6nO"; Name = "Instagram" },
   @{ Id = "QtaYwMxUYhZ8ercb"; Name = "TikTok" }
@@ -80,19 +93,120 @@ function Test-WorkflowSucceededThisWeek {
   return $catchupResult -eq "yes"
 }
 
+function ConvertTo-CountLogValue {
+  param([object]$Value)
+
+  if ($Value -isnot [System.ValueType] -or $Value -is [bool]) {
+    return $null
+  }
+
+  $numberText = [Convert]::ToString($Value, [Globalization.CultureInfo]::InvariantCulture)
+  $number = 0.0
+  if (-not [double]::TryParse(
+      $numberText,
+      [Globalization.NumberStyles]::Float,
+      [Globalization.CultureInfo]::InvariantCulture,
+      [ref]$number
+    ) -or [double]::IsNaN($number) -or [double]::IsInfinity($number) -or
+    $number -lt 0 -or $number -ne [Math]::Floor($number)) {
+    return $null
+  }
+
+  return $number.ToString("0", [Globalization.CultureInfo]::InvariantCulture)
+}
+
+function Find-WorkflowCountFields {
+  param(
+    [object]$Value,
+    [System.Collections.IDictionary]$CountValues
+  )
+
+  if ($null -eq $Value) {
+    return
+  }
+
+  if ($Value -is [System.Collections.IDictionary]) {
+    foreach ($key in $Value.Keys) {
+      if ($script:countFieldLabels.Contains($key)) {
+        $displayValue = ConvertTo-CountLogValue -Value $Value[$key]
+        if ($null -ne $displayValue -and -not $CountValues.Contains($key)) {
+          $CountValues[$key] = $displayValue
+        }
+      }
+
+      Find-WorkflowCountFields -Value $Value[$key] -CountValues $CountValues
+    }
+    return
+  }
+
+  if ($Value -is [pscustomobject]) {
+    foreach ($property in $Value.PSObject.Properties) {
+      if ($script:countFieldLabels.Contains($property.Name)) {
+        $displayValue = ConvertTo-CountLogValue -Value $property.Value
+        if ($null -ne $displayValue -and -not $CountValues.Contains($property.Name)) {
+          $CountValues[$property.Name] = $displayValue
+        }
+      }
+
+      Find-WorkflowCountFields -Value $property.Value -CountValues $CountValues
+    }
+    return
+  }
+
+  if ($Value -is [System.Collections.IEnumerable] -and $Value -isnot [string]) {
+    foreach ($item in $Value) {
+      Find-WorkflowCountFields -Value $item -CountValues $CountValues
+    }
+  }
+}
+
 function Invoke-N8nWorkflow {
   param(
     [string]$WorkflowId,
     [string]$WorkflowName
   )
 
-  docker exec `
+  $catchupOutput = @(
+    docker exec `
     -e N8N_RUNNERS_BROKER_PORT=5680 `
     $catchupContainerName `
-    n8n execute --id=$WorkflowId --rawOutput | Out-Null
+    n8n execute --id=$WorkflowId --rawOutput
+  )
+  $catchupExecutionExitCode = $LASTEXITCODE
 
-  if ($LASTEXITCODE -ne 0) {
-    throw "$WorkflowName workflow failed with exit code $LASTEXITCODE."
+  $countMessage = "counts unavailable"
+  try {
+    $outputText = $catchupOutput -join "`n"
+    $parsedOutput = $outputText | ConvertFrom-Json -ErrorAction Stop
+    $countValues = [ordered]@{}
+    Find-WorkflowCountFields -Value $parsedOutput -CountValues $countValues
+
+    $requiredCountFields = @("importedCount", "duplicateCount", "truncatedCount")
+    $hasRequiredCountFields = $true
+    foreach ($fieldName in $requiredCountFields) {
+      if (-not $countValues.Contains($fieldName)) {
+        $hasRequiredCountFields = $false
+        break
+      }
+    }
+
+    if ($hasRequiredCountFields) {
+      $countParts = New-Object "System.Collections.Generic.List[string]"
+      foreach ($fieldName in $script:countFieldLabels.Keys) {
+        if ($countValues.Contains($fieldName)) {
+          [void]$countParts.Add("$($script:countFieldLabels[$fieldName])=$($countValues[$fieldName])")
+        }
+      }
+      $countMessage = $countParts -join " "
+    }
+  } catch {
+    $countMessage = "counts unavailable"
+  }
+
+  Write-CatchupLog "$WorkflowName $countMessage"
+
+  if ($catchupExecutionExitCode -ne 0) {
+    throw "$WorkflowName workflow failed with exit code $catchupExecutionExitCode."
   }
 }
 

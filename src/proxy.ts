@@ -1,11 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
   APP_ACCESS_COOKIE,
+  APP_ACCESS_COOKIE_MAX_AGE_SECONDS,
   getAppAccessCookieValue,
+  hasBasicAuthAttempt,
+  hasValidAppAccessCookie,
   isAppRequestAuthorized,
+  safeCompare,
 } from "@/lib/security/appAccess.server";
+import {
+  checkBasicAuthRequest,
+  clearBasicAuthFailures,
+  recordBasicAuthFailure,
+  type LoginRateLimitEntry,
+} from "@/lib/security/loginRateLimit";
 
 const authRealm = "Hair Trend Dashboard";
+// On Vercel this in-memory limit is best-effort per instance.
+const basicAuthFailures = new Map<string, LoginRateLimitEntry>();
 
 const securityHeaders = {
   "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
@@ -31,7 +43,10 @@ function isAuthorizedCronRequest(request: NextRequest) {
       request.nextUrl.pathname === "/api/seo/ga4/fetch" ||
       request.nextUrl.pathname === "/api/seo/monthly-fetch" ||
       request.nextUrl.pathname === "/api/seo/search-console/fetch") &&
-    request.headers.get("authorization") === `Bearer ${cronSecret}`
+    safeCompare(
+      request.headers.get("authorization") ?? "",
+      `Bearer ${cronSecret}`,
+    )
   );
 }
 
@@ -48,9 +63,19 @@ function isAuthorizedAutomationRequest(request: NextRequest) {
   return (
     request.method === "POST" &&
     request.nextUrl.pathname === "/api/automation/import-social" &&
-    (authorization === `Bearer ${automationSecret}` ||
-      headerSecret === automationSecret)
+    (safeCompare(authorization ?? "", `Bearer ${automationSecret}`) ||
+      safeCompare(headerSecret ?? "", automationSecret))
   );
+}
+
+function getClientIp(request: NextRequest) {
+  const forwardedIp = request.headers
+    .get("x-forwarded-for")
+    ?.split(",", 1)[0]
+    .trim();
+  const realIp = request.headers.get("x-real-ip")?.trim();
+
+  return forwardedIp || realIp || "unknown";
 }
 
 function withSecurityHeaders(response: NextResponse) {
@@ -81,6 +106,27 @@ function createUnauthorizedResponse(request: NextRequest) {
   });
 }
 
+function createRateLimitedResponse(
+  request: NextRequest,
+  retryAfterSeconds: number,
+) {
+  const message = "Too many failed authentication attempts. Try again later.";
+  const headers = {
+    ...securityHeaders,
+    "Cache-Control": "no-store",
+    "Retry-After": String(retryAfterSeconds),
+  };
+
+  if (request.nextUrl.pathname.startsWith("/api/")) {
+    return NextResponse.json(
+      { error: message },
+      { headers, status: 429 },
+    );
+  }
+
+  return new NextResponse(message, { headers, status: 429 });
+}
+
 export function proxy(request: NextRequest) {
   if (isAuthorizedCronRequest(request)) {
     return withSecurityHeaders(NextResponse.next());
@@ -90,17 +136,43 @@ export function proxy(request: NextRequest) {
     return withSecurityHeaders(NextResponse.next());
   }
 
-  if (!isAuthenticated(request)) {
+  const clientIp = getClientIp(request);
+  const hasValidAccessCookie = hasValidAppAccessCookie(request);
+  const authCheck = checkBasicAuthRequest(
+    basicAuthFailures,
+    clientIp,
+    hasValidAccessCookie,
+    () => isAuthenticated(request),
+  );
+
+  if (authCheck.retryAfterSeconds > 0) {
+    return createRateLimitedResponse(request, authCheck.retryAfterSeconds);
+  }
+
+  if (!authCheck.authorized) {
+    if (hasBasicAuthAttempt(request)) {
+      const retryAfterSeconds = recordBasicAuthFailure(
+        basicAuthFailures,
+        clientIp,
+      );
+
+      if (retryAfterSeconds > 0) {
+        return createRateLimitedResponse(request, retryAfterSeconds);
+      }
+    }
+
     return createUnauthorizedResponse(request);
   }
+
+  clearBasicAuthFailures(basicAuthFailures, clientIp);
 
   const response = NextResponse.next();
   const accessCookie = getAppAccessCookieValue();
 
-  if (accessCookie && !request.cookies.get(APP_ACCESS_COOKIE)) {
+  if (accessCookie && !hasValidAccessCookie) {
     response.cookies.set({
       httpOnly: true,
-      maxAge: 60 * 60 * 12,
+      maxAge: APP_ACCESS_COOKIE_MAX_AGE_SECONDS,
       name: APP_ACCESS_COOKIE,
       path: "/",
       sameSite: "lax",
