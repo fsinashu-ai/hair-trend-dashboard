@@ -16,5 +16,5 @@
 
 ## 未対応事項
 
-- D1（2026-10-16 決定）: Apify 経由の Instagram/TikTok 取り込みは AGENTS.md の例外として継続。保存は URL・ハンドル・日付・数値・ハッシュタグ・AI要約に限定し、本文・rawPayload の文字列・サムネイルURLは保存しない（コード修正済み、本番未デプロイ）。既存データの本文・rawPayload は残したまま。消去するかは未定。
+- D1（2026-10-16 決定）: Apify 経由の Instagram/TikTok 取り込みは AGENTS.md の例外として継続。保存は URL・ハンドル・日付・数値・ハッシュタグ・AI要約に限定し、本文・rawPayload の文字列・サムネイルURLは保存しない（2026-10-18 に push し、Vercel の2プロジェクトでデプロイ成功を確認。本番でのログインと取り込みの動作は未確認）。既存データの本文・rawPayload は残したまま。消去するかは未定。
 - Supabase の RLS / Storage 公開設定と Vercel 環境変数の確認。ユーザー側の作業。
