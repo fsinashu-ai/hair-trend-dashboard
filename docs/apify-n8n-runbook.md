@@ -89,6 +89,14 @@ Windows予定タスク `HairTrendDashboard-ApifyWeeklyCatchup` は毎週火曜�
 
 ログは `C:\n8n\logs\apify-weekly-catchup.log` に保存されます。スクリプトにはApify TokenやWebhook Secretを保存しません。
 
+週次ログには、件数が読めた場合は `Instagram imported=3 duplicates=0 truncated=0` のように数値だけを記録します。件数を読めない場合は、原因に応じて次の診断行を記録します。
+
+- `counts unavailable: no JSON (lines=..., chars=...)`: 出力全体と行単位のJSON候補を解析できなかった。
+- `counts unavailable: missing fields (keys=...)`: JSONは読めたが、必須件数が見つからなかった。`keys` は出力内のキー名だけで、最大30個・各40文字までです。
+- `counts unavailable: duplicateRun`: APIが同じ取り込み実行の再送と判定した。
+
+診断行には出力値を含めず、件数解析の失敗だけで週次処理を失敗扱いにはしません。n8nの実行終了コードによる成功・失敗判定は従来どおりです。
+
 ### Docker起動の確認
 
 2026-09-15、Windows PowerShell 5.1でDocker停止中の標準エラーが例外になり、自動起動へ進めない問題を修正しました。停止判定では終了コードを確認し、Docker Desktopの起動へ進みます。

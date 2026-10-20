@@ -160,6 +160,251 @@ function Find-WorkflowCountFields {
   }
 }
 
+function Get-WorkflowJsonBlocks {
+  param([string]$OutputText)
+
+  $jsonBlocks = New-Object "System.Collections.Generic.List[string]"
+  $coveredThroughIndex = -1
+  $lineStarts = [regex]::Matches($OutputText, '(?m)^[\uFEFF\t ]*[\{\[]')
+
+  foreach ($lineStart in $lineStarts) {
+    $startIndex = $lineStart.Index + $lineStart.Length - 1
+    if ($startIndex -le $coveredThroughIndex) {
+      continue
+    }
+
+    $bracketStack = New-Object "System.Collections.Generic.Stack[char]"
+    [void]$bracketStack.Push([char]$OutputText[$startIndex])
+    $insideString = $false
+    $escapedCharacter = $false
+    $blockEndIndex = -1
+    $hasMismatchedBracket = $false
+
+    for ($characterIndex = $startIndex + 1; $characterIndex -lt $OutputText.Length; $characterIndex += 1) {
+      $character = [char]$OutputText[$characterIndex]
+
+      if ($insideString) {
+        if ($escapedCharacter) {
+          $escapedCharacter = $false
+        } elseif ($character -eq [char]92) {
+          $escapedCharacter = $true
+        } elseif ($character -eq '"') {
+          $insideString = $false
+        }
+        continue
+      }
+
+      if ($character -eq '"') {
+        $insideString = $true
+        continue
+      }
+
+      if ($character -eq '{' -or $character -eq '[') {
+        [void]$bracketStack.Push($character)
+        continue
+      }
+
+      if ($character -eq '}' -or $character -eq ']') {
+        if ($bracketStack.Count -eq 0) {
+          $hasMismatchedBracket = $true
+          break
+        }
+
+        $openingBracket = $bracketStack.Pop()
+        if (($openingBracket -eq '{' -and $character -ne '}') -or
+          ($openingBracket -eq '[' -and $character -ne ']')) {
+          $hasMismatchedBracket = $true
+          break
+        }
+
+        if ($bracketStack.Count -eq 0) {
+          $blockEndIndex = $characterIndex
+          break
+        }
+      }
+    }
+
+    if (-not $hasMismatchedBracket -and $blockEndIndex -ge $startIndex) {
+      $blockLength = $blockEndIndex - $startIndex + 1
+      [void]$jsonBlocks.Add($OutputText.Substring($startIndex, $blockLength))
+      $coveredThroughIndex = $blockEndIndex
+    }
+  }
+
+  return $jsonBlocks.ToArray()
+}
+
+function Find-WorkflowDuplicateRun {
+  param([object]$Value)
+
+  if ($null -eq $Value) {
+    return $false
+  }
+
+  if ($Value -is [System.Collections.IDictionary]) {
+    foreach ($key in $Value.Keys) {
+      if ($key -eq "duplicateRun" -and $Value[$key] -is [bool] -and $Value[$key]) {
+        return $true
+      }
+
+      if (Find-WorkflowDuplicateRun -Value $Value[$key]) {
+        return $true
+      }
+    }
+    return $false
+  }
+
+  if ($Value -is [pscustomobject]) {
+    foreach ($property in $Value.PSObject.Properties) {
+      if ($property.Name -eq "duplicateRun" -and $property.Value -is [bool] -and $property.Value) {
+        return $true
+      }
+
+      if (Find-WorkflowDuplicateRun -Value $property.Value) {
+        return $true
+      }
+    }
+    return $false
+  }
+
+  if ($Value -is [System.Collections.IEnumerable] -and $Value -isnot [string]) {
+    foreach ($item in $Value) {
+      if (Find-WorkflowDuplicateRun -Value $item) {
+        return $true
+      }
+    }
+  }
+
+  return $false
+}
+
+function Find-WorkflowKeyNames {
+  param(
+    [object]$Value,
+    [System.Collections.Generic.List[string]]$KeyNames
+  )
+
+  if ($null -eq $Value -or $KeyNames.Count -ge 30) {
+    return
+  }
+
+  if ($Value -is [System.Collections.IDictionary]) {
+    foreach ($key in $Value.Keys) {
+      $keyName = [string]$key
+      if ($keyName -match '^[A-Za-z0-9_-]+$') {
+        if ($keyName.Length -gt 40) {
+          $keyName = $keyName.Substring(0, 40)
+        }
+
+        if (-not $KeyNames.Contains($keyName) -and $KeyNames.Count -lt 30) {
+          [void]$KeyNames.Add($keyName)
+        }
+      }
+
+      Find-WorkflowKeyNames -Value $Value[$key] -KeyNames $KeyNames
+      if ($KeyNames.Count -ge 30) {
+        return
+      }
+    }
+    return
+  }
+
+  if ($Value -is [pscustomobject]) {
+    foreach ($property in $Value.PSObject.Properties) {
+      $keyName = [string]$property.Name
+      if ($keyName -match '^[A-Za-z0-9_-]+$') {
+        if ($keyName.Length -gt 40) {
+          $keyName = $keyName.Substring(0, 40)
+        }
+
+        if (-not $KeyNames.Contains($keyName) -and $KeyNames.Count -lt 30) {
+          [void]$KeyNames.Add($keyName)
+        }
+      }
+
+      Find-WorkflowKeyNames -Value $property.Value -KeyNames $KeyNames
+      if ($KeyNames.Count -ge 30) {
+        return
+      }
+    }
+    return
+  }
+
+  if ($Value -is [System.Collections.IEnumerable] -and $Value -isnot [string]) {
+    foreach ($item in $Value) {
+      Find-WorkflowKeyNames -Value $item -KeyNames $KeyNames
+      if ($KeyNames.Count -ge 30) {
+        return
+      }
+    }
+  }
+}
+
+function Get-WorkflowCountLogMessage {
+  param([string]$OutputText)
+
+  if ($null -eq $OutputText) {
+    $OutputText = ""
+  }
+
+  $parsedOutput = $null
+  $hasParsedJson = $false
+  try {
+    $parsedOutput = ConvertFrom-Json -InputObject $OutputText -ErrorAction Stop
+    $hasParsedJson = $true
+  } catch {
+    $jsonBlocks = @(Get-WorkflowJsonBlocks -OutputText $OutputText)
+    for ($blockIndex = $jsonBlocks.Count - 1; $blockIndex -ge 0; $blockIndex -= 1) {
+      try {
+        $parsedOutput = ConvertFrom-Json -InputObject $jsonBlocks[$blockIndex] -ErrorAction Stop
+        $hasParsedJson = $true
+        break
+      } catch {
+        continue
+      }
+    }
+  }
+
+  if (-not $hasParsedJson -or $null -eq $parsedOutput) {
+    $lineCount = 0
+    if ($OutputText.Length -gt 0) {
+      $lineCount = [regex]::Split($OutputText, "`r`n|`n|`r").Count
+    }
+    return "counts unavailable: no JSON (lines=$lineCount, chars=$($OutputText.Length))"
+  }
+
+  if (Find-WorkflowDuplicateRun -Value $parsedOutput) {
+    return "counts unavailable: duplicateRun"
+  }
+
+  $countValues = [ordered]@{}
+  Find-WorkflowCountFields -Value $parsedOutput -CountValues $countValues
+
+  $requiredCountFields = @("importedCount", "duplicateCount", "truncatedCount")
+  $hasRequiredCountFields = $true
+  foreach ($fieldName in $requiredCountFields) {
+    if (-not $countValues.Contains($fieldName)) {
+      $hasRequiredCountFields = $false
+      break
+    }
+  }
+
+  if (-not $hasRequiredCountFields) {
+    $keyNames = New-Object "System.Collections.Generic.List[string]"
+    Find-WorkflowKeyNames -Value $parsedOutput -KeyNames $keyNames
+    return "counts unavailable: missing fields (keys=$($keyNames -join ','))"
+  }
+
+  $countParts = New-Object "System.Collections.Generic.List[string]"
+  foreach ($fieldName in $script:countFieldLabels.Keys) {
+    if ($countValues.Contains($fieldName)) {
+      [void]$countParts.Add("$($script:countFieldLabels[$fieldName])=$($countValues[$fieldName])")
+    }
+  }
+
+  return $countParts -join " "
+}
+
 function Invoke-N8nWorkflow {
   param(
     [string]$WorkflowId,
@@ -174,33 +419,15 @@ function Invoke-N8nWorkflow {
   )
   $catchupExecutionExitCode = $LASTEXITCODE
 
-  $countMessage = "counts unavailable"
+  $outputText = $catchupOutput -join "`n"
   try {
-    $outputText = $catchupOutput -join "`n"
-    $parsedOutput = $outputText | ConvertFrom-Json -ErrorAction Stop
-    $countValues = [ordered]@{}
-    Find-WorkflowCountFields -Value $parsedOutput -CountValues $countValues
-
-    $requiredCountFields = @("importedCount", "duplicateCount", "truncatedCount")
-    $hasRequiredCountFields = $true
-    foreach ($fieldName in $requiredCountFields) {
-      if (-not $countValues.Contains($fieldName)) {
-        $hasRequiredCountFields = $false
-        break
-      }
-    }
-
-    if ($hasRequiredCountFields) {
-      $countParts = New-Object "System.Collections.Generic.List[string]"
-      foreach ($fieldName in $script:countFieldLabels.Keys) {
-        if ($countValues.Contains($fieldName)) {
-          [void]$countParts.Add("$($script:countFieldLabels[$fieldName])=$($countValues[$fieldName])")
-        }
-      }
-      $countMessage = $countParts -join " "
-    }
+    $countMessage = Get-WorkflowCountLogMessage -OutputText $outputText
   } catch {
-    $countMessage = "counts unavailable"
+    $lineCount = 0
+    if ($outputText.Length -gt 0) {
+      $lineCount = [regex]::Split($outputText, "`r`n|`n|`r").Count
+    }
+    $countMessage = "counts unavailable: no JSON (lines=$lineCount, chars=$($outputText.Length))"
   }
 
   Write-CatchupLog "$WorkflowName $countMessage"
