@@ -7,7 +7,7 @@
 - Windows の週次タスク HairTrendDashboard-ApifyWeeklyCatchup は、2026-09-22、09-29、10-06、10-13 にすべて成功。各回で Docker 起動、Instagram/TikTok 取込、Docker 停止まで完了し、C:\n8n\logs\apify-weekly-catchup.log で確認済み。
 - 毎週「今週の実行記録なし → 実行」と判定されているため、現状はこのスケジュールタスクが実質唯一の実行元。2026-09-15 の週のデータは未バックフィル。
 - 2026-10-20 の週次実行も成功。件数ログは Instagram・TikTok とも `counts unavailable` だったが、Supabase の social_import_runs では件数付きの成功記録を確認（10/20: 受信3・保存3、受信1・重複1。10/13: 受信1・保存1）。原因はスクリプト側の n8n 出力解析と判断し、解析の改善と値を含まない診断行を追加（2026-10-20）。実出力での動作は 2026-10-27 の週次ログで確認する。
-- 週あたりの受信が1〜3件と少ない（上限30件）。Apify 側の取得件数・ハッシュタグ設定と使用量は未確認（Codex の Chrome では Apify がログイン画面になり確認できず）。
+- 週あたりの受信が1〜3件と少ない（上限30件）。2026-10-22 に Codex の Chrome で Apify を確認（画面のみ）: Free plan、請求期間 10/19〜11/18 の使用額 $0.55 / $5.00。Instagram（apify/instagram-scraper、タスク Instagram-hair-trends、入力20個、resultsPerPage=5）は 9/22〜10/20 の毎週火曜に成功し毎回95件・約$0.26。TikTok（clockworks/tiktok-scraper、タスク tiktok-hair-trends、入力19個・各5件）は毎回79件・約$0.29。Max cost per run はどちらも $0.50。→ Apify は95件/79件を取れているのに、ダッシュボードの受信は3件/1件なので、件数は n8n の実際のワークフロー内で減っている（手本 `apify-social-import.workflow.example.json` の通りなら全件送るはずなので、実際のワークフローは手本と違うと推測）。次は n8n の実ワークフロー定義（実行データではなく定義だけ）を確認する。
 - 2026-10-04 に GA4 クリック指標の照合、モバイル表示修正、本番確認を実施。詳細: [GA4指標照合メモ](../docs/ga4-metric-reconciliation-2026-10-04.md)
 - 今回のセキュリティ修正: Basic 認証のIP別失敗回数制限、12時間有効の署名付き v2 ログインCookie、Cron/自動取込シークレットの定時間比較、n8nログの数値件数だけの出力を追加。
 
