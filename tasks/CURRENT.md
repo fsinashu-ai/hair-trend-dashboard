@@ -22,3 +22,10 @@
 - 2026-10-21 Supabase 確認（Codex の Chrome、画面のみ）: keywords・trend_links・blog_posts・social_posts・social_import_runs・social_sources はすべて RLS 有効で anon 向け読み取りポリシーなし。hair-images バケットは Private。匿名キーでの読み取りテストは未実施。
 - 2026-10-21 Vercel 確認（名前のみ、値は未表示）: Codex は hair-trend-dashboard の一覧に APP_USER・APP_PASSWORD・GEMINI_API_KEY を見つけられなかったが、同日ユーザーの目視で3つとも「ある」と確認（Codex の見落とし）。hair-trend-dashboard-wnan は環境変数ゼロで同じリポジトリを本番デプロイしている（不要なら整理を検討）。OPENAI_API_KEY は Vercel に無く、ローカルの .env.local だけに残る。
 - 2026-10-21 npm audit（本番依存）: next 16.2.9 に critical（Middleware/Proxy のすり抜け）。16.3.8 以降で修正。undici（override で 7.28.0 固定）、postcss、sharp なども high。同日ユーザー承認で next・eslint-config-next を ^16.3.8（実際は 16.4.2）、undici override を 7.30.1 に更新（Codex の環境は npm に接続できず、Claude が直接実施）。lint・test 25件・build 成功、critical と undici の high は解消。残りは postcss・nanoid・source-map-js（high、主にビルド時）と protobufjs・baseline-browser-mapping（moderate）で、いずれも `npm audit fix`（--force なし）で修正可能。2026-10-21 にユーザー承認で push（5878805）。Vercel 2プロジェクトともデプロイ成功。両方の本番URLで、未ログインのページと API が 401（Basic 認証要求、X-Frame-Options: DENY）になることを確認。同日ユーザーが本番にログインし、トレンド一覧が問題なく開くことを確認。問題があれば直前のコミットに戻して push する（ユーザー了承済み）。
+
+## 保留（2026-10-22 ユーザー判断）
+
+- 残りの npm 脆弱性（postcss・nanoid・source-map-js の high、protobufjs・baseline-browser-mapping の moderate）を `npm audit fix` で直すか。
+- Supabase に保存済みの投稿本文・rawPayload を消去するか。
+- ローカルの .env.local にだけ残る OPENAI_API_KEY の、OpenAI 側での無効化（ユーザー作業）。
+- Vercel の2つ目のプロジェクト hair-trend-dashboard-wnan の整理: 2026-10-22 ユーザー判断で「Git 連携の解除」に決定（プロジェクトは残す。操作はユーザーが Vercel で行う。戻すときは Settings > Git でつなぎ直す）。解除後の確認: 次の push で GitHub のステータスに hair-trend-dashboard だけが出ること。2026-10-22 に Codex の Chrome で確認（画面のみ）: どちらも独自ドメインなし（hair-trend-dashboard.vercel.app と hair-trend-dashboard-wnan.vercel.app だけ）。どちらも同じリポジトリの main に接続し、vercel.json の Cron 2件（毎日の auto-generate、毎月5日の monthly-fetch）が両方で有効。wnan は環境変数が無く CRON_SECRET も無いため、wnan 側の Cron は認証で弾かれ実データには触れない（推測）。本番の Cron は hair-trend-dashboard 側で直近12時間に auto-generate の実行1件を確認。
