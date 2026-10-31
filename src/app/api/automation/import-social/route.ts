@@ -27,12 +27,13 @@ import type {
 } from "@/types/social";
 import type { SalonRelevance, TrendCategory } from "@/types/trend";
 
+export const maxDuration = 60;
 export const runtime = "nodejs";
 
 const maxImportItems = 50;
 const freeImportItemLimit = 30;
 const defaultAiLimit = 10;
-const freeAiLimit = 3;
+const freeAiLimit = 10;
 const maxRequestBodyBytes = 4 * 1024 * 1024;
 
 type ImportBudgetMode = "free" | "standard";

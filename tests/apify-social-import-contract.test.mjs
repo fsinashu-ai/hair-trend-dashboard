@@ -68,7 +68,8 @@ test("import route exposes bounded, replay-safe import behavior", async () => {
 
   assert.match(route, /maxImportItems = 50/);
   assert.match(route, /freeImportItemLimit = 30/);
-  assert.match(route, /freeAiLimit = 3/);
+  assert.match(route, /freeAiLimit = 10/);
+  assert.match(route, /maxDuration = 60/);
   assert.match(route, /budgetMode/);
   assert.match(route, /itemLimit/);
   assert.match(route, /maxRequestBodyBytes = 4 \* 1024 \* 1024/);

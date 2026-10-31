@@ -10,13 +10,14 @@
 {
   "budgetMode": "free",
   "maxItems": 30,
-  "aiLimit": 3
+  "aiLimit": 10
 }
 ```
 
-- `budgetMode: "free"` は、指定がない場合でも取り込みを最大30件、AI分類を最大3件に制限します。
+- `budgetMode: "free"` は、指定がない場合でも取り込みを最大30件、AI分類を最大10件に制限します。
 - `maxItems` は1〜50件の範囲で指定できます。無料モードでは指定しても最大30件です。
-- `aiLimit` は無料モードでは最大3件です。
+- `aiLimit` は無料モードでは最大10件です。
+- 2026-10-31のユーザー判断により、Gemini無料枠内で週の呼び出しが最大20回程度となるよう変更しました。
 - APIレスポンスにも `budgetMode`、`itemLimit`、`aiLimit`、`truncatedCount` を返すため、n8nの実行結果で制限が働いたか確認できます。
 
 これはSupabaseとGeminiの処理量を抑えるアプリ側の安全弁です。Apifyの料金はActor実行中に発生するため、Apifyの無料枠を守るには、Actorを起動する前にn8n側でも運用制御が必要です。
@@ -33,4 +34,4 @@
 
 ## n8nテンプレート
 
-`automation/n8n/apify-social-import.workflow.example.json` は、週1回実行、Actor側最大30件、Dashboard側 `budgetMode: "free"`、AI分類最大3件の設定に調整済みです。これは認証情報を含まない例です。実運用では、Actor起動前のLimits APIゲートを追加してから有効化してください。
+`automation/n8n/apify-social-import.workflow.example.json` は、週1回実行、Actor側最大30件、Dashboard側 `budgetMode: "free"`、AI分類最大10件の設定に調整済みです。これは認証情報を含まない例です。実運用では、Actor起動前のLimits APIゲートを追加してから有効化してください。

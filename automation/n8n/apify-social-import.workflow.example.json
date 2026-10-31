@@ -207,7 +207,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ provider: 'Apify', sourceName: 'Apify Instagram Actor', budgetMode: 'free', maxItems: 30, aiLimit: 3, actorId: $env.APIFY_INSTAGRAM_ACTOR_ID, actorRunId: $node['Start Apify Actor'].json.data.id, datasetId: $node['Poll Apify run'].json.data.defaultDatasetId, requestId: $execution.id, idempotencyKey: `Apify:${$node['Start Apify Actor'].json.data.id}`, items: $input.all().map(item => item.json) }) }}",
+        "jsonBody": "={{ JSON.stringify({ provider: 'Apify', sourceName: 'Apify Instagram Actor', budgetMode: 'free', maxItems: 30, aiLimit: 10, actorId: $env.APIFY_INSTAGRAM_ACTOR_ID, actorRunId: $node['Start Apify Actor'].json.data.id, datasetId: $node['Poll Apify run'].json.data.defaultDatasetId, requestId: $execution.id, idempotencyKey: `Apify:${$node['Start Apify Actor'].json.data.id}`, items: $input.all().map(item => item.json) }) }}",
         "options": {}
       },
       "executeOnce": true,

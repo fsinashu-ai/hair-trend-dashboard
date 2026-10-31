@@ -12,7 +12,8 @@
 - n8n workflow `Instagramトレンド取得` にLimits APIとIFゲートを追加し、公開済み。
 - ApifyのInstagram Task `Instagram-hair-trends` の `MAXIMUM COST PER RUN` を `$0.5` に設定。
 - ApifyのTikTok Task `tiktok-hair-trends` の `MAXIMUM COST PER RUN` を `$0.5` に設定。
-- 無料モードのDashboard payloadは `budgetMode: "free"`, `maxItems: 30`, `aiLimit: 3`。
+- 無料モードのDashboard payloadは `budgetMode: "free"`, `maxItems: 30`, `aiLimit: 10`。
+- 2026-10-31のユーザー判断により、Gemini無料枠内で週の呼び出しが最大20回程度となるよう変更。
 
 ## 注意点
 
