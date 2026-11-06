@@ -56,5 +56,5 @@
 ## 6. 使っていない機能・保留中のこと（2026-11-06）
 
 - 使われていない: キーワード管理（0件）、投稿ネタの保存（`sns_posts` 0件）、AI 出力の保存（`ai_outputs` 0件）。ダッシュボードのブログ下書き（`blog_posts`）は 8月以降使っていない（記事は WordPress に直接下書きする運用に変更）。使い続けるか、画面から外すかはユーザー判断。
-- 2026-11-06 ユーザー判断で、使っていない10画面をメニューと画面内のリンクから隠した（ページ・API・データは残し、URL を直接入力すれば開ける）: /keywords、/post-generator、/image-analysis、/quality-check、/seo/keywords・/seo/pages・/seo/reports（中身はダミー）、/seo/tasks、/ads/creatives、/ads/reports。戻すときは `src/data/navigation.ts` と `src/components/marketing/MarketingSectionNav.tsx` などのリンクを元に戻し、`tests/navigation-hidden.test.mjs` を直す。
+- 2026-11-06 ユーザー判断で、使っていない10画面をメニューと画面内のリンクから隠した（ページ・API・データは残し、URL を直接入力すれば開ける）: /keywords、/post-generator、/image-analysis、/quality-check、/seo/keywords・/seo/pages・/seo/reports（中身はダミー）、/seo/tasks、/ads/creatives、/ads/reports。戻すときは `src/data/navigation.ts` と `src/components/marketing/MarketingSectionNav.tsx` などのリンクを元に戻し、`tests/navigation-hidden.test.mjs` を直す。 2026-11-06 に push（469f389）し、Vercel のデプロイ成功と、未ログインでは 401 になることを確認。ログイン後の本番画面で10画面が消えていることをユーザーが確認。
 - ユーザー判断待ち（[tasks/CURRENT.md](../tasks/CURRENT.md) の「保留」）: 残りの npm 脆弱性の修正、Supabase に残っている投稿本文・rawPayload の消去、OPENAI_API_KEY の無効化（ユーザー作業）。
