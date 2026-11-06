@@ -2,6 +2,12 @@
 
 最終更新: 2026-11-06（運用の全体: [docs/operations.md](../docs/operations.md)）。ホームページ部署との役割分担: [docs/role-split-homepage.md](../docs/role-split-homepage.md)（2026-11-06 確定）
 
+## 次の作業（2026-11-06 時点。2・3は Claude Code の予定タスクで自動確認: 毎週火曜11時 hair-trend-weekly-check（取り込み確認とテーマ候補）、毎月7日10時 hair-trend-monthly-report（前月の効果）。どちらも読み取りと報告だけ。週次 Windows タスクは逃した週を次の起動時に実行する設定に変更）
+
+- [ ] ブログ3本目: ユーザーが始めると言ったら、ネタ帳（`npm.cmd run blog:brief`）とテーマ候補を用意する。流れは [docs/blog-workflow.md](../docs/blog-workflow.md)。週1本が目安。
+- [ ] 2026-11-10（火）9:45 の SNS 週次取り込みのあと: `social_import_runs` で成功・件数・AI分類数を確認し、`C:\n8n\logs\apify-weekly-catchup.log` も見る。失敗していれば報告する。
+- [ ] 2026-12 上旬（毎月5日の自動取得のあと）: 11月の Search Console・GA4 で、新規記事 6318（髪の履歴）・6324（冬の広がり）のインデックス登録・表示回数・クリック・LINE クリック（line_click）を確認する。あわせて投稿 232（ビビリ毛）・243（白髪染め）を書き直すかを決める（文案はトレンド・SEO、反映はホームページ部署）。
+
 ## 現在の状態
 
 - Windows の週次タスク HairTrendDashboard-ApifyWeeklyCatchup は、2026-09-22、09-29、10-06、10-13 にすべて成功。各回で Docker 起動、Instagram/TikTok 取込、Docker 停止まで完了し、C:\n8n\logs\apify-weekly-catchup.log で確認済み。

@@ -9,12 +9,24 @@
 | いつ | 何をする | 実行元 | 2026-11-06 の確認 |
 | --- | --- | --- | --- |
 | 毎朝7時 | トレンド候補の自動生成（RSS・取得元 → Gemini で分類 → `trend_links`） | Vercel Cron `/api/trends/auto-generate` | 直近14日で14件追加、最新 11/6 朝 |
+| 毎週火曜 9時台 | YouTube 周回（過去7日間の動画を検索し `trend_links` に保存） | Vercel Cron `/api/youtube/auto-generate`（UTC `0 0 * * 2`） | 実装を追加。本番への反映と初回実行は未確認 |
 | 毎週火曜 9:45 | Instagram・TikTok の公開投稿の取り込み（Apify → n8n → `/api/automation/import-social`、AI分類は1回10件まで） | Windows タスク `HairTrendDashboard-ApifyWeeklyCatchup`（Docker を起動して終わったら停止） | 11/3 成功（受信26・保存21・AI分類10、受信14・保存9・AI分類9） |
 | 毎月5日 9時ごろ | 前月の Search Console・GA4 を取得 | Vercel Cron `/api/seo/monthly-fetch` | 11/5 に10月分を取得 |
+| 毎週火曜 11時ごろ | 取り込みの成否確認と、その週のブログのテーマ候補3つを報告（読み取りと報告だけ） | Claude Code の予定タスク `hair-trend-weekly-check`（Claude アプリが開いているとき） | 2026-11-06 設定、初回 11/10 |
+| 毎月7日 10時 | 前月の Search Console・GA4 から記事ごとの効果・書き直し候補・無料枠の状況を報告（読み取りと報告だけ） | Claude Code の予定タスク `hair-trend-monthly-report` | 2026-11-06 設定、初回 11/7 |
 
-- 定期処理の実行元は上の2つ（Vercel Cron と Windows タスク）だけにする。同じ処理を別の場所で動かさない。
+- データを取り込む定期処理の実行元は Vercel Cron と Windows タスクだけにする。同じ処理を別の場所で動かさない。Claude Code の予定タスクは確認と報告だけで、データは書き込まない。
 - 週次タスクの記録: `C:\n8n\logs\apify-weekly-catchup.log`。取り込み結果は Supabase の `social_import_runs`。
-- パソコンが火曜 9:45 に起動していないと、その週の取り込みは動かない（タスクの「開始時刻を過ぎたらすぐ実行」は オフ。2026-11-06 確認）。逃した週は、手動でタスクを実行すれば取り込める。次回は 11/10 9:45。
+- 火曜 9:45 にパソコンが止まっていた場合は、次に起動したときに取り込みが動く（タスクの「開始時刻を過ぎたらすぐ実行」を 2026-11-06 にユーザー承認でオン。戻すときは同じ設定をオフにする）。同じ週に2回は取り込まない（スクリプトが今週の記録を確認する）。
+- Claude Code の予定タスクは、Claude アプリを閉じていると、次に開いたときに動く。保存は Auto モード（アプリのタスク編集で変えられる）。
+
+### まだ手動のデータ取得（2026-11-06 Codex 調査）
+
+- YouTube 周回: 画面のボタンだけ。週1回の Vercel Cron にする案がおすすめ（Hobby でも Cron は100件・1日1回まで可。専用の入口と CRON_SECRET の確認、失敗の検知が必要）。実装はユーザー判断待ち。
+  - 追記（2026-11-06）: ユーザー承認により週次 Cron を実装。本番反映・実行確認までは従来どおり手動で実行する。
+- Google 広告 API: 環境変数が未設定。Developer Token の廃止（2026-09-09）に合わせた改修と、Google Cloud・OAuth の準備が先。それまでは広告 CSV を手動で取り込む。
+- X 公式 API: AGENTS.md の方針で自動取得しない（本文を保存する経路もある）。
+- Search Console・GA4 の CSV 取り込みは予備。通常は毎月5日の API 取得で足りる。
 
 ## 2. 人が行うこと
 

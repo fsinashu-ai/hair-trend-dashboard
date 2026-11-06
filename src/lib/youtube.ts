@@ -112,6 +112,7 @@ export async function searchYoutubeVideosForKeywords({
 
   const warnings: string[] = [];
   const videoMap = new Map<string, YoutubeSearchVideo>();
+  let duplicateCount = 0;
   const publishedAfter = getPublishedAfter(rangeDays);
   const safeMaxResultsPerKeyword = Math.min(
     5,
@@ -135,7 +136,9 @@ export async function searchYoutubeVideosForKeywords({
     });
 
     try {
-      const response = await fetch(`${youtubeSearchEndpoint}?${params}`);
+      const response = await fetch(`${youtubeSearchEndpoint}?${params}`, {
+        signal: AbortSignal.timeout(8_000),
+      });
 
       if (!response.ok) {
         warnings.push(`YouTube検索に失敗しました: ${keyword}`);
@@ -147,8 +150,12 @@ export async function searchYoutubeVideosForKeywords({
       (data.items ?? []).forEach((item) => {
         const video = toYoutubeVideo(item, keyword);
 
-        if (video && !videoMap.has(video.url)) {
-          videoMap.set(video.url, video);
+        if (video) {
+          if (videoMap.has(video.url)) {
+            duplicateCount += 1;
+          } else {
+            videoMap.set(video.url, video);
+          }
         }
       });
     } catch {
@@ -157,6 +164,7 @@ export async function searchYoutubeVideosForKeywords({
   }
 
   return {
+    duplicateCount,
     videos: Array.from(videoMap.values()),
     warnings,
   };

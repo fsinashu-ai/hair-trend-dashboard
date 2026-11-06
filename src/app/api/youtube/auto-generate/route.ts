@@ -23,6 +23,7 @@ import type {
 } from "@/types/youtubeTrend";
 
 export const runtime = "nodejs";
+export const maxDuration = 60;
 
 type KeywordRow = {
   name: string;
@@ -384,8 +385,10 @@ function toSavedYoutubeTrend(
   };
 }
 
-export async function POST(request: Request) {
-  const { rangeDays } = await readRequestOptions(request);
+async function runAutoGenerate(
+  rangeDays: YoutubeTrendRangeDays,
+  report?: { searchedKeywordCount: number; foundCount: number; duplicateCount: number },
+) {
   const dailyLimit = getYoutubeDailyVideoLimit(
     youtubeTrendSearchConfig.dailyVideoLimit,
   );
@@ -445,6 +448,9 @@ export async function POST(request: Request) {
       });
     }
 
+    if (report) {
+      report.searchedKeywordCount = searchedKeywords.length;
+    }
     const searchResult = await searchYoutubeVideosForKeywords({
       keywords: searchedKeywords,
       maxResultsPerKeyword,
@@ -452,11 +458,20 @@ export async function POST(request: Request) {
     });
     warnings.push(...searchResult.warnings);
 
+    if (report) {
+      report.foundCount = searchResult.videos.length + searchResult.duplicateCount;
+      report.duplicateCount = searchResult.duplicateCount;
+    }
+
     const filteredVideos = filterUniqueVideos({
       existingTitles: baseData.existingTitles,
       existingUrls: baseData.existingUrls,
       videos: searchResult.videos,
     });
+
+    if (report) {
+      report.duplicateCount = searchResult.duplicateCount + filteredVideos.excludedCount;
+    }
 
     if (filteredVideos.excludedCount > 0) {
       warnings.push(
@@ -527,4 +542,80 @@ export async function POST(request: Request) {
       { status: 500 },
     );
   }
+}
+
+function cronWarning(warning: string) {
+  if (warning.startsWith("登録済みトレンドURLの取得に失敗")) {
+    return "登録済みトレンドの取得に失敗しました。";
+  }
+  if (warning.startsWith("登録済みキーワードの取得に失敗")) {
+    return "登録済みキーワードの取得に失敗しました。";
+  }
+  if (warning.startsWith("登録済みSNS投稿URLの取得に失敗")) {
+    return "登録済みSNS投稿の取得に失敗しました。";
+  }
+  if (warning.startsWith("YouTube候補の生成はできましたが、Supabase保存に失敗")) {
+    return "YouTube候補のSupabase保存に失敗しました。";
+  }
+  if (warning.startsWith("YouTube検索")) {
+    return "YouTube検索に失敗したキーワードがあります。";
+  }
+  if (warning.startsWith("Supabaseが未設定")) {
+    return "Supabaseが未設定のため保存できません。";
+  }
+  if (warning.startsWith("YOUTUBE_API_KEYが未設定")) {
+    return "YouTube APIが未設定のため検索できません。";
+  }
+  if (warning.startsWith("本日のYouTube保存上限")) {
+    return "本日のYouTube保存上限に達しています。";
+  }
+  if (warning.startsWith("保存済みURLまたは近いタイトルの重複候補")) {
+    return "保存済みまたは類似する候補を除外しました。";
+  }
+  if (warning.startsWith("新しく保存できるYouTube動画候補")) {
+    return "新しく保存できるYouTube動画候補はありませんでした。";
+  }
+  return "YouTube周回で警告が発生しました。";
+}
+
+export async function GET(request: Request) {
+  const secret = process.env.CRON_SECRET;
+  if (!secret || request.headers.get("authorization") !== `Bearer ${secret}`) {
+    return NextResponse.json(
+      { error: "Unauthorized cron request." },
+      { status: 401 },
+    );
+  }
+
+  const report = { searchedKeywordCount: 0, foundCount: 0, duplicateCount: 0 };
+  const response = await runAutoGenerate(7, report);
+  const result = await response.json();
+  if (!response.ok) {
+    return NextResponse.json(
+      {
+        ok: false,
+        searchedKeywordCount: report.searchedKeywordCount,
+        foundCount: report.foundCount,
+        savedCount: 0,
+        duplicateCount: report.duplicateCount,
+        warnings: ["YouTube周回に失敗しました。"],
+      },
+      { status: response.status },
+    );
+  }
+
+  const warnings = (result.warnings as string[]).map(cronWarning);
+  return NextResponse.json({
+    ok: !(result.savedCount === 0 && warnings.length > 0),
+    searchedKeywordCount: report.searchedKeywordCount,
+    foundCount: report.foundCount,
+    savedCount: result.savedCount,
+    duplicateCount: report.duplicateCount,
+    warnings,
+  });
+}
+
+export async function POST(request: Request) {
+  const { rangeDays } = await readRequestOptions(request);
+  return runAutoGenerate(rangeDays);
 }

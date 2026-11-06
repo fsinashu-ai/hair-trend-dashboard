@@ -7,6 +7,10 @@
     {
       "path": "/api/seo/monthly-fetch",
       "schedule": "0 0 5 * *"
+    },
+    {
+      "path": "/api/youtube/auto-generate",
+      "schedule": "0 0 * * 2"
     }
   ]
 }
