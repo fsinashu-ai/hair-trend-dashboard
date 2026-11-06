@@ -248,9 +248,6 @@ export async function SeoDashboard() {
         <div>
           <div className="mb-3 flex items-center justify-between gap-3">
             <h2 className="text-lg font-semibold text-stone-950">優先キーワード（管理用）</h2>
-            <Link className="text-sm font-semibold text-teal-700" href="/seo/keywords">
-              すべて見る
-            </Link>
           </div>
           <div className="divide-y divide-stone-100 rounded-lg border border-stone-200 bg-white shadow-sm">
             {(usesSupabase ? [] : dummySeoKeywords.slice(0, 4)).map((item) => (
@@ -271,9 +268,6 @@ export async function SeoDashboard() {
         <div>
           <div className="mb-3 flex items-center justify-between gap-3">
             <h2 className="text-lg font-semibold text-stone-950">改善すべきページ（管理用）</h2>
-            <Link className="text-sm font-semibold text-teal-700" href="/seo/pages">
-              すべて見る
-            </Link>
           </div>
           <div className="divide-y divide-stone-100 rounded-lg border border-stone-200 bg-white shadow-sm">
             {(usesSupabase ? [] : dummySeoPages).map((page) => (

@@ -169,15 +169,12 @@ function TaskList({
 
   return (
     <div className="space-y-2">
-      {items.map((item, index) => (
-        <div
-          className="rounded-md border border-stone-200 bg-white"
-          key={`${item.label}-${index}`}
-        >
-          <Link
-            className="block p-3 transition hover:bg-teal-50"
-            href={item.href}
-          >
+      {items.map((item, index) => {
+        const hideLink = ["/seo/tasks", "/ads/creatives", "/quality-check"].includes(
+          item.href,
+        );
+        const content = (
+          <>
             <div className="flex flex-wrap items-center gap-2">
               <Badge tone={priorityTone(item.priority)}>
                 {priorityLabel(item.priority)}
@@ -189,21 +186,36 @@ function TaskList({
             <p className="mt-2 text-sm font-semibold leading-6 text-stone-950">
               {item.label}
             </p>
-          </Link>
-          <div className="border-t border-stone-100 px-3 py-2 text-right">
-            <button
-              className="min-h-9 rounded-md border border-teal-200 px-3 text-xs font-semibold text-teal-800 hover:bg-teal-50 disabled:cursor-wait disabled:opacity-60"
-              disabled={completingTaskKey === dashboardTaskKey(item)}
-              onClick={() => onComplete(item)}
-              type="button"
-            >
-              {completingTaskKey === dashboardTaskKey(item)
-                ? "更新中"
-                : "今月は完了"}
-            </button>
+          </>
+        );
+
+        return (
+          <div
+            className="rounded-md border border-stone-200 bg-white"
+            key={`${item.label}-${index}`}
+          >
+            {hideLink ? (
+              <div className="p-3">{content}</div>
+            ) : (
+              <Link className="block p-3 transition hover:bg-teal-50" href={item.href}>
+                {content}
+              </Link>
+            )}
+            <div className="border-t border-stone-100 px-3 py-2 text-right">
+              <button
+                className="min-h-9 rounded-md border border-teal-200 px-3 text-xs font-semibold text-teal-800 hover:bg-teal-50 disabled:cursor-wait disabled:opacity-60"
+                disabled={completingTaskKey === dashboardTaskKey(item)}
+                onClick={() => onComplete(item)}
+                type="button"
+              >
+                {completingTaskKey === dashboardTaskKey(item)
+                  ? "更新中"
+                  : "今月は完了"}
+              </button>
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -539,12 +551,6 @@ export function FinalMarketingDashboard() {
               href="/seo/integrated"
             >
               ページ統合分析
-            </Link>
-            <Link
-              className="min-h-11 rounded-md border border-stone-300 bg-white px-4 py-3 text-center text-sm font-semibold text-stone-800 hover:bg-stone-50"
-              href="/quality-check"
-            >
-              公開前チェック
             </Link>
           </div>
         </>

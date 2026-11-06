@@ -17,13 +17,7 @@ const navigationGroups: MarketingNavGroup[] = [
     label: "計画・管理",
     links: [
       { href: "/seo", label: "SEO概要" },
-      { href: "/seo/keywords", label: "キーワード" },
-      { href: "/seo/pages", label: "ページ改善" },
-      { href: "/seo/reports", label: "SEOレポート" },
-      { href: "/seo/tasks", label: "SEOタスク" },
       { href: "/ads", label: "広告メモ" },
-      { href: "/ads/reports", label: "広告レポート" },
-      { href: "/ads/creatives", label: "広告案生成" },
     ],
   },
   {
@@ -47,11 +41,6 @@ const navigationGroups: MarketingNavGroup[] = [
       { href: "/ads/imports", label: "広告実績集計" },
       { href: "/seo/integrated", label: "ページ統合分析" },
     ],
-  },
-  {
-    description: "作成した記事・広告文を公開前に確認する",
-    label: "公開前確認",
-    links: [{ href: "/quality-check", label: "AI品質チェック" }],
   },
 ];
 

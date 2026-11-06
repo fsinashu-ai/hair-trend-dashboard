@@ -45,16 +45,6 @@ const favoriteLinks = [
     note: "登録リンクを見る",
   },
   {
-    href: "/post-generator",
-    label: "投稿ネタ生成",
-    note: "細かく条件指定",
-  },
-  {
-    href: "/image-analysis",
-    label: "画像分析",
-    note: "仕上がり説明に",
-  },
-  {
     href: "/backup",
     label: "バックアップ",
     note: "月末の保存",
@@ -414,9 +404,6 @@ export function HomeDashboard() {
           <div className="mt-5 grid grid-cols-2 gap-3">
             <Button href="/trends" variant="primary">
               記事を見る
-            </Button>
-            <Button href="/post-generator" variant="secondary">
-              細かく生成
             </Button>
           </div>
             </>

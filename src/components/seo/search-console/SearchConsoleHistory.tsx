@@ -39,7 +39,6 @@ export function SearchConsoleHistory() {
               <Link className="inline-flex min-h-10 items-center justify-center rounded-md border border-teal-200 px-3 text-sm font-semibold text-teal-700" href={`/seo/search-console?importId=${encodeURIComponent(item.id)}#gemini-analysis`}>{analysis ? "再分析する" : "分析する"}</Link>
               <Link className="inline-flex min-h-10 items-center justify-center rounded-md border border-stone-300 px-3 text-sm font-semibold text-stone-700" href={`/seo/search-console?importId=${encodeURIComponent(item.id)}`}>前月と比較</Link>
               <Link className="inline-flex min-h-10 items-center justify-center rounded-md border border-stone-300 px-3 text-sm font-semibold text-stone-700" href={`/seo/search-console?importId=${encodeURIComponent(item.id)}#gemini-analysis`}>ブログ案を見る</Link>
-              <Link className="inline-flex min-h-10 items-center justify-center rounded-md border border-stone-300 px-3 text-sm font-semibold text-stone-700" href={`/seo/tasks?importId=${encodeURIComponent(item.id)}`}>SEOタスクを見る</Link>
             </div>
           </article>
         );
