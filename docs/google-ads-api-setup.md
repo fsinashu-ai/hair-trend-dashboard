@@ -36,13 +36,19 @@ GA4 の「管理 > プロパティのアクセス管理」に、`…@….iam.gse
 
 Google 広告の画面右上に出る `123-456-7890` の形の番号（お客様 ID）。ハイフンを除いた10桁を、あとで Vercel の環境変数 `GOOGLE_ADS_CUSTOMER_ID` に入れます。管理者アカウント（MCC）経由で見ている場合は、その管理者アカウントの ID も控えます。
 
+- 注意（2026-11-07）: ユーザー追加の画面のエラーや URL に出る `ocid` などの番号は Google 広告の内部番号で、お客様 ID ではありません。アカウント選択の一覧に出る `123-456-7890` の形の番号を使います。
+- サービスアカウントを広告アカウントに直接追加した場合、`GOOGLE_ADS_LOGIN_CUSTOMER_ID` は入れません（入っていると HTTP 403 になることがある）。
+
 ## 終わったら
 
 「Google 広告の準備が終わった」とトレンド・SEO部署に伝えてください。こちらで、アプリの改修（Codex）と動作確認をしてから、定期実行を追加します。Vercel への環境変数の設定は、改修のあとにお願いします（どの名前に入れるかはそのときにお伝えします）。
 
 参考: [サービスアカウントでの接続（Google 公式）](https://developers.google.com/google-ads/api/docs/oauth/service-accounts)
 
-## アプリ側の改修（2026-11-07 実装済み・未接続）
+## アプリ側の改修（2026-11-07 実装・本番接続確認済み）
+
+- 2026-11-07: 本番の画面から10月分（キャンペーン）を手動取得し、31行が imported で保存されたことを Supabase で確認。最初は HTTP 403。Vercel の `GOOGLE_ADS_CUSTOMER_ID` を正しいお客様 ID に直し、古い `GOOGLE_ADS_LOGIN_CUSTOMER_ID` を消して Redeploy したら成功した。同時保存防止の目印の行（status failed、画面には出ない）も正しく解除されていた。
+
 
 - 認証は、GA4・Search Console と同じサービスアカウント（共通の認証処理に広告用スコープ `https://www.googleapis.com/auth/adwords` を渡す）に統一。リフレッシュトークン方式と Developer Token は使わない。
 - 必要な環境変数: 既存の `GOOGLE_SERVICE_ACCOUNT_EMAIL`・`GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY`（または `GOOGLE_SERVICE_ACCOUNT_JSON`）、新しく `GOOGLE_ADS_CUSTOMER_ID`（MCC 経由なら `GOOGLE_ADS_LOGIN_CUSTOMER_ID` も）。

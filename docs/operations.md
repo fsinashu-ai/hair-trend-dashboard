@@ -12,7 +12,7 @@
 | 毎週火曜 9時台 | YouTube 周回（過去7日間の動画を検索し `trend_links` に保存） | Vercel Cron `/api/youtube/auto-generate`（UTC `0 0 * * 2`） | 実装を追加。本番への反映と初回実行は未確認 |
 | 毎週火曜 9:45 | Instagram・TikTok の公開投稿の取り込み（Apify → n8n → `/api/automation/import-social`、AI分類は1回10件まで） | Windows タスク `HairTrendDashboard-ApifyWeeklyCatchup`（Docker を起動して終わったら停止） | 11/3 成功（受信26・保存21・AI分類10、受信14・保存9・AI分類9） |
 | 毎月5日 9時ごろ | 前月の Search Console・GA4 を取得 | Vercel Cron `/api/seo/monthly-fetch` | 11/5 に10月分を取得 |
-| 毎月5日 10時台 | 前月の Google 広告キャンペーン実績を取得 | Vercel Cron `/api/ads/google/monthly-fetch` | 実装済み、Google 側の準備待ち・本番未確認 |
+| 毎月5日 10時台 | 前月の Google 広告キャンペーン実績を取得 | Vercel Cron `/api/ads/google/monthly-fetch` | 11/7 に手動取得で本番接続を確認（10月分31行を保存）。Cron の初回は 12/5 |
 | 毎週火曜 11時ごろ | 取り込みの成否確認と、その週のブログのテーマ候補3つを報告（読み取りと報告だけ） | Claude Code の予定タスク `hair-trend-weekly-check`（Claude アプリが開いているとき） | 2026-11-06 設定、初回 11/10 |
 | 毎月7日 10時 | 前月の Search Console・GA4 から記事ごとの効果・書き直し候補・無料枠の状況を報告（読み取りと報告だけ） | Claude Code の予定タスク `hair-trend-monthly-report` | 2026-11-06 設定、初回 11/7 |
 
@@ -25,7 +25,7 @@
 
 - YouTube 周回: 画面のボタンだけ。週1回の Vercel Cron にする案がおすすめ（Hobby でも Cron は100件・1日1回まで可。専用の入口と CRON_SECRET の確認、失敗の検知が必要）。実装はユーザー判断待ち。
   - 追記（2026-11-06）: ユーザー承認により週次 Cron を実装。本番反映・実行確認までは従来どおり手動で実行する。
-- Google 広告 API: 環境変数が未設定。Developer Token の廃止（2026-09-09）に合わせた改修と、Google Cloud・OAuth の準備が先。それまでは広告 CSV を手動で取り込む。
+- Google 広告 API: 2026-11-07 にサービスアカウント方式へ改修し、毎月5日の自動取得に移行（上の表）。広告 CSV の手動取り込みは予備。
 - X 公式 API: AGENTS.md の方針で自動取得しない（本文を保存する経路もある）。
 - Search Console・GA4 の CSV 取り込みは予備。通常は毎月5日の API 取得で足りる。
 
