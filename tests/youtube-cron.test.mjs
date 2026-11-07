@@ -93,7 +93,7 @@ function routeFixture({ configured = true, saveFails = false } = {}) {
 
 test("YouTube weekly cron preserves the existing schedules", () => {
   const { crons } = JSON.parse(readFileSync(new URL("../vercel.json", import.meta.url), "utf8"));
-  assert.equal(crons.length, 3);
+  assert.equal(crons.length, 4);
   for (const [path, schedule] of [
     ["/api/trends/auto-generate", "0 22 * * *"],
     ["/api/seo/monthly-fetch", "0 0 5 * *"],

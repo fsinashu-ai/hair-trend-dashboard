@@ -11,6 +11,10 @@
     {
       "path": "/api/youtube/auto-generate",
       "schedule": "0 0 * * 2"
+    },
+    {
+      "path": "/api/ads/google/monthly-fetch",
+      "schedule": "0 1 5 * *"
     }
   ]
 }

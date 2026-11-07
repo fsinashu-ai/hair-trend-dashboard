@@ -2,10 +2,9 @@ import { createHash } from "node:crypto";
 import { adCsvConfig } from "@/config/adCsv";
 import { summarizeAdCsvRows } from "@/lib/ads/adCsvAnalysis";
 import {
-  GoogleAdsOAuthError,
-  googleAdsOAuthErrorMessage,
-  readGoogleOAuthErrorCode,
-} from "@/lib/ads/googleAdsOauth";
+  getGoogleServiceAccountAccessToken,
+  isGoogleServiceAccountConfigured,
+} from "@/lib/google/serviceAccount.server";
 import { saveAdCsvImport } from "@/lib/supabase/adCsv.server";
 import type {
   AdCsvImportMetadata,
@@ -16,12 +15,8 @@ import type {
 
 type GoogleAdsConfig = {
   apiVersion: string;
-  clientId: string;
-  clientSecret: string;
   customerId: string;
-  developerToken: string;
   loginCustomerId: string;
-  refreshToken: string;
 };
 
 type GoogleAdsFetchInput = {
@@ -37,20 +32,9 @@ type GoogleAdsSearchStreamChunk = {
   results?: Array<Record<string, unknown>>;
 };
 
-type GoogleOAuthTokenResponse = {
-  access_token?: unknown;
-  expires_in?: unknown;
-};
+const googleAdsScope = "https://www.googleapis.com/auth/adwords";
 
-type GoogleAdsAccessTokenCache = {
-  accessToken: string;
-  credentialFingerprint: string;
-  expiresAt: number;
-};
-
-const oauthRequestTimeoutMs = 20_000;
-const oauthExpirySafetyMs = 5 * 60 * 1000;
-let accessTokenCache: GoogleAdsAccessTokenCache | null = null;
+export class GoogleAdsReportError extends Error {}
 
 const supportedReportTypes: AdCsvImportType[] = [
   "campaign",
@@ -72,23 +56,18 @@ function normalizeCustomerId(value: string) {
 function getGoogleAdsConfig(): GoogleAdsConfig {
   return {
     apiVersion: env("GOOGLE_ADS_API_VERSION") || "v24",
-    clientId: env("GOOGLE_ADS_CLIENT_ID"),
-    clientSecret: env("GOOGLE_ADS_CLIENT_SECRET"),
     customerId: normalizeCustomerId(env("GOOGLE_ADS_CUSTOMER_ID")),
-    developerToken: env("GOOGLE_ADS_DEVELOPER_TOKEN"),
     loginCustomerId: normalizeCustomerId(env("GOOGLE_ADS_LOGIN_CUSTOMER_ID")),
-    refreshToken: env("GOOGLE_ADS_REFRESH_TOKEN"),
   };
 }
 
 export function getGoogleAdsConfigStatus() {
   const config = getGoogleAdsConfig();
   const missing = [
-    !config.developerToken ? "GOOGLE_ADS_DEVELOPER_TOKEN" : "",
-    !config.clientId ? "GOOGLE_ADS_CLIENT_ID" : "",
-    !config.clientSecret ? "GOOGLE_ADS_CLIENT_SECRET" : "",
-    !config.refreshToken ? "GOOGLE_ADS_REFRESH_TOKEN" : "",
     !config.customerId ? "GOOGLE_ADS_CUSTOMER_ID" : "",
+    !isGoogleServiceAccountConfigured()
+      ? "GOOGLE_SERVICE_ACCOUNT_JSON または GOOGLE_SERVICE_ACCOUNT_EMAIL と GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY"
+      : "",
   ].filter(Boolean);
 
   return {
@@ -106,76 +85,14 @@ function validateDate(value: string) {
 
 function validateInput(input: GoogleAdsFetchInput) {
   if (!supportedReportTypes.includes(input.importType)) {
-    throw new Error("Google広告APIで取得できる種別を選んでください。");
+    throw new GoogleAdsReportError("Google広告APIで取得できる種別を選んでください。");
   }
   if (!validateDate(input.periodStart) || !validateDate(input.periodEnd)) {
-    throw new Error("開始日と終了日を入力してください。");
+    throw new GoogleAdsReportError("開始日と終了日を入力してください。");
   }
   if (input.periodEnd < input.periodStart) {
-    throw new Error("終了日は開始日以降にしてください。");
+    throw new GoogleAdsReportError("終了日は開始日以降にしてください。");
   }
-}
-
-async function fetchAccessToken(config: GoogleAdsConfig) {
-  const credentialFingerprint = createHash("sha256")
-    .update(`${config.clientId}\0${config.refreshToken}`)
-    .digest("hex");
-
-  if (
-    accessTokenCache?.credentialFingerprint === credentialFingerprint &&
-    accessTokenCache.expiresAt - oauthExpirySafetyMs > Date.now()
-  ) {
-    return accessTokenCache.accessToken;
-  }
-
-  let response: Response;
-  try {
-    response = await fetch("https://oauth2.googleapis.com/token", {
-      body: new URLSearchParams({
-        client_id: config.clientId,
-        client_secret: config.clientSecret,
-        grant_type: "refresh_token",
-        refresh_token: config.refreshToken,
-      }),
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      method: "POST",
-      signal: AbortSignal.timeout(oauthRequestTimeoutMs),
-    });
-  } catch {
-    throw new GoogleAdsOAuthError(
-      "network_error",
-      "Google広告APIのOAuthサーバーへ接続できませんでした。時間をおいて再試行してください。",
-    );
-  }
-
-  const payload = (await response.json().catch(() => ({}))) as GoogleOAuthTokenResponse;
-
-  if (!response.ok) {
-    const code = readGoogleOAuthErrorCode(payload);
-    throw new GoogleAdsOAuthError(
-      code,
-      googleAdsOAuthErrorMessage(code, response.status),
-    );
-  }
-
-  if (typeof payload.access_token !== "string" || !payload.access_token) {
-    throw new GoogleAdsOAuthError(
-      "missing_access_token",
-      "Google広告APIのOAuth応答にAccess Tokenが含まれていませんでした。OAuthクライアント設定を確認してください。",
-    );
-  }
-
-  const expiresIn = Number(payload.expires_in);
-  const expiresInMs = Number.isFinite(expiresIn) && expiresIn > 0
-    ? expiresIn * 1000
-    : 60 * 60 * 1000;
-  accessTokenCache = {
-    accessToken: payload.access_token,
-    credentialFingerprint,
-    expiresAt: Date.now() + expiresInMs,
-  };
-
-  return payload.access_token;
 }
 
 function buildGoogleAdsQuery(input: GoogleAdsFetchInput) {
@@ -341,26 +258,36 @@ function rowToAdCsvRow(row: Record<string, unknown>, rowType: AdCsvImportType): 
 }
 
 async function fetchGoogleAdsRows(input: GoogleAdsFetchInput, config: GoogleAdsConfig) {
-  const accessToken = await fetchAccessToken(config);
+  let accessToken: string;
+  try {
+    accessToken = await getGoogleServiceAccountAccessToken(googleAdsScope);
+  } catch {
+    throw new GoogleAdsReportError("Googleサービスアカウントの認証に失敗しました。環境変数と権限を確認してください。");
+  }
   const headers: Record<string, string> = {
     Authorization: `Bearer ${accessToken}`,
     "Content-Type": "application/json",
-    "developer-token": config.developerToken,
   };
   if (config.loginCustomerId) headers["login-customer-id"] = config.loginCustomerId;
 
-  const response = await fetch(
-    `https://googleads.googleapis.com/${config.apiVersion}/customers/${config.customerId}/googleAds:searchStream`,
-    {
-      body: JSON.stringify({ query: buildGoogleAdsQuery(input) }),
-      headers,
-      method: "POST",
-    },
-  );
+  let response: Response;
+  try {
+    response = await fetch(
+      `https://googleads.googleapis.com/${config.apiVersion}/customers/${config.customerId}/googleAds:searchStream`,
+      {
+        body: JSON.stringify({ query: buildGoogleAdsQuery(input) }),
+        headers,
+        method: "POST",
+        signal: AbortSignal.timeout(25_000),
+      },
+    );
+  } catch {
+    throw new GoogleAdsReportError("Google広告APIへの接続に失敗しました。");
+  }
 
   if (!response.ok) {
     const status = response.status;
-    throw new Error(`Google広告APIの取得に失敗しました。HTTP ${status}。customer ID、developer token、権限、API利用設定を確認してください。`);
+    throw new GoogleAdsReportError(`Google広告APIの取得に失敗しました。HTTP ${status}。顧客ID、権限、API利用設定を確認してください。`);
   }
 
   const chunks = (await response.json()) as GoogleAdsSearchStreamChunk[];
@@ -372,22 +299,30 @@ export async function fetchGoogleAdsReport(input: GoogleAdsFetchInput) {
   validateInput(input);
   const status = getGoogleAdsConfigStatus();
   if (!status.configured) {
-    throw new Error(`Google広告APIの環境変数が不足しています: ${status.missing.join(", ")}`);
+    throw new GoogleAdsReportError(`Google広告APIの環境変数が不足しています: ${status.missing.join(", ")}`);
   }
 
   const config = getGoogleAdsConfig();
   const rows = await fetchGoogleAdsRows(input, config);
   const contentHash = createHash("sha256")
-    .update(JSON.stringify({ input, rows }))
+    .update(JSON.stringify(rows.map((row) => JSON.stringify(
+      Object.fromEntries(Object.entries(row).filter(([key]) => key !== "rawData")),
+    )).sort()))
     .digest("hex");
-  const fileName = `google-ads-api-${input.importType}-${input.periodStart}_${input.periodEnd}.json`;
+  const accountHash = createHash("sha256").update(config.customerId).digest("hex");
+  const fileName = `google-ads-api-v1-${accountHash}-${input.importType}-${input.periodStart}-${input.periodEnd}`;
+  const reachedRowLimit = rows.length >= adCsvConfig.maxImportRows;
   const preview: AdCsvPreview = {
     contentHash,
     detectedType: input.importType,
     errorCount: 0,
     fileName,
     invalidRowCount: 0,
-    issues: [],
+    issues: reachedRowLimit ? [{
+      message: "取得行数が上限に達したため、全件を取得できていない可能性があります。",
+      rowNumber: adCsvConfig.maxImportRows,
+      severity: "warning",
+    }] : [],
     metrics: summarizeAdCsvRows(rows),
     platform: "google",
     previewRows: rows.slice(0, adCsvConfig.previewRowLimit),
@@ -402,7 +337,7 @@ export async function fetchGoogleAdsReport(input: GoogleAdsFetchInput) {
     sourceColumns: ["Google Ads API searchStream"],
     totalRowCount: rows.length,
     validRowCount: rows.length,
-    warningCount: 0,
+    warningCount: reachedRowLimit ? 1 : 0,
   };
 
   return {

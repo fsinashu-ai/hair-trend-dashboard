@@ -1,3 +1,4 @@
+import { createHash, randomUUID } from "node:crypto";
 import { getServerSupabaseClient } from "@/lib/supabase/serverClient";
 import type {
   AdCsvImport,
@@ -147,6 +148,92 @@ function metricsToColumns(metrics: AdCsvMetrics) {
   };
 }
 
+// The account is represented by a hash, never by the customer ID itself.
+const googleAdsApiFileNamePattern = /^google-ads-api-v1-[a-f0-9]{64}-(?:campaign|ad_group|ad|keyword|search_term|daily)-\d{4}-\d{2}-\d{2}-\d{4}-\d{2}-\d{2}$/;
+
+function isGoogleAdsApiImport(fileName: string) {
+  return googleAdsApiFileNamePattern.test(fileName);
+}
+
+function googleAdsLockId(fileName: string) {
+  const hash = createHash("sha256").update(`google-ads-import-lock-v1:${fileName}`).digest("hex");
+  return `${hash.slice(0, 8)}-${hash.slice(8, 12)}-5${hash.slice(13, 16)}-8${hash.slice(17, 20)}-${hash.slice(20, 32)}`;
+}
+
+async function acquireGoogleAdsImportLock(
+  fileName: string,
+  metadata: AdCsvImportMetadata,
+) {
+  const supabase = getServerSupabaseClient();
+  if (!supabase) throw new Error("広告データの保存先を利用できません。");
+
+  const lockId = googleAdsLockId(fileName);
+  const owner = randomUUID();
+  const { error: insertError } = await supabase.from("ad_csv_imports").insert({
+    id: lockId,
+    file_name: fileName,
+    file_hash: "google-ads-import-lock-v1",
+    platform: metadata.platform,
+    import_type: metadata.importType,
+    period_start: metadata.periodStart,
+    period_end: metadata.periodEnd,
+    report_month: reportMonth(metadata.reportMonth),
+    status: "preview",
+    memo: owner,
+    user_id: null,
+  });
+
+  if (insertError) {
+    if (insertError.code !== "23505") {
+      throw new Error("広告データの保存処理を開始できませんでした。");
+    }
+    // A conditional update claims an unlocked sentinel atomically. A crashed
+    // owner is not expired automatically, so an old writer cannot resume.
+    const { data, error } = await supabase
+      .from("ad_csv_imports")
+      .update({ status: "preview", memo: owner })
+      .eq("id", lockId)
+      .eq("status", "failed")
+      .select("id")
+      .maybeSingle();
+    if (error) throw new Error("広告データの保存処理を開始できませんでした。");
+    if (!data) {
+      throw new Error("同じ広告データの保存処理が進行中か、前回の処理が中断されています。");
+    }
+  }
+
+  return async () => {
+    const { data, error } = await supabase
+      .from("ad_csv_imports")
+      .update({ status: "failed", memo: "" })
+      .eq("id", lockId)
+      .eq("status", "preview")
+      .eq("memo", owner)
+      .select("id")
+      .maybeSingle();
+    if (error || !data) {
+      throw new Error("広告データの保存処理の終了を確認できませんでした。");
+    }
+  };
+}
+
+async function findLatestGoogleAdsApiImport(fileName: string) {
+  const supabase = getServerSupabaseClient();
+  if (!supabase) return null;
+
+  const { data, error } = await supabase
+    .from("ad_csv_imports")
+    .select("*")
+    .eq("file_name", fileName)
+    .eq("status", "imported")
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  return data ? toImport(data as AdCsvImportRow) : null;
+}
+
 export async function findDuplicateAdCsvImport(
   preview: AdCsvPreview,
   metadata: AdCsvImportMetadata,
@@ -174,12 +261,37 @@ export async function saveAdCsvImport(
   preview: AdCsvPreview,
   metadata: AdCsvImportMetadata,
 ) {
+  if (!getServerSupabaseClient()) return null;
+  if (!isGoogleAdsApiImport(preview.fileName)) {
+    return saveAdCsvImportUnlocked(preview, metadata);
+  }
+
+  const releaseLock = await acquireGoogleAdsImportLock(preview.fileName, metadata);
+  try {
+    return await saveAdCsvImportUnlocked(preview, metadata);
+  } finally {
+    await releaseLock();
+  }
+}
+
+async function saveAdCsvImportUnlocked(
+  preview: AdCsvPreview,
+  metadata: AdCsvImportMetadata,
+) {
   const supabase = getServerSupabaseClient();
   const rows = preview.rows ?? [];
   if (!supabase) return null;
 
-  const duplicate = await findDuplicateAdCsvImport(preview, metadata);
-  if (duplicate) return { duplicate, item: null };
+  const isApiImport = isGoogleAdsApiImport(preview.fileName);
+  const latestApiImport = isApiImport
+    ? await findLatestGoogleAdsApiImport(preview.fileName)
+    : null;
+  const duplicate = isApiImport
+    ? latestApiImport?.fileHash === preview.contentHash ? latestApiImport : null
+    : await findDuplicateAdCsvImport(preview, metadata);
+  if (duplicate) {
+    return { duplicate, item: null, version: isApiImport ? "unchanged" as const : undefined };
+  }
 
   const { data: importData, error: importError } = await supabase
     .from("ad_csv_imports")
@@ -249,7 +361,11 @@ export async function saveAdCsvImport(
       .select("*")
       .single();
     if (error) throw error;
-    return { duplicate: null, item: toImport(data as AdCsvImportRow) };
+    return {
+      duplicate: null,
+      item: toImport(data as AdCsvImportRow),
+      version: isApiImport ? (latestApiImport ? "updated" as const : "new" as const) : undefined,
+    };
   } catch (error) {
     await supabase
       .from("ad_csv_imports")
@@ -266,14 +382,34 @@ export async function fetchAdCsvImports(limit = 24) {
   const supabase = getServerSupabaseClient();
   if (!supabase) return null;
 
-  const { data, error } = await supabase
-    .from("ad_csv_imports")
-    .select("*")
-    .order("period_end", { ascending: false })
-    .order("created_at", { ascending: false })
-    .limit(limit);
-  if (error) throw error;
-  return (data ?? []).map((row) => toImport(row as AdCsvImportRow));
+  const imports: AdCsvImport[] = [];
+  const seenApiImports = new Set<string>();
+  const pageSize = 100;
+  let offset = 0;
+
+  // Apply the requested limit after discarding old or incomplete API versions.
+  while (imports.length < limit) {
+    const { data, error } = await supabase
+      .from("ad_csv_imports")
+      .select("*")
+      .order("period_end", { ascending: false })
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false })
+      .range(offset, offset + pageSize - 1);
+    if (error) throw error;
+    const rows = (data ?? []) as AdCsvImportRow[];
+    for (const row of rows) {
+      if (isGoogleAdsApiImport(row.file_name)) {
+        if (row.status !== "imported" || seenApiImports.has(row.file_name)) continue;
+        seenApiImports.add(row.file_name);
+      }
+      imports.push(toImport(row));
+      if (imports.length === limit) break;
+    }
+    if (rows.length < pageSize) break;
+    offset += pageSize;
+  }
+  return imports;
 }
 
 export async function fetchAdCsvRows(importIds: string[]) {

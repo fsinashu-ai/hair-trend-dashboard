@@ -43,6 +43,7 @@ function isAuthorizedCronRequest(request: NextRequest) {
       request.nextUrl.pathname === "/api/youtube/auto-generate" ||
       request.nextUrl.pathname === "/api/seo/ga4/fetch" ||
       request.nextUrl.pathname === "/api/seo/monthly-fetch" ||
+      request.nextUrl.pathname === "/api/ads/google/monthly-fetch" ||
       request.nextUrl.pathname === "/api/seo/search-console/fetch") &&
     safeCompare(
       request.headers.get("authorization") ?? "",

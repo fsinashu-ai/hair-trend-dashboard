@@ -89,7 +89,7 @@ export function GoogleAdsApiManager() {
     if (duplicate) {
       setTone("warning");
       setMessage("同じGoogle広告API取得データがこの端末に保存済みです。既存データは変更していません。");
-      return;
+      return false;
     }
 
     const now = new Date().toISOString();
@@ -115,6 +115,7 @@ export function GoogleAdsApiManager() {
       warningCount: previewData.warningCount,
     };
     addLocalAdCsvImport(item, previewData.rows ?? []);
+    return true;
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -149,7 +150,7 @@ export function GoogleAdsApiManager() {
       setPreview(data.preview);
 
       if (data.storageMode === "local") {
-        saveLocal(data.preview);
+        if (!saveLocal(data.preview)) return;
       }
 
       setTone(data.preview.validRowCount === 0 ? "warning" : "success");

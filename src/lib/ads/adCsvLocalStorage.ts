@@ -9,7 +9,9 @@ const emptyDataset: AdCsvDataset = {
   rowsByImport: {},
 };
 
-export function readLocalAdCsvDataset(): AdCsvDataset {
+const googleAdsApiFileNamePattern = /^google-ads-api-v1-[a-f0-9]{64}-(?:campaign|ad_group|ad|keyword|search_term|daily)-\d{4}-\d{2}-\d{2}-\d{4}-\d{2}-\d{2}$/;
+
+function readStoredDataset(): AdCsvDataset {
   if (typeof window === "undefined") return emptyDataset;
 
   try {
@@ -24,6 +26,24 @@ export function readLocalAdCsvDataset(): AdCsvDataset {
   }
 }
 
+export function readLocalAdCsvDataset(): AdCsvDataset {
+  const dataset = readStoredDataset();
+  const latestApiImports = new Map<string, AdCsvImport>();
+
+  for (const item of dataset.imports) {
+    if (!googleAdsApiFileNamePattern.test(item.fileName) || item.status !== "imported") continue;
+    const latest = latestApiImports.get(item.fileName);
+    if (!latest || item.createdAt > latest.createdAt) latestApiImports.set(item.fileName, item);
+  }
+
+  return {
+    ...dataset,
+    imports: dataset.imports.filter((item) =>
+      !googleAdsApiFileNamePattern.test(item.fileName) || latestApiImports.get(item.fileName) === item,
+    ),
+  };
+}
+
 function saveDataset(dataset: AdCsvDataset) {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(storageKey, JSON.stringify(dataset));
@@ -31,7 +51,7 @@ function saveDataset(dataset: AdCsvDataset) {
 }
 
 export function addLocalAdCsvImport(item: AdCsvImport, rows: AdCsvRow[]) {
-  const current = readLocalAdCsvDataset();
+  const current = readStoredDataset();
   const imports = [item, ...current.imports.filter((entry) => entry.id !== item.id)].slice(0, 10);
   const allowedIds = new Set(imports.map((entry) => entry.id));
   const rowsByImport = Object.fromEntries(
