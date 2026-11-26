@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { generateKeyPairSync, createVerify } from "node:crypto";
 import test from "node:test";
-import { formatReport, main, normalizePrivateKey, readConfig } from "../tools/search-console/inspect-urls.mjs";
+import { formatReport, main, normalizeInspectionUrl, normalizePrivateKey, readConfig, writeReport } from "../tools/search-console/inspect-urls.mjs";
 
 test("サービスアカウントの秘密鍵を既存の形式と同じように整える", () => {
   assert.equal(normalizePrivateKey('  "first\\nsecond"  '), "first\nsecond");
@@ -154,4 +154,59 @@ test("鍵ファイルに問題がある場合は種類だけを表示して処�
     assert.equal(code, 1);
     assert.deepEqual(errors, [`GOOGLE_SERVICE_ACCOUNT_KEY_FILE: ${item.expected}`]);
   }
+});
+
+
+test("検査URLのパスとクエリにある16進エスケープを大文字にする", () => {
+  assert.equal(normalizeInspectionUrl("https://example.invalid/%e9%ab%aa/?q=%e9%ab%aa"), "https://example.invalid/%E9%AB%AA/?q=%E9%AB%AA");
+  assert.equal(normalizeInspectionUrl("https://example.invalid/髪/?q=髪"), "https://example.invalid/%E9%AB%AA/?q=%E9%AB%AA");
+  assert.equal(normalizeInspectionUrl("https://example.invalid/article-123/?q=abc"), "https://example.invalid/article-123/?q=abc");
+  assert.equal(normalizeInspectionUrl("https://example.invalid/%zz/%2g/%/?q=%xy%1"), "https://example.invalid/%zz/%2g/%/?q=%xy%1");
+  assert.equal(normalizeInspectionUrl("https://EXAMPLE.invalid:443/%e9%ab%aa/#%e9"), "https://EXAMPLE.invalid:443/%E9%AB%AA/#%e9");
+});
+
+test("main は正規化したURLを送信し、変わった場合だけ元の入力を表示する", async () => {
+  const { privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048, privateKeyEncoding: { type: "pkcs8", format: "pem" }, publicKeyEncoding: { type: "spki", format: "pem" } });
+  const inputs = ["https://example.invalid/%e9%ab%aa/", "https://example.invalid/髪/", "https://example.invalid/plain/"];
+  const expected = ["https://example.invalid/%E9%AB%AA/", "https://example.invalid/%E9%AB%AA/", "https://example.invalid/plain/"];
+  const sent = [];
+  let saved = "";
+  const code = await main({
+    args: inputs,
+    env: { GOOGLE_SERVICE_ACCOUNT_EMAIL: "test@example.invalid", GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY: privateKey, SEARCH_CONSOLE_SITE_URL: "sc-domain:example.invalid" },
+    now: new Date("2026-11-27T02:00:00Z"),
+    fetchImpl: async (_url, options) => {
+      if (options.body instanceof URLSearchParams) return { ok: true, json: async () => ({ access_token: "mock-token" }) };
+      sent.push(JSON.parse(options.body).inspectionUrl);
+      return { ok: true, json: async () => ({ inspectionResult: { indexStatusResult: {} } }) };
+    },
+    save: async (markdown) => { saved = markdown; },
+    output: () => {},
+    errorOutput: () => {},
+  });
+  assert.equal(code, 0);
+  assert.deepEqual(sent, expected);
+  assert.ok(saved.includes(`## ${expected[0]}\n\n入力: ${inputs[0]}\n`));
+  assert.ok(saved.includes(`## ${expected[1]}\n\n入力: ${inputs[1]}\n`));
+  assert.ok(saved.includes(`## ${expected[2]}\n\n|`));
+});
+
+test("同日の結果を時刻と区切りとともに追記する", async () => {
+  const files = new Map();
+  const options = {
+    mkdirImpl: async () => {},
+    appendFileImpl: async (path, data, encoding) => {
+      assert.equal(encoding, "utf8");
+      files.set(path, (files.get(path) || "") + data);
+    },
+  };
+  await writeReport("first result\n", new Date("2026-11-27T00:01:02Z"), options);
+  await writeReport("second result\n", new Date("2026-11-27T03:04:05Z"), options);
+  assert.equal(files.size, 1);
+  const [[path, content]] = files;
+  assert.match(path, /inspect-20261127\.md$/);
+  assert.ok(content.includes("first result"));
+  assert.ok(content.includes("second result"));
+  assert.ok(content.indexOf("first result") < content.indexOf("second result"));
+  assert.match(content, /first result\n\n---\n\n実行: 2026\/11\/27 12:04:05 JST\n\nsecond result/);
 });

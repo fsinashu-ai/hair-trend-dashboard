@@ -1,5 +1,5 @@
 import { createSign } from "node:crypto";
-import { readFile, mkdir, writeFile } from "node:fs/promises";
+import { readFile, mkdir, appendFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { parseEnv } from "node:util";
@@ -8,6 +8,17 @@ const tokenUrl = "https://oauth2.googleapis.com/token";
 const inspectUrl = "https://searchconsole.googleapis.com/v1/urlInspection/index:inspect";
 const scope = "https://www.googleapis.com/auth/webmasters.readonly";
 const fields = ["verdict", "coverageState", "lastCrawlTime", "googleCanonical", "userCanonical", "robotsTxtState", "indexingState", "pageFetchState", "sitemap"];
+
+export function normalizeInspectionUrl(value) {
+  const parsed = new URL(value);
+  const parts = value.match(/^([a-z][a-z\d+.-]*:\/\/[^/?#]*)([^#]*)(#.*)?$/is);
+  if (!parts) return parsed.href.replace(/%[0-9a-f]{2}/gi, (match) => match.toUpperCase());
+
+  const pathAndQuery = parts[2]
+    .replace(/[^\x00-\x7f]/gu, (character) => encodeURIComponent(character.toWellFormed()))
+    .replace(/%[0-9a-f]{2}/gi, (match) => match.toUpperCase());
+  return `${parts[1]}${pathAndQuery}${parts[3] || ""}`;
+}
 
 export function normalizePrivateKey(value) {
   return value.trim().replace(/^"|"$/g, "").replace(/^'|'$/g, "").replace(/\\n/g, "\n");
@@ -104,6 +115,9 @@ export function formatReport(results, secrets = []) {
   const lines = ["# Search Console URL検査", ""];
   for (const result of results) {
     lines.push(`## ${cell(result.url, secrets)}`, "");
+    if (result.inputUrl && result.inputUrl !== result.url) {
+      lines.push(`入力: ${cell(result.inputUrl, secrets)}`, "");
+    }
     if (result.error) {
       lines.push("| HTTP | error.message |", "| --- | --- |", `| ${cell(result.error.status, secrets)} | ${cell(result.error.message, secrets)} |`, "");
       continue;
@@ -160,11 +174,11 @@ export async function inspectUrls(urls, siteUrl, accessToken, fetchImpl = fetch)
   return results;
 }
 
-async function writeReport(markdown, now) {
+export async function writeReport(markdown, now, { mkdirImpl = mkdir, appendFileImpl = appendFile } = {}) {
   const date = new Date(now.getTime() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10).replaceAll("-", "");
   const directory = join(process.cwd(), "runtime-data", "search-console");
-  await mkdir(directory, { recursive: true });
-  await writeFile(join(directory, `inspect-${date}.md`), markdown, "utf8");
+  await mkdirImpl(directory, { recursive: true });
+  await appendFileImpl(join(directory, `inspect-${date}.md`), `\n---\n\n実行: ${japanDateTime(now)}\n\n${markdown}`, "utf8");
 }
 
 export async function main({ args = process.argv.slice(2), env, fetchImpl = fetch, now = new Date(), save = writeReport, output = console.log, errorOutput = console.error, readKeyFile = readFile } = {}) {
@@ -212,7 +226,9 @@ export async function main({ args = process.argv.slice(2), env, fetchImpl = fetc
     return 1;
   }
   const secrets = [config.privateKey, config.privateKey.replace(/\n/g, "\\n"), env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY, env.GOOGLE_SERVICE_ACCOUNT_JSON, env.GOOGLE_SERVICE_ACCOUNT_KEY_FILE, loaded.keyFilePath, loaded.keyFileContent, config.clientEmail, accessToken].filter(Boolean).sort((first, second) => second.length - first.length);
-  const results = await inspectUrls(args, config.siteUrl, accessToken, fetchImpl);
+  const urls = args.map(normalizeInspectionUrl);
+  const results = (await inspectUrls(urls, config.siteUrl, accessToken, fetchImpl))
+    .map((result, index) => ({ ...result, inputUrl: args[index] }));
   const markdown = formatReport(results, secrets);
   try {
     await save(markdown, now);

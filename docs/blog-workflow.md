@@ -27,7 +27,8 @@
 8. **数日後の確認と効果測定（Claude）**: Search Console のインデックス登録、表示回数・クリック、GA4 の LINE クリックを確かめ、`tasks/CURRENT.md` に記録する。公開直後の確認はホームページ部署が行うので、同じ確認は繰り返さない。
    URL検査は `.env.local` に `SEARCH_CONSOLE_SITE_URL` と、`GOOGLE_SERVICE_ACCOUNT_JSON` または `GOOGLE_SERVICE_ACCOUNT_EMAIL`・`GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY` を設定し、Search Console のプロパティにサービスアカウントの読み取り権限を付けてから使う。
    鍵ファイルの場所を `GOOGLE_SERVICE_ACCOUNT_KEY_FILE` に設定する方法も使える。設定した場合は鍵ファイルが優先される。
-   `npm.cmd run sc:inspect -- <URL> [<URL> ...]` で最大20件を順番に確認し、画面と `runtime-data/search-console/inspect-YYYYMMDD.md` に結果を出す。同日のファイルは上書きされる。登録リクエストは行わない。
+   `npm.cmd run sc:inspect -- <URL> [<URL> ...]` で最大20件を順番に確認し、画面と `runtime-data/search-console/inspect-YYYYMMDD.md` に結果を出す。日本語を含む URL もそのまま渡せる。
+   同日の結果は既存のファイルに実行時刻とともに追記される。登録リクエストは行わない。
 
 ## 定期的に行うこと
 
